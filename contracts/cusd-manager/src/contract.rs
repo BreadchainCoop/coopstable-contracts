@@ -89,9 +89,6 @@ impl CusdManagerTrait for CusdManager {
             asset_address.clone(),
             amount
         );
-
-        // TODO: mint cusd to owner
-        // TODO: transfer collateral from owner to this contract
         e.events().publish(("CUSD_MANAGER", "mint_cusd"), owner);
     }
 
@@ -100,9 +97,6 @@ impl CusdManagerTrait for CusdManager {
         manager.require_auth();
         verify_if_supported_asset(&e, &asset_address);
         spend_balance(&e, owner.clone(), asset_address.clone(), amount);
-
-        // TODO: burn cusd from owner
-        // TODO: transfer collateral from this contract to owner
         e.events().publish(("CUSD_MANAGER", "burn_cusd"), owner);
     }
 

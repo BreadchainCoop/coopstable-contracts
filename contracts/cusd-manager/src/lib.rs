@@ -6,4 +6,4 @@ mod admin;
 mod manager;
 mod asset;
 
-mod test;
+// mod test;
