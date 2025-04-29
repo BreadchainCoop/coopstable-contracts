@@ -1,8 +1,6 @@
-#![no_std]
-use soroban_sdk::{contract, contractimpl, panic_with_error, symbol_short, Address, Env, Symbol};
-
+use soroban_sdk::{contract, contractimpl,  symbol_short, Address, Env, Symbol};
 use super::contract_types::{RequestType, Request};
-use adapter::{
+use yield_adapter::{
     lending_adapter::LendingAdapter,
     storage_types::{ ADAPTER_INSTANCE_BUMP_AMOUNT, ADAPTER_INSTANCE_LIFETIME_THRESHOLD }
 };
@@ -52,8 +50,8 @@ impl BlendCapitalAdapter {
 
     fn supply_collateral(
         env: &Env,
-        user: Address,
-        asset: Address,
+        user: &Address,
+        asset: &Address,
         amount: i128
     ) -> i128 {
         require_lending_adapter_controller_auth(env);
@@ -78,8 +76,8 @@ impl BlendCapitalAdapter {
 
     fn withdraw_collateral(
         env: &Env,
-        user: Address,
-        asset: Address,
+        user: &Address,
+        asset: &Address,
         amount: i128
     ) -> i128 {
         require_lending_adapter_controller_auth(env);
@@ -116,7 +114,7 @@ impl LendingAdapter for BlendCapitalAdapter  {
         // Check if asset is supported
         require_lending_adapter_controller_auth(env);
                         
-        Self::supply_collateral(env, user, asset, amount);
+        Self::supply_collateral(env, &user, &asset, amount);
         
         // Emit deposit event
         env.events().publish(
@@ -137,7 +135,7 @@ impl LendingAdapter for BlendCapitalAdapter  {
         
         require_lending_adapter_controller_auth(env);
 
-        Self::withdraw_collateral(env, user, asset, amount);
+        Self::withdraw_collateral(env, &user, &asset, amount);
         
         // Emit withdrawal event
         env.events().publish(
@@ -152,6 +150,7 @@ impl LendingAdapter for BlendCapitalAdapter  {
     fn get_balance(
         env: &Env,
         user: Address,
+        asset: Address
     ) -> i128 {
         
         // Get the Blend pool ID

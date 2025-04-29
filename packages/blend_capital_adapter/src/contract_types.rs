@@ -1,4 +1,3 @@
-#![no_std]
 use soroban_sdk::{Address, contracttype};
 
 #[derive(Clone)]
@@ -12,7 +11,6 @@ pub enum RequestType {
     Borrow = 4,
     Repay = 5,
 }
-
 
 #[derive(Clone)]
 #[contracttype]

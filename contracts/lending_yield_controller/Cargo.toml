@@ -1,5 +1,5 @@
 [package]
-name = "blend_capital_adapter"
+name = "lending_yield_controller"
 version = "0.0.0"
 edition = "2021"
 publish = false
@@ -10,7 +10,9 @@ doctest = false
 
 [dependencies]
 soroban-sdk = { workspace = true }
-yield_adapter = { workspace= true, path = "./packages/yield_adapter" }
+yield_adapter_registry = { workspace = true }
+yield_adapter = { workspace = true }
+cusd_manager = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

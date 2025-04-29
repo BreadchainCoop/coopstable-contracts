@@ -3,13 +3,6 @@
 version = 4
 
 [[package]]
-name = "adapter"
-version = "0.0.0"
-dependencies = [
- "soroban-sdk",
-]
-
-[[package]]
 name = "ahash"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -194,11 +187,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "89e25b6adfb930f02d1981565a6e5d9c547ac15a96606256d3b59040e5cd4ca3"
 
 [[package]]
-name = "blend_adapter"
+name = "blend_capital_adapter"
 version = "0.0.0"
 dependencies = [
- "adapter",
  "soroban-sdk",
+ "yield_adapter",
 ]
 
 [[package]]
@@ -348,8 +341,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "cusd-manager"
-version = "0.0.0"
+name = "cusd_manager"
+version = "1.1.0"
 dependencies = [
  "pretty_assertions",
  "soroban-sdk",
@@ -567,13 +560,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
-name = "funding-controller"
-version = "0.0.0"
-dependencies = [
- "soroban-sdk",
-]
-
-[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -758,10 +744,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "lending-adapter-controller"
+name = "lending_yield_controller"
 version = "0.0.0"
 dependencies = [
+ "cusd_manager",
  "soroban-sdk",
+ "yield_adapter",
+ "yield_adapter_registry",
 ]
 
 [[package]]
@@ -1662,6 +1651,21 @@ name = "yansi"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
+
+[[package]]
+name = "yield_adapter"
+version = "0.0.0"
+dependencies = [
+ "soroban-sdk",
+ "test-case",
+]
+
+[[package]]
+name = "yield_adapter_registry"
+version = "0.0.0"
+dependencies = [
+ "soroban-sdk",
+]
 
 [[package]]
 name = "zerocopy"

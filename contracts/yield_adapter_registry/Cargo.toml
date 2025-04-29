@@ -1,7 +1,7 @@
 [package]
-name = "blend_capital_adapter"
+name = "yield_adapter_registry"
 version = "0.0.0"
-edition = "2021"
+edition = { workspace = true }
 publish = false
 
 [lib]
@@ -10,7 +10,6 @@ doctest = false
 
 [dependencies]
 soroban-sdk = { workspace = true }
-yield_adapter = { workspace= true, path = "./packages/yield_adapter" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
