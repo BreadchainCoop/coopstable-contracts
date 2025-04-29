@@ -3,6 +3,13 @@
 version = 4
 
 [[package]]
+name = "adapter"
+version = "0.0.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "ahash"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -185,6 +192,14 @@ name = "base64ct"
 version = "1.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "89e25b6adfb930f02d1981565a6e5d9c547ac15a96606256d3b59040e5cd4ca3"
+
+[[package]]
+name = "blend_adapter"
+version = "0.0.0"
+dependencies = [
+ "adapter",
+ "soroban-sdk",
+]
 
 [[package]]
 name = "block-buffer"
@@ -743,7 +758,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "lending-pool-adapters"
+name = "lending-adapter-controller"
 version = "0.0.0"
 dependencies = [
  "soroban-sdk",

@@ -1,9 +1,9 @@
 #![no_std]
-mod contract;
+mod cusd_manager_contract;
 mod storage_types;
-mod collateral;
 mod admin;
 mod manager;
 mod asset;
+mod token;
 
 // mod test;

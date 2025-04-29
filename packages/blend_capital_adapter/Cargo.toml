@@ -1,5 +1,5 @@
 [package]
-name = "lending-pool-adapters"
+name = "blend_capital_adapter"
 version = "0.0.0"
 edition = "2021"
 publish = false
@@ -10,6 +10,7 @@ doctest = false
 
 [dependencies]
 soroban-sdk = { workspace = true }
+adapter = { workspace= true, path = "./packages/adapter" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
