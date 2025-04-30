@@ -9,7 +9,6 @@ pub(crate) const ASSET_LIFETIME_THRESHOLD: u32 = ASSET_BUMP_AMOUNT - DAY_IN_LEDG
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
-    SupportedAssets,
     Admin,
     Manager,
 }

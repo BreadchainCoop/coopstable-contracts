@@ -56,5 +56,22 @@ pub fn verify_if_yield_adapter_exists(e: &Env, protocol: Symbol) -> bool {
 
 pub fn get_yield_adapter(e: &Env, protocol: Symbol) -> Address {
     let registry_map = read_yield_adapter_registry(e);
-    registry_map.get_adapter(protocol).unwrap()
+    registry_map.get_adapter(protocol)
+}
+
+pub fn support_asset(e: &Env, protocol: Symbol, asset: Address) {
+    let mut registry_map = read_yield_adapter_registry(e);
+    registry_map.support_asset(protocol, asset);
+    write_yield_adapter_registry(e, registry_map);
+}
+
+pub fn remove_asset_support(e: &Env, protocol: Symbol, asset: Address) {
+    let mut registry_map = read_yield_adapter_registry(e);
+    registry_map.remove_asset_support(protocol, asset);
+    write_yield_adapter_registry(e, registry_map);
+}
+
+pub fn is_asset_supported(e: &Env, protocol: Symbol, asset: Address) -> bool {
+    let registry_map = read_yield_adapter_registry(e);
+    registry_map.supports_asset(protocol,asset)
 }
