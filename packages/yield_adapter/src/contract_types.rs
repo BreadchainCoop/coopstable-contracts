@@ -11,9 +11,9 @@ pub enum SupportedAdapter {
 impl SupportedAdapter {
     pub fn id(&self) -> Symbol {
         match self {
-            SupportedAdapter::BlendCapital => symbol_short!("BLA"),
-            SupportedAdapter::Aave         => symbol_short!("ALA"),
-            SupportedAdapter::Compound     => symbol_short!("CLA"),
+            SupportedAdapter::BlendCapital => symbol_short!("BC_LA"),
+            SupportedAdapter::Aave         => symbol_short!("AA_LA"),
+            SupportedAdapter::Compound     => symbol_short!("CO_LA"),
         }
     }
 }

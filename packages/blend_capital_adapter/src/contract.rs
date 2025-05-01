@@ -6,14 +6,12 @@ use soroban_sdk::{
     Env, 
     Symbol, 
     vec, 
-    Vec,
-    token::TokenClient
+    Vec
 };
 use super::contract_types::RequestType;
 use crate::artifacts::pool::{
     Client as PoolClient, 
-    Request, 
-    Reserve,
+    Request
 };
 use yield_adapter::{
     lending_adapter::LendingAdapter,
@@ -25,9 +23,40 @@ pub struct BlendCapitalAdapter;
 
 const YIELD_CONTROLLER_ID: Symbol = symbol_short!("LACID");
 const BLEND_POOL_ID: Symbol = symbol_short!("BID");
+const USER_DEPOSITS: Symbol = symbol_short!("UDEP");
+
+fn store_deposit(e: &Env, user: &Address, asset: &Address, amount: i128) {
+    e.storage()
+        .instance()
+        .extend_ttl(ADAPTER_INSTANCE_LIFETIME_THRESHOLD, ADAPTER_INSTANCE_BUMP_AMOUNT);
+    
+    let key = (USER_DEPOSITS, user.clone(), asset.clone());
+    let current_amount = e.storage().instance().get(&key).unwrap_or(0_i128);
+    
+    e.storage().instance().set(&key, &(current_amount + amount));
+}
+
+fn remove_deposit(e: &Env, user: &Address, asset: &Address, amount: i128) {
+    e.storage()
+        .instance()
+        .extend_ttl(ADAPTER_INSTANCE_LIFETIME_THRESHOLD, ADAPTER_INSTANCE_BUMP_AMOUNT);
+    
+    let key = (USER_DEPOSITS, user.clone(), asset.clone());
+    let current_amount = e.storage().instance().get(&key).unwrap_or(0_i128);
+    
+    if amount >= current_amount {
+        e.storage().instance().remove(&key);
+    } else {
+        e.storage().instance().set(&key, &(current_amount - amount));
+    }
+}
+
+fn get_deposit_amount(e: &Env, user: &Address, asset: &Address) -> i128 {
+    let key = (USER_DEPOSITS, user.clone(), asset.clone());
+    e.storage().instance().get(&key).unwrap_or(0_i128)
+}
 
 fn get_yield_controller(e: &Env) -> Address {
-
     e.storage()
         .instance()
         .extend_ttl(ADAPTER_INSTANCE_LIFETIME_THRESHOLD, ADAPTER_INSTANCE_BUMP_AMOUNT);
@@ -85,6 +114,8 @@ impl BlendCapitalAdapter {
             &request_vec
         );        
         
+        store_deposit(env, user, asset, amount);
+        
         amount
     }
 
@@ -108,6 +139,9 @@ impl BlendCapitalAdapter {
             &request_vec
         );
 
+        // Remove the withdrawn amount from tracking
+        remove_deposit(env, user, asset, amount);
+        
         env.events().publish(
             ("BLEND_ADAPTER", "withdraw"),
             (user, asset, amount)
@@ -121,12 +155,12 @@ impl BlendCapitalAdapter {
         user: Address,
         asset: Address
     ) -> i128 {
-        
         let pool_id: Address = read_blend_pool_id(env);
         let pool_client = PoolClient::new(env, &pool_id);
         
-        // Get the user's positions from the pool
+        // Get the user's positions and the reserve from the pool
         let positions = pool_client.get_positions(&user);
+        let reserve = pool_client.get_reserve(&asset);
         
         // Find the reserve index for the asset
         let reserve_list = pool_client.get_reserve_list();
@@ -140,26 +174,37 @@ impl BlendCapitalAdapter {
         }
         
         if let Some(idx) = reserve_index {
-            // Check collateral position (which is what we use for this adapter)
-            if let Some(amount) = positions.collateral.get(idx) {
-                // Get the reserve to convert bTokens to underlying asset value
-                let reserve: Reserve = pool_client.get_reserve(&asset);
-                
-                // The Reserve struct has a method to convert bTokens to the underlying asset
-                // This is a direct calculation based on the current b_rate
-                // In a real-world implementation, you'd need to use the appropriate method
-                // from the pool contract to perform this conversion
-                
-                // Calculate current value in underlying asset
-                let value_in_asset = reserve.to_asset_from_b_token(env, amount);
-                return value_in_asset;
+            // Check if user has a collateral position for this asset
+            if let Some(b_token_amount) = positions.collateral.get(idx) {
+                // The b_rate represents exchange rate between bTokens and the underlying asset
+                // Calculate underlying asset value: b_tokens * b_rate / 10^12
+                // Note: SCALAR_12 (10^12) is the fixed-point scalar used in the contract
+                let scalar_12: i128 = 1_000_000_000_000;
+                return (b_token_amount * reserve.data.b_rate) / scalar_12;
             }
         }
         
         0 // No position found
     }
     
-
+    fn get_reserve_token_id(
+        env: &Env, 
+        asset: &Address
+    ) -> Option<u32> {
+        let pool_id: Address = read_blend_pool_id(env);
+        let pool_client = PoolClient::new(env, &pool_id);
+        
+        let reserve_list = pool_client.get_reserve_list();
+        
+        for (i, addr) in reserve_list.iter().enumerate() {
+            if addr == *asset {
+                // For collateral (bTokens), reserve_token_id = reserve_index * 2 + 1
+                return Some((i as u32) * 2 + 1);
+            }
+        }
+        
+        None
+    }
 }
 
 #[contractimpl]
@@ -203,31 +248,69 @@ impl LendingAdapter for BlendCapitalAdapter  {
         amount
     }
     
-    
     fn get_yield(
         env: &Env,
         user: Address,
         asset: Address
     ) -> i128 {
-
-        // Get the Blend pool ID
-        let pool_id: Address = read_blend_pool_id(env);
+        // Get the current value of user's supplied collateral
+        let current_value = Self::get_balance(env, user.clone(), asset.clone());
         
-        // This is a simplified approach - in a real implementation, you'd:
-        // TODO: implement the yield method
-        // 1. Get the user's bToken balance 
-        // 2. Calculate the current value using the current bRate
-        // 3. Calculate the original deposit value
-        // 4. Return the difference (current value - original deposit)
+        // Get the original deposit amount
+        let original_deposit = get_deposit_amount(env, &user, &asset);
         
-        // For now, we'll return 0 as a placeholder
-        // In reality, you might store the original deposit amount separately
-        // and compare it with the current value calculated in get_balance
-        0
+        // The yield is the difference between current value and original deposit
+        // If there is no deposit or current value is less, return 0
+        if original_deposit == 0 || current_value <= original_deposit {
+            return 0;
+        }
+        
+        current_value - original_deposit
     }
 
-    fn claim_yield(env: &Env, user: Address, asset: Address) -> i128 {
-        // TODO: implement claim_yield method
-        0
+    fn claim_yield(
+        env: &Env, 
+        user: Address, 
+        asset: Address
+    ) -> i128 {
+        require_yield_controller(env);
+        
+        // Get the yield for this asset
+        let yield_amount = Self::get_yield(env, user.clone(), asset.clone());
+        if yield_amount <= 0 {
+            return 0;
+        }
+        
+        // In Blend protocol, we need to handle two types of yield:
+        // 1. Value appreciation from interest (reflected in b_rate)
+        // 2. Emissions (BLND tokens distributed to suppliers)
+        
+        // First, claim any emissions rewards
+        if let Some(reserve_token_id) = Self::get_reserve_token_id(env, &asset) {
+            let pool_id: Address = read_blend_pool_id(env);
+            let pool_client = PoolClient::new(env, &pool_id);
+            
+            let reserve_token_ids = vec![env, reserve_token_id];
+            
+            // Claim emissions - this sends BLND tokens to the user
+            let emission_amount = pool_client.claim(&user, &reserve_token_ids, &user);
+            
+            if emission_amount > 0 {
+                env.events().publish(
+                    ("BLEND_ADAPTER", "emissions_claimed"),
+                    (user.clone(), asset.clone(), emission_amount)
+                );
+            }
+        }
+        
+        // Then, withdraw the yield amount from the value appreciation
+        Self::withdraw_collateral(env, &user, &asset, yield_amount);
+        
+        env.events().publish(
+            ("BLEND_ADAPTER", "yield_claimed"),
+            (user, asset, yield_amount)
+        );
+        
+        yield_amount
     }
 }
