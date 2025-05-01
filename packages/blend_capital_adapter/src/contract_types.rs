@@ -2,14 +2,17 @@ use soroban_sdk::{Address, contracttype};
 
 #[derive(Clone)]
 #[repr(u32)]
-#[contracttype]
 pub enum RequestType {
-    Deposit = 0,
+    Supply = 0,
     Withdraw = 1,
     SupplyCollateral = 2,
     WithdrawCollateral = 3,
     Borrow = 4,
     Repay = 5,
+    FillUserLiquidationAuction = 6,
+    FillBadDebtAuction = 7,
+    FillInterestAuction = 8,
+    DeleteLiquidationAuction = 9,
 }
 
 #[derive(Clone)]
@@ -19,3 +22,4 @@ pub struct Request {
     pub address: Address,
     pub amount: i128,
 }
+

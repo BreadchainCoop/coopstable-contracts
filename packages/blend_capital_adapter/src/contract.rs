@@ -1,5 +1,18 @@
-use soroban_sdk::{contract, contractimpl,  symbol_short, Address, Env, Symbol};
-use super::contract_types::{RequestType, Request};
+use soroban_sdk::{
+    contract, 
+    contractimpl,  
+    symbol_short, 
+    Address, 
+    Env, 
+    Symbol, 
+    vec, 
+    Vec,
+    token::TokenClient
+};
+use super::contract_types::RequestType;
+use crate::artifacts::pool::{
+    self, Client as PoolClient, Request
+};
 use yield_adapter::{
     lending_adapter::LendingAdapter,
     storage_types::{ ADAPTER_INSTANCE_BUMP_AMOUNT, ADAPTER_INSTANCE_LIFETIME_THRESHOLD }
@@ -8,21 +21,23 @@ use yield_adapter::{
 #[contract]
 pub struct BlendCapitalAdapter;
 
-const LENDING_ADAPTER_CONTROLLER_ID: Symbol = symbol_short!("LACID");
+const YIELD_CONTROLLER_ID: Symbol = symbol_short!("LACID");
 const BLEND_POOL_ID: Symbol = symbol_short!("BID");
 
-fn require_lending_adapter_controller_auth(e: &Env) { 
-    
+fn get_yield_controller(e: &Env) -> Address {
+
     e.storage()
         .instance()
         .extend_ttl(ADAPTER_INSTANCE_LIFETIME_THRESHOLD, ADAPTER_INSTANCE_BUMP_AMOUNT);
     
-    let lending_adapter_controller_id: Address = e
-        .storage()
+    e.storage()
         .instance()
-        .get(&LENDING_ADAPTER_CONTROLLER_ID).unwrap();
-    
-    lending_adapter_controller_id.require_auth()
+        .get(&YIELD_CONTROLLER_ID).unwrap()
+}
+
+fn require_yield_controller(e: &Env) { 
+    let yield_controller_id: Address = get_yield_controller(e);
+    yield_controller_id.require_auth()
 }
 
 fn read_blend_pool_id(e: &Env) -> Address {
@@ -36,7 +51,7 @@ impl BlendCapitalAdapter {
         lending_adapter_controller_id: Address,
         blend_pool_id: Address
     ) {
-        env.storage().instance().set(&LENDING_ADAPTER_CONTROLLER_ID, &lending_adapter_controller_id);
+        env.storage().instance().set(&YIELD_CONTROLLER_ID, &lending_adapter_controller_id);
         env.storage().instance().set(&BLEND_POOL_ID, &blend_pool_id);   
     }
 
@@ -54,23 +69,20 @@ impl BlendCapitalAdapter {
         asset: &Address,
         amount: i128
     ) -> i128 {
-        require_lending_adapter_controller_auth(env);
         
-        // Get the Blend pool ID
         let pool_id: Address = read_blend_pool_id(env);
+        let pool_client = PoolClient::new(env, &pool_id);
         
-        // We'll use SupplyCollateral (Type 2) to ensure we're depositing as collateral
         let request = Self::create_request(RequestType::SupplyCollateral, asset.clone(), amount);
+        let request_vec: Vec<Request> = vec![env, request];
+
+        pool_client.submit_with_allowance(
+            user, // user in this case will be the yield controller
+            &env.current_contract_address(), 
+            user, // user in this case will be the yield controller
+            &request_vec
+        );        
         
-        // TODO: implement supply collateral method
-        
-        // Emit deposit event
-        env.events().publish(
-            ("BLEND_ADAPTER", "deposit"),
-            (user, asset, amount)
-        );
-        
-        // Return the deposited amount
         amount
     }
 
@@ -80,23 +92,25 @@ impl BlendCapitalAdapter {
         asset: &Address,
         amount: i128
     ) -> i128 {
-        require_lending_adapter_controller_auth(env);
         
-        // Get the Blend pool ID
         let pool_id: Address = read_blend_pool_id(env);
-        
-        // We'll use WithdrawCollateral (Type 3) since we deposited as collateral
+        let pool_client = PoolClient::new(env, &pool_id);
         let request = Self::create_request(RequestType::WithdrawCollateral, asset.clone(), amount);
         
-        // TODO: implement withdraw collateral method
+        let request_vec: Vec<Request> = vec![env, request];
         
-        // Emit withdrawal event
+        pool_client.submit_with_allowance(
+            user, // user in this case will be the yield controller
+            &env.current_contract_address(), 
+            user, // user in this case will be the yield controller
+            &request_vec
+        );
+
         env.events().publish(
             ("BLEND_ADAPTER", "withdraw"),
             (user, asset, amount)
         );
         
-        // Return the withdrawn amount
         amount
     }
 }
@@ -104,19 +118,17 @@ impl BlendCapitalAdapter {
 #[contractimpl]
 impl LendingAdapter for BlendCapitalAdapter  {
 
-    // Implementation of deposit method - deposits assets into Blend pool
     fn deposit(
         env: &Env,
         user: Address,
         asset: Address,
         amount: i128
     ) -> i128 {
-        // Check if asset is supported
-        require_lending_adapter_controller_auth(env);
+        
+        require_yield_controller(env);
                         
         Self::supply_collateral(env, &user, &asset, amount);
         
-        // Emit deposit event
         env.events().publish(
             ("BLEND_ADAPTER", "deposit"),
             (user, asset, amount)
@@ -125,7 +137,6 @@ impl LendingAdapter for BlendCapitalAdapter  {
         amount
     }
     
-    // Implementation of withdraw method - withdraws assets from Blend pool
     fn withdraw(
         env: &Env,
         user: Address,
@@ -133,11 +144,10 @@ impl LendingAdapter for BlendCapitalAdapter  {
         amount: i128
     ) -> i128 {
         
-        require_lending_adapter_controller_auth(env);
+        require_yield_controller(env);
 
         Self::withdraw_collateral(env, &user, &asset, amount);
         
-        // Emit withdrawal event
         env.events().publish(
             ("BLEND_ADAPTER", "withdraw"),
             (user, asset, amount)
@@ -146,14 +156,12 @@ impl LendingAdapter for BlendCapitalAdapter  {
         amount
     }
     
-    // Get user's balance in the Blend pool
     fn get_balance(
         env: &Env,
         user: Address,
         asset: Address
     ) -> i128 {
         
-        // Get the Blend pool ID
         let pool_id: Address = read_blend_pool_id(env);
         
         // TODO: implement get balance method
@@ -161,7 +169,6 @@ impl LendingAdapter for BlendCapitalAdapter  {
         0 // No position found
     }
     
-    // Get user's accrued yield in the Blend pool
     fn get_yield(
         env: &Env,
         user: Address,
