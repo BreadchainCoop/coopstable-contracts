@@ -49,7 +49,9 @@ impl CusdManager {
         manager: Address
     ) {
         let admin = admin;
+
         write_administrator(&e, &admin);
+        
         write_cusd_manager_admin(&e, &manager);
 
         e.storage()
@@ -62,25 +64,19 @@ impl CusdManager {
 impl CusdManagerAdmin for CusdManager {
 
     fn set_admin(e: Env, new_admin: Address) {
+        
         let admin = read_administrator(&e);
+        
         admin.require_auth();
 
-        e.storage()
-            .instance()
-            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-
         write_administrator(&e, &new_admin);
+        
         e.events().publish(("CUSD_MANAGER", "set_admin"), &new_admin);
     }
 
     fn set_manager(e: Env, new_manager: Address) {
         let admin = read_administrator(&e);
         admin.require_auth();
-
-        e.storage()
-            .instance()
-            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-
         write_cusd_manager_admin(&e, &new_manager);
         e.events().publish(("CUSD_MANAGER", "set_manager"), new_manager);
     }

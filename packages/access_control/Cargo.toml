@@ -1,0 +1,17 @@
+[package]
+name = "access_control"
+description = "A lib to manage access control"
+version = {workspace = true}
+edition = {workspace = true}
+
+[lib]
+crate-type = ["lib", "cdylib"]
+
+[dependencies]
+soroban-sdk = { workspace = true }
+
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+soroban-sdk = { workspace = true, features = ["testutils"] }
+test-case = {workspace = true}
