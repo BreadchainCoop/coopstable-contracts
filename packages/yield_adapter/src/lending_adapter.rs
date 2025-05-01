@@ -6,7 +6,7 @@ pub trait LendingAdapter {
     
     fn withdraw(env: &Env, user: Address, asset: Address, amount: i128) -> i128;
     
-    fn get_balance(env: &Env, user: Address, asset: Address) -> i128;
-    
     fn get_yield(env: &Env, user: Address, asset: Address) -> i128;
+
+    fn claim_yield(env: &Env, user: Address, asset: Address) -> i128;
 }

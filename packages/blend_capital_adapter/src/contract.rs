@@ -11,7 +11,9 @@ use soroban_sdk::{
 };
 use super::contract_types::RequestType;
 use crate::artifacts::pool::{
-    self, Client as PoolClient, Request
+    Client as PoolClient, 
+    Request, 
+    Reserve,
 };
 use yield_adapter::{
     lending_adapter::LendingAdapter,
@@ -113,6 +115,51 @@ impl BlendCapitalAdapter {
         
         amount
     }
+
+    fn get_balance(
+        env: &Env,
+        user: Address,
+        asset: Address
+    ) -> i128 {
+        
+        let pool_id: Address = read_blend_pool_id(env);
+        let pool_client = PoolClient::new(env, &pool_id);
+        
+        // Get the user's positions from the pool
+        let positions = pool_client.get_positions(&user);
+        
+        // Find the reserve index for the asset
+        let reserve_list = pool_client.get_reserve_list();
+        let mut reserve_index = None;
+        
+        for (i, addr) in reserve_list.iter().enumerate() {
+            if addr == asset {
+                reserve_index = Some(i as u32);
+                break;
+            }
+        }
+        
+        if let Some(idx) = reserve_index {
+            // Check collateral position (which is what we use for this adapter)
+            if let Some(amount) = positions.collateral.get(idx) {
+                // Get the reserve to convert bTokens to underlying asset value
+                let reserve: Reserve = pool_client.get_reserve(&asset);
+                
+                // The Reserve struct has a method to convert bTokens to the underlying asset
+                // This is a direct calculation based on the current b_rate
+                // In a real-world implementation, you'd need to use the appropriate method
+                // from the pool contract to perform this conversion
+                
+                // Calculate current value in underlying asset
+                let value_in_asset = reserve.to_asset_from_b_token(env, amount);
+                return value_in_asset;
+            }
+        }
+        
+        0 // No position found
+    }
+    
+
 }
 
 #[contractimpl]
@@ -156,18 +203,6 @@ impl LendingAdapter for BlendCapitalAdapter  {
         amount
     }
     
-    fn get_balance(
-        env: &Env,
-        user: Address,
-        asset: Address
-    ) -> i128 {
-        
-        let pool_id: Address = read_blend_pool_id(env);
-        
-        // TODO: implement get balance method
-
-        0 // No position found
-    }
     
     fn get_yield(
         env: &Env,
@@ -188,6 +223,11 @@ impl LendingAdapter for BlendCapitalAdapter  {
         // For now, we'll return 0 as a placeholder
         // In reality, you might store the original deposit amount separately
         // and compare it with the current value calculated in get_balance
+        0
+    }
+
+    fn claim_yield(env: &Env, user: Address, asset: Address) -> i128 {
+        // TODO: implement claim_yield method
         0
     }
 }
