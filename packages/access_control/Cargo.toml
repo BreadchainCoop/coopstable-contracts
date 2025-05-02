@@ -1,6 +1,6 @@
 [package]
 name = "access_control"
-description = "A lib to manage access control"
+description = "A simple library to manage access control" 
 version = {workspace = true}
 edition = {workspace = true}
 

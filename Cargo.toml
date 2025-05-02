@@ -17,6 +17,7 @@ yield_adapter = { workspace= true, path = "./packages/yield_adapter" }
 blend_capital_adapter = { workspace= true, path = "./packages/blend_capital_adapter" }
 cusd_manager = { workspace= true, path = "./contracts/cusd_manager" }
 yield_adapter_registry = { workspace= true, path = "./contracts/yield_adapter_registry" }
+access_control = { workspace= true, path = "./packages/access_control" }
 
 [profile.release]
 opt-level = "z"

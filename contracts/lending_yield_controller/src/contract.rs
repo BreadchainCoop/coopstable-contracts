@@ -106,7 +106,7 @@ impl LendingYieldControllerTrait for LendingYieldController {
             &cusd_manager_client.address, 
             &amount
         );
-        cusd_manager_client.issue_cusd(&user, &amount);
+        cusd_manager_client.issue_cusd(&e.current_contract_address(), &user, &amount);
         
         amount
     }
@@ -136,7 +136,7 @@ impl LendingYieldControllerTrait for LendingYieldController {
         
         // Burn cUSD
         // will transfer usdc asset to yield controller
-        cusd_manager_client.burn_cusd(&user, &amount);
+        cusd_manager_client.burn_cusd(&e.current_contract_address(),&user, &amount);
                 
         // Transfer asset to user
         asset_client.transfer(

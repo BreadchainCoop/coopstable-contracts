@@ -6,13 +6,19 @@ use soroban_sdk::{
     symbol_short, 
     Address, 
     Env, 
-    Symbol
+    Symbol,
+    token::StellarAssetClient
 };
 
 use crate::storage_types::{INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD};
-use crate::admin::{read_administrator, write_administrator};
-use crate::manager::{read_cusd_manager_admin, write_cusd_manager_admin};
 use crate::token::{process_token_burn, process_token_mint};
+use access_control::{
+    access::default_access_control,
+    constants::DEFAULT_ADMIN_ROLE
+};
+
+const CUSD_ADMIN: Symbol = symbol_short!("CUSD_ADMN");
+const CUSD_ADDRESS_KEY: Symbol = symbol_short!("cUSD");
 
 contractmeta!(key = "Description", val = "Coopstable cUSD manager contract");
 
@@ -22,21 +28,22 @@ fn check_nonnegative_amount(amount: i128) {
     }
 }
 
-
 #[contract]
 pub struct CusdManager;
 
 // manager manages collateral assets supported by this contract
 #[contractclient(name = "CusdManagerAdminClient")]
 pub trait CusdManagerAdmin {
-    fn set_admin(e: Env, admin: Address);
-    fn set_manager(e: Env, new_manager: Address);
+    fn set_default_admin(e: &Env, caller: Address, new_admin: Address);
+    fn set_admin(e: &Env, caller: Address, new_manager: Address);
+    fn only_admin(e: &Env, caller: Address);
+    fn set_cusd_issuer(e: &Env, caller: Address, new_issuer: Address);
 }
 
 #[contractclient(name = "CusdManagerTokenClient")]
 pub trait CusdManagerToken {
-    fn issue_cusd(e: Env, owner: Address, amount: i128);
-    fn burn_cusd(e: Env, owner: Address, amount: i128);
+    fn issue_cusd(e: &Env, caller: Address, to: Address, amount: i128);
+    fn burn_cusd(e: &Env, caller: Address, from: Address, amount: i128);
     fn get_cusd_id(e: &Env) -> Address;
 }
 
@@ -45,44 +52,47 @@ impl CusdManager {
     fn __constructor(
         e: Env, 
         cusd_id: Address,
-        admin: Address, 
-        manager: Address
+        owner: Address, 
+        admin: Address
     ) {
-        let admin = admin;
+        let access_control = default_access_control(&e);
 
-        write_administrator(&e, &admin);
-        
-        write_cusd_manager_admin(&e, &manager);
+        access_control.initialize(&e, &owner);
+        access_control.set_role_admin(&e, CUSD_ADMIN, DEFAULT_ADMIN_ROLE); 
+        access_control._grant_role(&e, CUSD_ADMIN, &admin);
 
         e.storage()
             .instance()
-            .set(&CUSD_SYMBOL, &cusd_id);
+            .set(&CUSD_ADDRESS_KEY, &cusd_id);
     }
 }
 
 #[contractimpl]
 impl CusdManagerAdmin for CusdManager {
 
-    fn set_admin(e: Env, new_admin: Address) {
-        
-        let admin = read_administrator(&e);
-        
-        admin.require_auth();
-
-        write_administrator(&e, &new_admin);
-        
-        e.events().publish(("CUSD_MANAGER", "set_admin"), &new_admin);
+    fn set_default_admin(e: &Env, caller: Address, new_admin: Address) {
+        let access_control = default_access_control(e);
+        access_control.grant_role(&e, caller, DEFAULT_ADMIN_ROLE, &new_admin);
     }
 
-    fn set_manager(e: Env, new_manager: Address) {
-        let admin = read_administrator(&e);
-        admin.require_auth();
-        write_cusd_manager_admin(&e, &new_manager);
-        e.events().publish(("CUSD_MANAGER", "set_manager"), new_manager);
+    fn set_admin(e: &Env, caller: Address, new_admin: Address) {
+        let access_control = default_access_control(e);
+        access_control.grant_role(&e, caller, CUSD_ADMIN, &new_admin);
+    }
+
+    fn only_admin(e: &Env, caller: Address) {
+        let access_control = default_access_control(e);
+        access_control.only_role(&e, &caller, CUSD_ADMIN);
+    }
+
+    fn set_cusd_issuer(e: &Env, caller: Address, new_issuer: Address) {
+        let access_control = default_access_control(e);
+        access_control.only_role(&e, &caller, CUSD_ADMIN);
+        let token_admin_client = StellarAssetClient::new(&e, &Self::get_cusd_id(&e));
+        token_admin_client.set_admin(&new_issuer);        
     }
 }
 
-const CUSD_SYMBOL: Symbol = symbol_short!("cUSD");
 
 #[contractimpl]
 impl CusdManagerToken for CusdManager {
@@ -92,22 +102,20 @@ impl CusdManagerToken for CusdManager {
             .instance()
             .extend_ttl(INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD);
         
-        e.storage().instance().get(&CUSD_SYMBOL).unwrap()
+        e.storage().instance().get(&CUSD_ADDRESS_KEY).unwrap()
     }
 
-    fn issue_cusd(e: Env, owner: Address, amount: i128) {
-        let manager = read_cusd_manager_admin(&e);
-        manager.require_auth();
+    fn issue_cusd(e: &Env, caller: Address, to: Address, amount: i128) {
+        Self::only_admin(e, caller);
         check_nonnegative_amount(amount);
-        process_token_mint(&e, owner.clone(), Self::get_cusd_id(&e), amount); 
-        e.events().publish(("CUSD_MANAGER", "mint_cusd"), owner);
+        process_token_mint(&e, to.clone(), Self::get_cusd_id(&e), amount); 
+        e.events().publish(("CUSD_MANAGER", "mint_cusd"), to);
     }
 
-    fn burn_cusd(e: Env, owner: Address, amount: i128) {
-        let manager = read_cusd_manager_admin(&e);
-        manager.require_auth();
+    fn burn_cusd(e: &Env, caller: Address, from: Address, amount: i128) {
+        Self::only_admin(e, caller);
         check_nonnegative_amount(amount);
-        process_token_burn(&e, owner.clone(), Self::get_cusd_id(&e), amount);
-        e.events().publish(("CUSD_MANAGER", "burn_cusd"), owner);
+        process_token_burn(&e, from.clone(), Self::get_cusd_id(&e), amount);
+        e.events().publish(("CUSD_MANAGER", "burn_cusd"), from);
     }
 }

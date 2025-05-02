@@ -1,7 +1,7 @@
 [package]
 name = "cusd_manager"
 description = "Coopstable cUSD manager contract"
-version = {workspace = true}
+version = "0.0.0"
 edition = {workspace = true}
 
 [lib]
@@ -10,7 +10,7 @@ crate-type = ["lib", "cdylib"]
 [dependencies]
 soroban-sdk = { workspace = true }
 soroban-token-sdk = { workspace = true }
-
+access_control = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
