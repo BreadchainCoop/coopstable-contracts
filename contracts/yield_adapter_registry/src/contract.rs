@@ -27,7 +27,7 @@ contractmeta!(
 );
 
 pub trait YieldAdapterRegistryTrait {
-    fn set_admin(e: &Env, caller: Address, new_admin: Address);
+    fn set_yield_adapter_admin(e: &Env, caller: Address, new_admin: Address);
     fn register_adapter(e: &Env, caller: Address, protocol: SupportedAdapter, adapter_address: Address);
     fn get_adapter(e: &Env, protocol: SupportedAdapter) -> Address;
     fn remove_adapter(e: &Env, caller: Address, protocol: SupportedAdapter);
@@ -57,7 +57,7 @@ impl YieldAdapterRegistry {
 
 #[contractimpl]
 impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
-    fn set_admin(e: &Env, caller: Address, new_admin: Address) {
+    fn set_yield_adapter_admin(e: &Env, caller: Address, new_admin: Address) {
         let access_control = default_access_control(e);
         access_control.grant_role(&e, caller, DEFAULT_ADMIN_ROLE, &new_admin);
         e.events().publish(("YIELD_ADAPTER_REGISTRY", "set_admin"), &new_admin);

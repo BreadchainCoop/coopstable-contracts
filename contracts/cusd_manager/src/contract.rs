@@ -35,7 +35,7 @@ pub struct CusdManager;
 #[contractclient(name = "CusdManagerAdminClient")]
 pub trait CusdManagerAdmin {
     fn set_default_admin(e: &Env, caller: Address, new_admin: Address);
-    fn set_admin(e: &Env, caller: Address, new_manager: Address);
+    fn set_cusd_manager_admin(e: &Env, caller: Address, new_manager: Address);
     fn only_admin(e: &Env, caller: Address);
     fn set_cusd_issuer(e: &Env, caller: Address, new_issuer: Address);
 }
@@ -75,7 +75,7 @@ impl CusdManagerAdmin for CusdManager {
         access_control.grant_role(&e, caller, DEFAULT_ADMIN_ROLE, &new_admin);
     }
 
-    fn set_admin(e: &Env, caller: Address, new_admin: Address) {
+    fn set_cusd_manager_admin(e: &Env, caller: Address, new_admin: Address) {
         let access_control = default_access_control(e);
         access_control.grant_role(&e, caller, CUSD_ADMIN, &new_admin);
     }
