@@ -16,3 +16,8 @@ access_control = { workspace = true }
 pretty_assertions = { workspace = true }
 soroban-sdk = { workspace = true, features = ["testutils"] }
 test-case = {workspace = true}
+
+
+[profile.release-with-logs]
+inherits = "release"
+debug-assertions = true
