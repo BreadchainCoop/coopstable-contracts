@@ -149,4 +149,3 @@ impl LendingYieldControllerTrait for LendingYieldController {
     }
 }
 
-

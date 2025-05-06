@@ -12,4 +12,5 @@ mod artifacts {
         soroban_sdk::contractimport!(file = "./artifacts/backstop.wasm");
     }
 }
+mod blend_pool_mock;
 mod test;
