@@ -2,6 +2,7 @@ use soroban_sdk::{Address, contracttype};
 
 #[derive(Clone)]
 #[repr(u32)]
+#[contracttype]
 pub enum RequestType {
     Supply = 0,
     Withdraw = 1,
