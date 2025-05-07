@@ -7,10 +7,10 @@ use crate::{
 };
 
 use soroban_sdk::{
-    log, testutils::{Address as _, Events}, token::{StellarAssetClient, TokenClient}, vec, Address, Env, IntoVal, Symbol  
+    testutils::{Address as _, Events}, token::{StellarAssetClient, TokenClient}, vec, Address, Env, IntoVal, Symbol  
 };
 use pretty_assertions::assert_eq;
-use soroban_token_sdk::event;
+
 // Helper function to create a test environment with a deployed CUSD token
 fn setup_test() -> (Env, Address, Address, Address, Address) {
     let e = Env::default();

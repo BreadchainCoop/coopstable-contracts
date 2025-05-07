@@ -16,43 +16,16 @@ use crate::artifacts::pool::{
 use yield_adapter::{
     lending_adapter::LendingAdapter,
     events::LendingAdapterEvents,
-    storage_types::{ ADAPTER_INSTANCE_BUMP_AMOUNT, ADAPTER_INSTANCE_LIFETIME_THRESHOLD }
+    constants::{ ADAPTER_INSTANCE_BUMP_AMOUNT, ADAPTER_INSTANCE_LIFETIME_THRESHOLD }
 };
-
+use crate::storage::{
+    store_deposit,
+    remove_deposit,
+    get_deposit_amount
+};
 const YIELD_CONTROLLER_ID: Symbol = symbol_short!("LACID");
 const BLEND_POOL_ID: Symbol = symbol_short!("BID");
-const USER_DEPOSITS: Symbol = symbol_short!("UDEP");
 
-fn store_deposit(e: &Env, user: &Address, asset: &Address, amount: i128) {
-    e.storage()
-        .instance()
-        .extend_ttl(ADAPTER_INSTANCE_LIFETIME_THRESHOLD, ADAPTER_INSTANCE_BUMP_AMOUNT);
-    
-    let key = (USER_DEPOSITS, user.clone(), asset.clone());
-    let current_amount = e.storage().instance().get(&key).unwrap_or(0_i128);
-    
-    e.storage().instance().set(&key, &(current_amount + amount));
-}
-
-fn remove_deposit(e: &Env, user: &Address, asset: &Address, amount: i128) {
-    e.storage()
-        .instance()
-        .extend_ttl(ADAPTER_INSTANCE_LIFETIME_THRESHOLD, ADAPTER_INSTANCE_BUMP_AMOUNT);
-    
-    let key = (USER_DEPOSITS, user.clone(), asset.clone());
-    let current_amount = e.storage().instance().get(&key).unwrap_or(0_i128);
-    
-    if amount >= current_amount {
-        e.storage().instance().remove(&key);
-    } else {
-        e.storage().instance().set(&key, &(current_amount - amount));
-    }
-}
-
-fn get_deposit_amount(e: &Env, user: &Address, asset: &Address) -> i128 {
-    let key = (USER_DEPOSITS, user.clone(), asset.clone());
-    e.storage().instance().get(&key).unwrap_or(0_i128)
-}
 
 fn get_yield_controller(e: &Env) -> Address {
     e.storage()
@@ -150,7 +123,7 @@ impl BlendCapitalAdapterTrait for BlendCapitalAdapter {
             &request_vec
         );        
         
-        store_deposit(e, &user, &asset, amount);
+        store_deposit(e, &e.current_contract_address(), &asset, amount);
     
         amount
     }
@@ -177,7 +150,7 @@ impl BlendCapitalAdapterTrait for BlendCapitalAdapter {
         );
 
         // Remove the withdrawn amount from tracking
-        remove_deposit(e, &user, &asset, amount);
+        remove_deposit(e, &e.current_contract_address(), &asset, amount);
         
         amount
     }
@@ -253,8 +226,6 @@ impl LendingAdapter for BlendCapitalAdapter  {
 
         LendingAdapterEvents::deposit(&e, e.current_contract_address(), user, asset, amount);
         
-        // log!(&e, "All events: {:?}", e.events().all());
-        
         amount
     }
     
@@ -320,8 +291,8 @@ impl LendingAdapter for BlendCapitalAdapter  {
             
             if emission_amount > 0 {
                 e.events().publish(
-                    ("BLEND_ADAPTER", "emissions_claimed"),
-                    (user.clone(), asset.clone(), emission_amount)
+                    ("emissions_claimed", user.clone()),
+                    (asset.clone(), emission_amount)
                 );
             }
         }
