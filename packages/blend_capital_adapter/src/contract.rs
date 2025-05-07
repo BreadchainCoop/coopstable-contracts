@@ -7,6 +7,7 @@ use soroban_sdk::{
     Symbol,
     vec, 
     Vec,
+    log
 };
 use crate::contract_types::RequestType;
 use crate::artifacts::pool::{
@@ -141,13 +142,14 @@ impl BlendCapitalAdapterTrait for BlendCapitalAdapter {
         
         let request = Self::create_request(RequestType::SupplyCollateral, asset.clone(), amount);
         let request_vec: Vec<Request> = vec![e, request];
-
+        log!(e, "poolclient: {:?}", pool_id); 
         pool_client.submit_with_allowance(
             &user, // user in this case will be the yield controller
-            &e.current_contract_address(), 
+            &e.current_contract_address(),
             &user, // user in this case will be the yield controller
             &request_vec
         );        
+        
         
         store_deposit(e, &user, &asset, amount);
         

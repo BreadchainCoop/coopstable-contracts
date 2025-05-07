@@ -1,10 +1,9 @@
-extern crate std;
-
 use crate::contract_types::RequestType;
 
 use soroban_sdk::{
     contract,
     contractimpl,
+    log,
     Address, Env, TryIntoVal, Symbol, symbol_short, Vec, vec, Map, Val
 };
 
@@ -39,6 +38,7 @@ impl PoolContract {
         _sender: Address,
         requests: Vec<Map<Symbol, Val>>
     ) -> () {
+        log!(&env, "submitting_with_allowance: {:?}", requests);
         for req in requests.iter() {
             let req_type: u32 = req.get(Symbol::new(&env,"request_type")).unwrap().try_into_val(&env).unwrap();
             let asset: Address = req.get(Symbol::new(&env,"address")).unwrap().try_into_val(&env).unwrap();

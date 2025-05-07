@@ -2,7 +2,7 @@
 extern crate std;
 
 use crate::{
-    contract::{BlendCapitalAdapter, BlendCapitalAdapterArgs},
+    contract::{BlendCapitalAdapter, BlendCapitalAdapterArgs, BlendCapitalAdapterClient},
     contract_types::RequestType,
 };
 use yield_adapter::{
@@ -68,38 +68,38 @@ fn test_constructor() {
     });
 }
 
-// // Test deposit operation
-// #[test]
-// fn test_deposit() {
-//     let (env, blend_adapter_id, yield_controller, usdc_token_id, _pool_id) = setup_test();
+// Test deposit operation
+#[test]
+fn test_deposit() {
+    let (env, blend_adapter_id, yield_controller, usdc_token_id, _pool_id) = setup_test();
     
-//     let client = BlendCapitalAdapterClient::new(&env, &blend_adapter_id);
-//     let user = Address::generate(&env);
-//     let amount: i128 = 1000;
+    let client = BlendCapitalAdapterClient::new(&env, &blend_adapter_id);
+    let user = Address::generate(&env);
+    let amount: i128 = 1000;
     
-//     // Mock the yield controller authorization
-//     env.mock_all_auths();
+    // Mock the yield controller authorization
+    env.mock_all_auths();
     
-//     // Deposit collateral
-//     let result = client.deposit(&yield_controller, &user, &usdc_token_id, &amount);
+    // Deposit collateral
+    let result = client.supply_collateral(&user, &usdc_token_id, &amount);
     
-//     // Verify the result
-//     assert_eq!(result, amount);
+    // Verify the result
+    assert_eq!(result, amount);
     
-//     // Verify deposit tracking
-//     env.as_contract(&blend_adapter_id, || {
-//         let key = (symbol_short!("UDEP"), user.clone(), usdc_token_id.clone());
-//         let stored_amount: i128 = env.storage().instance().get(&key).unwrap();
-//         assert_eq!(stored_amount, amount);
-//     });
+    // Verify deposit tracking
+    env.as_contract(&blend_adapter_id, || {
+        let key = (symbol_short!("UDEP"), user.clone(), usdc_token_id.clone());
+        let stored_amount: i128 = env.storage().instance().get(&key).unwrap();
+        assert_eq!(stored_amount, amount);
+    });
     
-//     // Verify auth was required for yield controller
-//     let auths = env.auths();
-//     assert_eq!(auths.len(), 1);
+    // Verify auth was required for yield controller
+    let auths = env.auths();
+    assert_eq!(auths.len(), 1);
     
-//     // The first auth should be from the yield controller
-//     assert_eq!(auths[0].0, yield_controller);
-// }
+    // The first auth should be from the yield controller
+    assert_eq!(auths[0].0, yield_controller);
+}
 
 // // Test withdraw operation
 // #[test]
