@@ -16,6 +16,7 @@ use crate::artifacts::pool::{
 };
 use yield_adapter::{
     lending_adapter::LendingAdapter,
+    events::LendingAdapterEvents,
     storage_types::{ ADAPTER_INSTANCE_BUMP_AMOUNT, ADAPTER_INSTANCE_LIFETIME_THRESHOLD }
 };
 
@@ -161,7 +162,8 @@ impl BlendCapitalAdapterTrait for BlendCapitalAdapter {
         asset: Address,
         amount: i128
     ) -> i128 {
-        
+        require_yield_controller(e);
+
         let pool_id: Address = read_blend_pool_id(e);
         let pool_client = PoolClient::new(e, &pool_id);
         let request = Self::create_request(RequestType::WithdrawCollateral, asset.clone(), amount);
@@ -177,11 +179,6 @@ impl BlendCapitalAdapterTrait for BlendCapitalAdapter {
 
         // Remove the withdrawn amount from tracking
         remove_deposit(e, &user, &asset, amount);
-        
-        e.events().publish(
-            ("BLEND_ADAPTER", "withdraw"),
-            (user, asset, amount)
-        );
         
         amount
     }
@@ -252,15 +249,12 @@ impl LendingAdapter for BlendCapitalAdapter  {
         asset: Address,
         amount: i128
     ) -> i128 {
-        
-        require_yield_controller(e);
                         
         Self::supply_collateral(e, user.clone(), asset.clone(), amount);    
-        
-        e.events().publish(
-            ("BLEND_ADAPTER", "deposit"),
-            (user, asset, amount)
-        );
+
+        log!(e, "logging events", );
+        LendingAdapterEvents::deposit(&e, e.current_contract_address(), user, asset, amount);
+        log!(e, "logged events");
         
         amount
     }
@@ -271,16 +265,11 @@ impl LendingAdapter for BlendCapitalAdapter  {
         asset: Address,
         amount: i128
     ) -> i128 {
-        
-        require_yield_controller(e);
 
         Self::withdraw_collateral(e, user.clone(), asset.clone(), amount);
-        
-        e.events().publish(
-            ("BLEND_ADAPTER", "withdraw"),
-            (user, asset, amount)
-        );
-        
+
+        LendingAdapterEvents::withdraw(&e, e.current_contract_address(), user, asset, amount);
+
         amount
     }
     
@@ -306,10 +295,9 @@ impl LendingAdapter for BlendCapitalAdapter  {
 
     fn claim_yield(
         e: &Env, 
-        user: Address, 
+        user: Address,
         asset: Address
     ) -> i128 {
-        require_yield_controller(e);
         
         // Get the yield for this asset
         let yield_amount = Self::get_yield(e, user.clone(), asset.clone());
@@ -341,11 +329,8 @@ impl LendingAdapter for BlendCapitalAdapter  {
         
         // Then, withdraw the yield amount from the value appreciation
         Self::withdraw_collateral(e, user.clone(), asset.clone(), yield_amount);
-        
-        e.events().publish(
-            ("BLEND_ADAPTER", "yield_claimed"),
-            (user, asset, yield_amount)
-        );
+
+        LendingAdapterEvents::claim_yield(&e, e.current_contract_address(), user, asset, yield_amount);
         
         yield_amount
     }
