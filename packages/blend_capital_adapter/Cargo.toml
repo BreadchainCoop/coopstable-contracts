@@ -14,5 +14,5 @@ test-case =  { workspace = true }
 yield_adapter = { workspace= true, path = "./packages/yield_adapter" }
 
 [dev-dependencies]
-soroban-sdk = { workspace = true, features = ["testutils"] }
 pretty_assertions = { workspace = true }
+soroban-sdk = { workspace = true, features = ["testutils"] }

@@ -3,10 +3,10 @@ extern crate std;
 
 use crate::contract::{BlendCapitalAdapter, BlendCapitalAdapterArgs, BlendCapitalAdapterClient};
 use crate::contract_types::RequestType;
-use soroban_sdk::testutils::Events;
+
 use soroban_sdk::{log, IntoVal};
 use soroban_sdk::{
-    testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation},
+    testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation, Events},
     Address, Env, Symbol, vec, symbol_short,
 };
 use pretty_assertions::assert_eq;
@@ -91,24 +91,26 @@ fn test_deposit() {
     });
     
     // Verify the event was emitted
-    log!(&env, "events: {:?}", client.env.events().all());
-    let event = vec![&client.env, client.env.events().all().last_unchecked()];
-    log!(&client.env, "TILL HERE");
     let topics = ( 
         Symbol::new(&client.env, "deposit"), 
+        blend_adapter_id.clone(),
         user.clone() 
     );
     let event_data = (usdc_token_id.clone(), amount);
+    let event = vec![
+        &client.env, 
+        (
+            blend_adapter_id.clone(),
+            topics.into_val(&client.env),
+            event_data.into_val(&client.env)
+        )
+    ];
+    log!(&client.env, "events for current e: {:?}", vec![&client.env, client.env.events().all()]);
+
+    // let published_event = vec![&client.env, client.env.events().all().last_unchecked()];
     assert_eq!(
-        event,
-        vec![
-            &client.env,
-            (
-                blend_adapter_id.clone(),
-                topics.into_val(&client.env),
-                event_data.into_val(&client.env)
-            )
-        ]
+        vec![&env, env.events().all().last_unchecked()], 
+        event
     );
 }
 

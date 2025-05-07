@@ -2,16 +2,15 @@
 extern crate std;
 
 use crate::{
-    contract::{CusdManager, CusdManagerClient, CusdManagerArgs},
+    contract::{CUSDManager, CUSDManagerClient, CUSDManagerArgs}, 
     token::{process_token_burn, process_token_mint}
 };
 
 use soroban_sdk::{
-    testutils::Address as _,
-    token::{StellarAssetClient, TokenClient}, 
-    Address, Env,  
+    log, testutils::{Address as _, Events}, token::{StellarAssetClient, TokenClient}, vec, Address, Env, IntoVal, Symbol  
 };
 use pretty_assertions::assert_eq;
+use soroban_token_sdk::event;
 // Helper function to create a test environment with a deployed CUSD token
 fn setup_test() -> (Env, Address, Address, Address, Address) {
     let e = Env::default();
@@ -25,8 +24,8 @@ fn setup_test() -> (Env, Address, Address, Address, Address) {
     
     // Deploy CUSD Manager contract
     let cusd_manager_id = e.register(
-        CusdManager,
-        CusdManagerArgs::__constructor(&cusd_token_id, &owner, &admin), 
+        CUSDManager,
+        CUSDManagerArgs::__constructor(&cusd_token_id, &owner, &admin), 
     );
     
     // Set the CUSD Manager contract as the admin of the CUSD token
@@ -44,7 +43,7 @@ fn setup_test() -> (Env, Address, Address, Address, Address) {
 fn test_constructor() {
     let (env, cusd_manager_id, _owner, admin, cusd_token_id) = setup_test();
     
-    let client = CusdManagerClient::new(&env, &cusd_manager_id);
+    let client = CUSDManagerClient::new(&env, &cusd_manager_id);
     
     // Test that the token ID is correctly set
     let stored_token_id = client.get_cusd_id();
@@ -60,7 +59,7 @@ fn test_constructor() {
 fn test_admin_access_success() {
     let (env, cusd_manager_id, _owner, admin, _cusd_token_id) = setup_test();
     
-    let client = CusdManagerClient::new(&env, &cusd_manager_id);
+    let client = CUSDManagerClient::new(&env, &cusd_manager_id);
     
     // Mock admin authentication
     env.mock_all_auths();
@@ -75,7 +74,7 @@ fn test_admin_access_success() {
 fn test_admin_access_failure() {
     let (env, cusd_manager_id, _owner, _admin, _cusd_token_id) = setup_test();
     
-    let client = CusdManagerClient::new(&env, &cusd_manager_id);
+    let client = CUSDManagerClient::new(&env, &cusd_manager_id);
     let not_admin = Address::generate(&env);
     
     // Mock authentication
@@ -90,7 +89,7 @@ fn test_admin_access_failure() {
 fn test_set_default_admin() {
     let (env, cusd_manager_id, owner, _, _cusd_token_id) = setup_test();
     
-    let client = CusdManagerClient::new(&env, &cusd_manager_id);
+    let client = CUSDManagerClient::new(&env, &cusd_manager_id);
     let new_admin = Address::generate(&env);
     
     // Mock admin authentication
@@ -105,7 +104,7 @@ fn test_set_default_admin() {
 fn test_set_cusd_manager_admin() {
     let (env, cusd_manager_id, _owner, _, _cusd_token_id) = setup_test();
     
-    let client = CusdManagerClient::new(&env, &cusd_manager_id);
+    let client = CUSDManagerClient::new(&env, &cusd_manager_id);
     let new_admin = Address::generate(&env);
     
     // Mock admin authentication
@@ -123,7 +122,7 @@ fn test_set_cusd_manager_admin() {
 fn test_set_cusd_issuer() {
     let (env, cusd_manager_id, _owner, _, cusd_token_id) = setup_test();
     
-    let client = CusdManagerClient::new(&env, &cusd_manager_id);
+    let client = CUSDManagerClient::new(&env, &cusd_manager_id);
     let new_issuer = Address::generate(&env);
     
     // Mock admin authentication
@@ -143,7 +142,7 @@ fn test_set_cusd_issuer() {
 fn test_issue_cusd() {
     let (env, cusd_manager_id, _owner, admin, cusd_token_id) = setup_test();
     
-    let client = CusdManagerClient::new(&env, &cusd_manager_id);
+    let client = CUSDManagerClient::new(&env, &cusd_manager_id);
     let recipient = Address::generate(&env);
     let amount: i128 = 1000;
     
@@ -164,7 +163,7 @@ fn test_issue_cusd() {
 fn test_burn_cusd() {
     let (env, cusd_manager_id, _owner, admin, cusd_token_id) = setup_test();
     
-    let client = CusdManagerClient::new(&env, &cusd_manager_id);
+    let client = CUSDManagerClient::new(&env, &cusd_manager_id);
     let token_client: TokenClient = TokenClient::new(&env, &cusd_token_id);
     let user = Address::generate(&env);
     let amount: i128 = 1000;
@@ -194,7 +193,7 @@ fn test_burn_cusd() {
 fn test_issue_cusd_negative_amount() {
     let (env, cusd_manager_id, _owner, admin, _cusd_token_id) = setup_test();
     
-    let client = CusdManagerClient::new(&env, &cusd_manager_id);
+    let client = CUSDManagerClient::new(&env, &cusd_manager_id);
     let recipient = Address::generate(&env);
     let amount: i128 = -100;  // Negative amount
     
@@ -211,7 +210,7 @@ fn test_issue_cusd_negative_amount() {
 fn test_burn_cusd_negative_amount() {
     let (env, cusd_manager_id, _owner, admin, _cusd_token_id) = setup_test();
     
-    let client = CusdManagerClient::new(&env, &cusd_manager_id);
+    let client = CUSDManagerClient::new(&env, &cusd_manager_id);
     let user = Address::generate(&env);
     let amount: i128 = -100;  // Negative amount
     
@@ -228,7 +227,7 @@ fn test_burn_cusd_negative_amount() {
 fn test_issue_cusd_non_admin() {
     let (env, cusd_manager_id, _owner, _admin, _cusd_token_id) = setup_test();
     
-    let client = CusdManagerClient::new(&env, &cusd_manager_id);
+    let client = CUSDManagerClient::new(&env, &cusd_manager_id);
     let non_admin = Address::generate(&env);
     let recipient = Address::generate(&env);
     let amount: i128 = 100;
@@ -246,7 +245,7 @@ fn test_issue_cusd_non_admin() {
 fn test_burn_cusd_non_admin() {
     let (env, cusd_manager_id, _owner, _admin, _cusd_token_id) = setup_test();
     
-    let client = CusdManagerClient::new(&env, &cusd_manager_id);
+    let client = CUSDManagerClient::new(&env, &cusd_manager_id);
     let non_admin = Address::generate(&env);
     let user = Address::generate(&env);
     let amount: i128 = 100;
@@ -308,78 +307,73 @@ fn test_process_token_burn() {
     assert_eq!(final_balance, amount / 2);
 }
 
-// TODO: Fix this test
 // Test that events are published when issuing CUSD
-// #[test]
-// fn test_issue_cusd_events() {
-//     let (env, cusd_manager_id, _owner, admin, _cusd_token_id) = setup_test();
+#[test]
+fn test_issue_cusd_events() {
+    let (env, cusd_manager_id, _owner, admin, _cusd_token_id) = setup_test();
     
-//     let client = CusdManagerClient::new(&env, &cusd_manager_id);
-//     let recipient = Address::generate(&env);
-//     let amount: i128 = 1000;
+    let client = CUSDManagerClient::new(&env, &cusd_manager_id);
+    let recipient = Address::generate(&env);
+    let amount: i128 = 1000;
     
-//     // Mock authentication
-//     env.mock_all_auths();
+    // Mock authentication
+    env.mock_all_auths();
     
-//     // Issue tokens and capture events
-//     client.issue_cusd(&admin, &recipient, &amount);
+    // Issue tokens and capture events
+    client.issue_cusd(&admin, &recipient, &amount);
     
-//     // Get events published by the contract
-//     let events = env.events().all();
-//     assert_eq!(events.len(), 1);
-//     assert_eq!(
-//         events,
-//         vec![
-//             &env,
-//             (
-//                 &client.address,
-//                 vec![
-//                     &env,
-//                     (
-//                         Symbol::new(&env, "CUSD_MANAGER").into_val(&env),     
-//                         Symbol::new(&env, "mint_cusd").into_val(&env)
-//                     ).into_val(&env),
-//                 ], 
-//                 recipient.into_val(&env)
-//             )
-//         ]
-//     );
-// }
+    // Get events published by the contract
+    let event_published= vec![&client.env, client.env.events().all().last_unchecked()];
+    let topic = (Symbol::new(&client.env, "issue_cusd"), ).into_val(&client.env);
+    let event_data = (recipient, amount).into_val(&client.env);
+    let event_control = vec![
+            &client.env,
+            (
+                client.address.clone(),
+                topic,
+                event_data
+            )
+        ];
+    assert_eq!(
+        event_published,
+        event_control
+    );
+}
 
 // TODO: Fix this test
-// // Test that events are published when burning CUSD
-// #[test]
-// fn test_burn_cusd_events() {
-//     let (env, cusd_manager_id, _owner, admin, _cusd_token_id) = setup_test();
+// Test that events are published when burning CUSD
+#[test]
+fn test_burn_cusd_events() {
+    let (env, cusd_manager_id, _owner, admin, _cusd_token_id) = setup_test();
     
-//     let client = CusdManagerToken::new(&env, &cusd_manager_id);
-//     let user = Address::generate(&env);
-//     let amount: i128 = 1000;
+    let client = CUSDManagerClient::new(&env, &cusd_manager_id);
+    let token_client: TokenClient = TokenClient::new(&env, &_cusd_token_id);
+    let user = Address::generate(&env);
+    let amount: i128 = 1000;
     
-//     // Issue tokens first
-//     env.mock_all_auths();
-//     client.issue_cusd(&admin, &user, amount);
+    // Issue tokens first
+    env.mock_all_auths();
+    client.issue_cusd(&admin, &user, &amount);
     
-//     // Reset events and burn tokens
-//     env.events().all(); // Clear events
-//     client.burn_cusd(&admin, &user, amount / 2);
+    // Reset events and burn tokens
+    env.events().all();
+    token_client.approve(&user, &client.address, &amount, &99999);
+    client.burn_cusd(&admin, &user, &(amount / 2));
     
-//     // Get events published by the contract
-//     let events = env.events().all();
-    
-//     // Verify we have the burn_cusd event
-//     let found = events.iter().any(|event| {
-//         if let (
-//             (Symbol::new(&env, "CUSD_MANAGER"), Symbol::new(&env, "burn_cusd")),
-//             Val::Address(addr),
-//         ) = event
-//         {
-//             assert_eq!(*addr, user);
-//             true
-//         } else {
-//             false
-//         }
-//     });
-    
-//     assert!(found, "burn_cusd event not found");
-// }
+    // Get events published by the contract
+    let event_published= vec![&client.env, client.env.events().all().last_unchecked()];
+    let topic = (Symbol::new(&client.env, "burn_cusd"), ).into_val(&client.env);
+    let event_data = (user, amount/2).into_val(&client.env);
+    let event_control = vec![
+            &client.env,
+            (
+                client.address.clone(),
+                topic,
+                event_data
+            )
+        ];
+    assert_eq!(
+        event_published,
+        event_control
+    );
+}

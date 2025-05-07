@@ -1,13 +1,12 @@
 use soroban_sdk::{
     contract, 
     contractimpl,  
-    symbol_short, 
+    symbol_short,
     Address, 
     Env, 
     Symbol,
     vec, 
-    Vec,
-    log
+    Vec
 };
 use crate::contract_types::RequestType;
 use crate::artifacts::pool::{
@@ -252,9 +251,9 @@ impl LendingAdapter for BlendCapitalAdapter  {
                         
         Self::supply_collateral(e, user.clone(), asset.clone(), amount);    
 
-        log!(e, "logging events", );
         LendingAdapterEvents::deposit(&e, e.current_contract_address(), user, asset, amount);
-        log!(e, "logged events");
+        
+        // log!(&e, "All events: {:?}", e.events().all());
         
         amount
     }

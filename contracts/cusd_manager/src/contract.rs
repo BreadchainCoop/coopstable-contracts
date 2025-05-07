@@ -8,7 +8,7 @@ use soroban_sdk::{
     Symbol,
     token::StellarAssetClient
 };
-
+use crate::events::CUSDManagerEvents;
 use crate::storage_types::{INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD};
 use crate::token::{process_token_burn, process_token_mint};
 use access_control::{
@@ -29,9 +29,9 @@ fn check_nonnegative_amount(amount: i128) {
 
 // TODO: add appropriate error handling
 #[contract]
-pub struct CusdManager;
+pub struct CUSDManager;
 
-pub trait CusdManagerTrait {
+pub trait CUSDManagerTrait {
     fn __constructor(
         e: Env,
         cusd_id: Address,
@@ -49,7 +49,7 @@ pub trait CusdManagerTrait {
 
 
 #[contractimpl]
-impl CusdManagerTrait for CusdManager {
+impl CUSDManagerTrait for CUSDManager {
     fn __constructor(
         e: Env,
         cusd_id: Address,
@@ -74,6 +74,7 @@ impl CusdManagerTrait for CusdManager {
     fn set_cusd_manager_admin(e: &Env, caller: Address, new_admin: Address) {
         let access_control = default_access_control(e);
         access_control.grant_role(&e, caller, CUSD_ADMIN, &new_admin);
+        CUSDManagerEvents::set_cusd_manager_admin(&e, new_admin);
     }
 
     fn only_admin(e: &Env, caller: Address) {
@@ -87,6 +88,7 @@ impl CusdManagerTrait for CusdManager {
 
         let token_admin_client = StellarAssetClient::new(&e, &Self::get_cusd_id(&e));
         token_admin_client.set_admin(&new_issuer);
+        CUSDManagerEvents::set_cusd_issuer(&e, new_issuer);
     }
 
     fn get_cusd_id(e: &Env) -> Address {
@@ -101,13 +103,13 @@ impl CusdManagerTrait for CusdManager {
         Self::only_admin(e, caller);
         check_nonnegative_amount(amount);
         process_token_mint(&e, to.clone(), Self::get_cusd_id(&e), amount); 
-        e.events().publish(("CUSD_MANAGER", "mint_cusd"), to);
+        CUSDManagerEvents::issue_cusd(&e, to, amount);
     }
 
     fn burn_cusd(e: &Env, caller: Address, from: Address, amount: i128) {
         Self::only_admin(e, caller);
         check_nonnegative_amount(amount);
         process_token_burn(&e, e.current_contract_address(), from.clone(), Self::get_cusd_id(&e), amount);
-        e.events().publish(("CUSD_MANAGER", "burn_cusd"), from);
+        CUSDManagerEvents::burn_cusd(&e, from, amount);
     }
 }
