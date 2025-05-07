@@ -14,7 +14,6 @@ use crate::artifacts::pool::{
     Request
 };
 use yield_adapter::{
-    lending_adapter::LendingAdapter,
     events::LendingAdapterEvents,
     constants::{ ADAPTER_INSTANCE_BUMP_AMOUNT, ADAPTER_INSTANCE_LIFETIME_THRESHOLD }
 };
@@ -82,7 +81,13 @@ pub trait BlendCapitalAdapterTrait {
         e: &Env, 
         asset: Address
     ) -> Option<u32>;
+
+    fn deposit(e: &Env, user: Address, asset: Address, amount: i128) -> i128;
+    fn withdraw(e: &Env, user: Address, asset: Address, amount: i128) -> i128;
+    fn get_yield(e: &Env, user: Address, asset: Address) -> i128;
+    fn claim_yield(e: &Env, user: Address, asset: Address) -> i128;
 }
+
 
 #[contractimpl]
 impl BlendCapitalAdapterTrait for BlendCapitalAdapter { 
@@ -123,7 +128,7 @@ impl BlendCapitalAdapterTrait for BlendCapitalAdapter {
             &request_vec
         );        
         
-        store_deposit(e, &e.current_contract_address(), &asset, amount);
+        store_deposit(e, &user, &asset, amount);
     
         amount
     }
@@ -150,7 +155,7 @@ impl BlendCapitalAdapterTrait for BlendCapitalAdapter {
         );
 
         // Remove the withdrawn amount from tracking
-        remove_deposit(e, &e.current_contract_address(), &asset, amount);
+        remove_deposit(e, &user, &asset, amount);
         
         amount
     }
@@ -210,10 +215,6 @@ impl BlendCapitalAdapterTrait for BlendCapitalAdapter {
         
         None
     }
-}
-
-#[contractimpl]
-impl LendingAdapter for BlendCapitalAdapter  {
 
     fn deposit(
         e: &Env,
@@ -224,8 +225,14 @@ impl LendingAdapter for BlendCapitalAdapter  {
                         
         Self::supply_collateral(e, user.clone(), asset.clone(), amount);    
 
-        LendingAdapterEvents::deposit(&e, e.current_contract_address(), user, asset, amount);
+        // Add diagnostic logging before event emission
+        e.events().publish((Symbol::new(&e, "debug"), ), "before event emission");
         
+        LendingAdapterEvents::deposit(&e, e.current_contract_address(), user, asset, amount);
+
+        // Add diagnostic logging after event emission
+        e.events().publish((Symbol::new(&e, "debug"), ), "after event emission");
+    
         amount
     }
     
@@ -304,4 +311,5 @@ impl LendingAdapter for BlendCapitalAdapter  {
         
         yield_amount
     }
+
 }

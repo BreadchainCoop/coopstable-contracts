@@ -15,7 +15,7 @@ use yield_adapter::{
     lending_adapter::LendingAdapterClient,
     contract_types::SupportedAdapter
 };
-use cusd_manager::contract::CusdManagerClient;
+use cusd_manager::contract::CUSDManagerClient;
 use yield_adapter_registry::contract::YieldAdapterRegistryClient;
 
 const ADAPTER_REGISTRY_KEY: Symbol = symbol_short!("AR");
@@ -60,8 +60,8 @@ impl LendingYieldController {
         e.storage().instance().get(&ADAPTER_REGISTRY_KEY).unwrap()
     }
 
-    fn cusd_manager_client(e: &Env) -> CusdManagerClient {
-        CusdManagerClient::new(e, &Self::get_cusd_manager(&e))
+    fn cusd_manager_client(e: &Env) -> CUSDManagerClient {
+        CUSDManagerClient::new(e, &Self::get_cusd_manager(&e))
     }
 
     fn adapter_registry_client(e: &Env) -> YieldAdapterRegistryClient {

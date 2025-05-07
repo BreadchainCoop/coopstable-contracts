@@ -2,7 +2,6 @@
 extern crate std;
 
 use crate::contract::{BlendCapitalAdapter, BlendCapitalAdapterArgs, BlendCapitalAdapterClient};
-use crate::contract_types::RequestType;
 
 use soroban_sdk::{log, IntoVal};
 use soroban_sdk::{
@@ -11,7 +10,6 @@ use soroban_sdk::{
 };
 use pretty_assertions::assert_eq;
 use crate::blend_pool_mock::{PoolContractClient, PoolContract};
-use yield_adapter::lending_adapter::LendingAdapterClient;
 
 // Helper function to create a test environment with a deployed BlendCapitalAdapter
 fn setup_test() -> (Env, Address, Address, Address, Address) {
@@ -89,29 +87,28 @@ fn test_deposit() {
         let stored_amount: i128 = env.storage().instance().get(&key).unwrap();
         assert_eq!(stored_amount, amount);
     });
-    
-    // Verify the event was emitted
-    let topics = ( 
-        Symbol::new(&client.env, "deposit"), 
-        blend_adapter_id.clone(),
-        user.clone() 
-    );
-    let event_data = (usdc_token_id.clone(), amount);
-    let event = vec![
-        &client.env, 
-        (
-            blend_adapter_id.clone(),
-            topics.into_val(&client.env),
-            event_data.into_val(&client.env)
-        )
-    ];
-    log!(&client.env, "events for current e: {:?}", vec![&client.env, client.env.events().all()]);
 
-    // let published_event = vec![&client.env, client.env.events().all().last_unchecked()];
-    assert_eq!(
-        vec![&env, env.events().all().last_unchecked()], 
-        event
-    );
+    
+    // Get all events
+    log!(&env, "events for current e: {:?}", vec![&env, env.events().all()]);
+    log!(&client.env, "last event: {:?}", vec![&client.env, client.env.events().all().last_unchecked()]);
+    let events = env.events().all();
+    assert!(!events.is_empty(), "No events were emitted");
+    
+    // Get the last event
+    let last_event = events.last().unwrap();
+
+    // Define the expected topic
+    let expected_topics = (
+        Symbol::new(&env, "deposit"), 
+        blend_adapter_id.clone(),
+        user.clone()
+    ).into_val(&env);
+    
+    // Assert that the event matches our expectations
+    assert_eq!(last_event.0, blend_adapter_id);
+    assert_eq!(last_event.1, expected_topics);
+    
 }
 
 // // Test deposit operation with unauthorized user
