@@ -8,7 +8,7 @@ use soroban_sdk::{
     vec, 
     Vec,
 };
-use super::contract_types::RequestType;
+use crate::contract_types::RequestType;
 use crate::artifacts::pool::{
     Client as PoolClient, 
     Request
