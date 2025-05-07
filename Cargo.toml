@@ -10,9 +10,9 @@ repository = "https://github.com/BreadchainCoop/Coop-Stable-Contracts"
 
 [workspace.dependencies]
 soroban-sdk = "22.0.7"
+soroban-token-sdk = "22.0.7"
 test-case = "3.3.1"
 pretty_assertions = "1.4.1"
-soroban-token-sdk = "22.0.7"
 yield_adapter = { workspace= true, path = "./packages/yield_adapter" }
 blend_capital_adapter = { workspace= true, path = "./packages/blend_capital_adapter" }
 cusd_manager = { workspace= true, path = "./contracts/cusd_manager" }

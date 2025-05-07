@@ -136,13 +136,13 @@ impl BlendCapitalAdapterTrait for BlendCapitalAdapter {
         asset: Address,
         amount: i128
     ) -> i128 {
+        require_yield_controller(e);
         
         let pool_id: Address = read_blend_pool_id(e);
         let pool_client = PoolClient::new(e, &pool_id);
         
         let request = Self::create_request(RequestType::SupplyCollateral, asset.clone(), amount);
         let request_vec: Vec<Request> = vec![e, request];
-        log!(e, "poolclient: {:?}", pool_id); 
         pool_client.submit_with_allowance(
             &user, // user in this case will be the yield controller
             &e.current_contract_address(),
@@ -150,9 +150,8 @@ impl BlendCapitalAdapterTrait for BlendCapitalAdapter {
             &request_vec
         );        
         
-        
         store_deposit(e, &user, &asset, amount);
-        
+    
         amount
     }
 
