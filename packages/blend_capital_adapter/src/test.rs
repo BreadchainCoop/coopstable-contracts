@@ -1,15 +1,12 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::{
-    contract::{BlendCapitalAdapter, BlendCapitalAdapterArgs, BlendCapitalAdapterClient},
-    contract_types::RequestType,
-};
+use crate::contract::{BlendCapitalAdapter, BlendCapitalAdapterArgs, BlendCapitalAdapterClient};
 use yield_adapter::lending_adapter::LendingAdapterClient;
 
 use soroban_sdk::{
-    testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation, Events},
-    Address, Env, Symbol, Vec, vec, symbol_short,
+    testutils::{Address as _,Events},
+    Address, Env, Symbol, symbol_short,
     IntoVal,
 };
 use pretty_assertions::assert_eq;
