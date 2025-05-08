@@ -93,7 +93,6 @@ impl BlendCapitalAdapterTrait for BlendCapitalAdapter {
         asset: Address,
         amount: i128
     ) -> i128 {
-        require_yield_controller(e);
         
         let pool_id: Address = read_lend_pool_id(e);
         let pool_client = PoolClient::new(e, &pool_id);
@@ -118,7 +117,6 @@ impl BlendCapitalAdapterTrait for BlendCapitalAdapter {
         asset: Address,
         amount: i128
     ) -> i128 {
-        require_yield_controller(e);
 
         let pool_id: Address = read_lend_pool_id(e);
         let pool_client = PoolClient::new(e, &pool_id);
@@ -216,7 +214,8 @@ impl LendingAdapter for BlendCapitalAdapter  {
         asset: Address,
         amount: i128
     ) -> i128 {
-                        
+        require_yield_controller(e);
+          
         Self::supply_collateral(e, user.clone(), asset.clone(), amount);    
 
         LendingAdapterEvents::deposit(&e, e.current_contract_address(), user, asset, amount);
@@ -230,6 +229,7 @@ impl LendingAdapter for BlendCapitalAdapter  {
         asset: Address,
         amount: i128
     ) -> i128 {
+        require_yield_controller(e);
 
         Self::withdraw_collateral(e, user.clone(), asset.clone(), amount);
 
@@ -263,18 +263,13 @@ impl LendingAdapter for BlendCapitalAdapter  {
         user: Address,
         asset: Address
     ) -> i128 {
-        
-        // Get the yield for this asset
+        require_yield_controller(e);
+
         let yield_amount = Self::get_yield(e, user.clone(), asset.clone());
         if yield_amount <= 0 {
             return 0;
         }
         
-        // In Blend protocol, we need to handle two types of yield:
-        // 1. Value appreciation from interest (reflected in b_rate)
-        // 2. Emissions (BLND tokens distributed to suppliers)
-        
-        // First, claim any emissions rewards
         if let Some(reserve_token_id) = Self::get_reserve_token_id(e, asset.clone()) {
             let pool_id: Address = read_lend_pool_id(e);
             let pool_client = PoolClient::new(e, &pool_id);
@@ -292,7 +287,6 @@ impl LendingAdapter for BlendCapitalAdapter  {
             }
         }
         
-        // Then, withdraw the yield amount from the value appreciation
         Self::withdraw_collateral(e, user.clone(), asset.clone(), yield_amount);
 
         LendingAdapterEvents::claim_yield(&e, e.current_contract_address(), user, asset, yield_amount);
