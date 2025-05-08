@@ -56,7 +56,7 @@ fn test_constructor() {
     // Verify the contract was initialized correctly
     env.as_contract(&blend_adapter_id, || {
         let stored_controller: Address = env.storage().instance().get(&symbol_short!("LACID")).unwrap();
-        let stored_pool: Address = env.storage().instance().get(&symbol_short!("BID")).unwrap();
+        let stored_pool: Address = env.storage().instance().get(&symbol_short!("LID")).unwrap();
         
         assert_eq!(stored_controller, yield_controller);
         assert_eq!(stored_pool, pool_id);
@@ -65,7 +65,7 @@ fn test_constructor() {
 
 // Test deposit operation
 #[test]
-fn test_deposit() {
+fn test_deposit_with_events() {
     let (env, blend_adapter_id, _, usdc_token_id, _pool_id) = setup_test();
     
     let client = BlendCapitalAdapterClient::new(&env, &blend_adapter_id);
@@ -76,18 +76,8 @@ fn test_deposit() {
     env.mock_all_auths();
 
     // Deposit collateral
+    let _ = env.events().all();
     let result = client.deposit(&user, &usdc_token_id, &amount);
-    
-    // Verify the result
-    assert_eq!(result, amount);
-    
-    // Verify deposit tracking
-    env.as_contract(&blend_adapter_id, || {
-        let key = (symbol_short!("UDEP"), user.clone(), usdc_token_id.clone());
-        let stored_amount: i128 = env.storage().instance().get(&key).unwrap();
-        assert_eq!(stored_amount, amount);
-    });
-
     
     // Get all events
     log!(&env, "events for current e: {:?}", vec![&env, env.events().all()]);
@@ -109,6 +99,16 @@ fn test_deposit() {
     assert_eq!(last_event.0, blend_adapter_id);
     assert_eq!(last_event.1, expected_topics);
     
+    // Verify the result
+    assert_eq!(result, amount);
+    
+    // Verify deposit tracking
+    env.as_contract(&blend_adapter_id, || {
+        let key = (symbol_short!("UDEP"), user.clone(), usdc_token_id.clone());
+        let stored_amount: i128 = env.storage().instance().get(&key).unwrap();
+        assert_eq!(stored_amount, amount);
+    });
+
 }
 
 // // Test deposit operation with unauthorized user

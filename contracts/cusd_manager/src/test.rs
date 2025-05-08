@@ -320,6 +320,7 @@ fn test_issue_cusd_events() {
     env.mock_all_auths();
     
     // Issue tokens and capture events
+    env.events().all();
     client.issue_cusd(&admin, &recipient, &amount);
     
     // Get events published by the contract

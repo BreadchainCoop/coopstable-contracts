@@ -23,7 +23,7 @@ impl LendingAdapterEvents {
         asset: Address,
         amount: i128,
     ) {
-        let topics = (Symbol::new(e, "witdraw"), adapter, user);
+        let topics = (Symbol::new(e, "withdraw"), adapter, user);
         e.events().publish(topics, (asset, amount));
     }
 

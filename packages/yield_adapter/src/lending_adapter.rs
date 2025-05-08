@@ -9,4 +9,10 @@ pub trait LendingAdapter {
     fn get_yield(env: &Env, user: Address, asset: Address) -> i128;
 
     fn claim_yield(env: &Env, user: Address, asset: Address) -> i128;
+
+    fn __constructor(
+        e: Env, 
+        lending_adapter_controller_id: Address,
+        lending_pool_id: Address
+    );
 }
