@@ -10,7 +10,45 @@ impl YieldAdapterRegistryEvents {
     ) {
         let topics = (Symbol::new(e, "set_admin"), );
         e.events()
-            .publish(topics, set_admin);
+            .publish(topics, new_admin);
     }
-    // TODO: Add events for register_adapter, remove_adapter, add_support_for_asset, remove_support_for_asset
+    
+    pub fn register_adapter(
+        e: &Env,
+        protocol: Symbol,
+        adapter_address: Address,
+    ) {
+        let topics = (Symbol::new(e, "register_adapter"), protocol);
+        e.events()
+            .publish(topics, adapter_address);
+    }
+    
+    pub fn remove_adapter(
+        e: &Env,
+        protocol: Symbol,
+    ) {
+        let topics = (Symbol::new(e, "remove_adapter"), );
+        e.events()
+            .publish(topics, protocol);
+    }
+    
+    pub fn add_support_for_asset(
+        e: &Env,
+        protocol: Symbol,
+        asset_address: Address,
+    ) {
+        let topics = (Symbol::new(e, "add_support_for_asset"), protocol);
+        e.events()
+            .publish(topics, asset_address);
+    }
+    
+    pub fn remove_support_for_asset(
+        e: &Env,
+        protocol: Symbol,
+        asset_address: Address,
+    ) {
+        let topics = (Symbol::new(e, "remove_support_for_asset"), protocol);
+        e.events()
+            .publish(topics, asset_address);
+    }
 }

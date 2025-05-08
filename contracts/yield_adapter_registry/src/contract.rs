@@ -5,7 +5,9 @@ use soroban_sdk::{
     Address,
     Env,
 };
-use crate::storage::{
+use crate::{
+    events::YieldAdapterRegistryEvents,
+    storage::{
         register_yield_adapter, 
         remove_yield_adapter,
         get_yield_adapter,
@@ -13,13 +15,14 @@ use crate::storage::{
         support_asset,
         remove_asset_support,
         is_asset_supported
-    };
+    }};
 
 use access_control::{
     access::default_access_control,
     constants::DEFAULT_ADMIN_ROLE
 };
 use yield_adapter::contract_types::SupportedAdapter;
+
 
 contractmeta!(
     key = "Description",
@@ -60,7 +63,7 @@ impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
     fn set_yield_adapter_admin(e: &Env, caller: Address, new_admin: Address) {
         let access_control = default_access_control(e);
         access_control.grant_role(&e, caller, DEFAULT_ADMIN_ROLE, &new_admin);
-        e.events().publish(("YIELD_ADAPTER_REGISTRY", "set_admin"), &new_admin);
+        YieldAdapterRegistryEvents::set_admin(&e, new_admin);
     }
 
     fn register_adapter(
@@ -70,14 +73,14 @@ impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
         adapter_address: Address
     ) {        
         Self::only_admin(e, caller);
-        register_yield_adapter(e, protocol.id(), adapter_address);
-        e.events().publish(("YIELD_ADAPTER_REGISTRY", "register_adapter"), protocol.id());
+        register_yield_adapter(e, protocol.id(), adapter_address.clone());
+        YieldAdapterRegistryEvents::register_adapter(&e, protocol.id(), adapter_address);
     }
 
     fn remove_adapter(e: &Env, caller: Address, protocol: SupportedAdapter) {
         Self::only_admin(e, caller);
         remove_yield_adapter(e, protocol.id());
-        e.events().publish(("YIELD_ADAPTER_REGISTRY", "remove_adapter"), protocol.id());
+        YieldAdapterRegistryEvents::remove_adapter(&e, protocol.id());
         
     }
     
@@ -92,13 +95,13 @@ impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
     fn add_support_for_asset(e: &Env, caller: Address, protocol: SupportedAdapter, asset_address: Address) {
         Self::only_admin(e, caller);
         support_asset(e, protocol.id(), asset_address.clone());
-        e.events().publish(("YIELD_ADAPTER_REGISTRY", "add_support_for_asset"), asset_address);
+        YieldAdapterRegistryEvents::add_support_for_asset(&e, protocol.id(), asset_address);
     }
 
     fn remove_support_for_asset(e: &Env, caller: Address, protocol: SupportedAdapter, asset_address: Address) {
         Self::only_admin(e, caller);
         remove_asset_support(&e, protocol.id(), asset_address.clone());
-        e.events().publish(("CUSD_MANAGER", "remove_asset"), asset_address);
+        YieldAdapterRegistryEvents::remove_support_for_asset(&e, protocol.id(), asset_address);
     }
 
     fn is_supported_asset(e: &Env, protocol: SupportedAdapter, asset_address: Address) -> bool {
