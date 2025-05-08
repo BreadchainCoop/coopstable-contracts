@@ -22,6 +22,11 @@ const ADAPTER_REGISTRY_KEY: Symbol = symbol_short!("AR");
 const CUSD_MANAGER_KEY: Symbol = symbol_short!("CM");
 
 pub trait LendingYieldControllerTrait {
+    fn __constructor(
+        env: Env, 
+        adapter_registry: Address, 
+        cusd_manager: Address
+    );
     fn deposit_collateral(env: &Env, protocol: SupportedAdapter, user: Address, asset: Address, amount: i128) -> i128;
     fn withdraw_collateral(env: &Env, protocol: SupportedAdapter, user: Address, asset: Address, amount: i128) -> i128;
 }
@@ -29,21 +34,8 @@ pub trait LendingYieldControllerTrait {
 #[contract]
 pub struct LendingYieldController ;
 
-#[contractimpl]
 impl LendingYieldController {
     
-    fn __constructor(
-        env: Env, 
-        adapter_registry: Address, 
-        cusd_manager: Address
-    ) {
-        env.storage().instance().extend_ttl(
-            INSTANCE_LIFETIME_THRESHOLD, 
-            INSTANCE_BUMP_AMOUNT
-        );
-        env.storage().instance().set(&ADAPTER_REGISTRY_KEY, &adapter_registry);
-        env.storage().instance().set(&CUSD_MANAGER_KEY, &cusd_manager);
-    }
     fn get_cusd_manager(e: &Env) -> Address {
         e.storage().instance().extend_ttl(
             INSTANCE_LIFETIME_THRESHOLD, 
@@ -71,7 +63,18 @@ impl LendingYieldController {
 
 #[contractimpl]
 impl LendingYieldControllerTrait for LendingYieldController {
-
+    fn __constructor(
+        env: Env, 
+        adapter_registry: Address, 
+        cusd_manager: Address
+    ) {
+        env.storage().instance().extend_ttl(
+            INSTANCE_LIFETIME_THRESHOLD, 
+            INSTANCE_BUMP_AMOUNT
+        );
+        env.storage().instance().set(&ADAPTER_REGISTRY_KEY, &adapter_registry);
+        env.storage().instance().set(&CUSD_MANAGER_KEY, &cusd_manager);
+    }
     fn deposit_collateral(
         e: &Env,
         protocol: SupportedAdapter,
