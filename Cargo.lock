@@ -759,7 +759,9 @@ dependencies = [
 name = "lending_yield_controller"
 version = "0.0.0"
 dependencies = [
+ "blend_capital_adapter",
  "cusd_manager",
+ "pretty_assertions",
  "soroban-sdk",
  "yield_adapter",
  "yield_adapter_registry",

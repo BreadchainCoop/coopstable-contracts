@@ -16,3 +16,6 @@ yield_adapter = { workspace= true, path = "./packages/yield_adapter" }
 [dev-dependencies]
 pretty_assertions = { workspace = true }
 soroban-sdk = { workspace = true, features = ["testutils"] }
+
+[features]
+use_mocks = []

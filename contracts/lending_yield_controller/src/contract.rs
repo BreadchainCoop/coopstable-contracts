@@ -1,27 +1,24 @@
-use soroban_sdk::Vec;
 use::soroban_sdk::{
     contract, 
     contractimpl, 
     Env,
     Address,
-    Symbol,
-    symbol_short,
     token::TokenClient
 };
-use crate::constants::{
-    INSTANCE_BUMP_AMOUNT, 
-    INSTANCE_LIFETIME_THRESHOLD,
-    ADAPTER_REGISTRY_KEY,
-    CUSD_MANAGER_KEY,
-    YIELD_TYPE,
-    YIELD_DISTRIBUTOR_KEY
+use crate::{
+    constants::{
+        ADAPTER_REGISTRY_KEY, 
+        CUSD_MANAGER_KEY, 
+        INSTANCE_BUMP_AMOUNT, 
+        INSTANCE_LIFETIME_THRESHOLD, 
+        YIELD_DISTRIBUTOR_KEY, 
+        YIELD_TYPE
+    }, 
+    events::LendingYieldControllerEvents
 };
 use yield_adapter::{
     lending_adapter::LendingAdapterClient,
-    contract_types::{
-        SupportedAdapter,
-        SupportedYieldType
-}
+    contract_types::SupportedAdapter
 };
 use cusd_manager::contract::CUSDManagerClient;
 use yield_adapter_registry::contract::YieldAdapterRegistryClient;
@@ -42,8 +39,9 @@ pub trait LendingYieldControllerTrait {
 }
 
 #[contract]
-pub struct LendingYieldController ;
+pub struct LendingYieldController;
 
+#[contractimpl]
 impl LendingYieldController {
     
     fn get_cusd_manager(e: &Env) -> Address {
@@ -131,10 +129,10 @@ impl LendingYieldControllerTrait for LendingYieldController {
         );
         asset_client.approve(&e.current_contract_address(), &adapter.address, &amount, &u32::MAX); 
         adapter.deposit(&e.current_contract_address(), &asset, &amount);
-        
-        // note: yield controller should be given approval to transfer asset from user
         cusd_manager_client.issue_cusd(&e.current_contract_address(), &user, &amount);
         
+        LendingYieldControllerEvents::deposit_collateral(&e, user, asset, amount);
+
         amount
     }
 
@@ -170,6 +168,8 @@ impl LendingYieldControllerTrait for LendingYieldController {
             &user, 
             &amount
         );
+
+        LendingYieldControllerEvents::withdraw_collateral(&e, user, asset, amount);
         
         amount
     }
@@ -227,7 +227,8 @@ impl LendingYieldControllerTrait for LendingYieldController {
                     
                     // Distribute the yield
                     distributor.distribute_yield(&user, &asset, &claimed);
-                    total_claimed += claimed           
+                    total_claimed += claimed;            
+                    LendingYieldControllerEvents::claim_yield(&e, user.clone(), asset.clone(), claimed);
                 }
             }
         }

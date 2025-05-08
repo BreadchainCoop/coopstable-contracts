@@ -1,14 +1,11 @@
 use soroban_sdk::{
     contract, 
     contractimpl, 
-    contractmeta, 
-    symbol_short, 
+    contractmeta,  
     token::TokenClient,
     Address, 
     Env, 
-    Symbol,
     Vec,
-    vec
 };
 
 use access_control::{
@@ -18,7 +15,6 @@ use access_control::{
 
 use crate::events::YieldDistributorEvents;
 use crate::storage::{
-    extend_instance,
     get_treasury,
     set_treasury,
     get_treasury_share_bps,
@@ -27,14 +23,12 @@ use crate::storage::{
     set_yield_controller,
     get_distribution_period,
     set_distribution_period,
-    get_last_distribution,
     get_member,
     get_active_members,
     add_member,
     remove_member,
     record_distribution,
     get_distribution_config,
-    count_active_members
 };
 
 contractmeta!(key = "Description", val = "Yield distributor for Coopstable");

@@ -1,9 +1,9 @@
 #![no_std]
 mod contract;
-mod contract_types;
+pub mod contract_types;
 mod constants;
 mod storage;
-mod artifacts {
+pub mod artifacts {
     pub mod pool {
         soroban_sdk::contractimport!(file = "./artifacts/pool.wasm");
     } 
@@ -14,5 +14,5 @@ mod artifacts {
         soroban_sdk::contractimport!(file = "./artifacts/backstop.wasm");
     }
 }
-mod blend_pool_mock;
+pub mod mocks;
 mod test;

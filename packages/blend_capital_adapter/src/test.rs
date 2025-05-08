@@ -10,7 +10,7 @@ use soroban_sdk::{
     IntoVal,
 };
 use pretty_assertions::assert_eq;
-use crate::blend_pool_mock::{PoolContractClient, PoolContract};
+use crate::mocks::blend_pool_mock::{PoolContractClient, PoolContract};
 
 // Helper function to create a test environment with a deployed BlendCapitalAdapter
 fn setup_test() -> (Env, Address, Address, Address, Address) {

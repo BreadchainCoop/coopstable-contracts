@@ -1,5 +1,6 @@
 [package]
 name = "lending_yield_controller"
+description = "Coopstable lending yield controller contract"
 version = "0.0.0"
 edition = { workspace = true }
 publish = false
@@ -15,5 +16,11 @@ yield_adapter = { workspace = true }
 yield_distributor = { workspace = true }
 cusd_manager = { workspace = true }
 
+
 [dev-dependencies]
+blend_capital_adapter = { workspace = true }
+pretty_assertions = { workspace = true }
 soroban-sdk = { workspace = true, features = ["testutils"] }
+
+[features]
+use_mocks = []
