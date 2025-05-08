@@ -14,8 +14,9 @@ pub fn read_yield_adapter_registry(e: &Env) -> YieldAdapterRegistryMap {
                 .persistent()
                 .extend_ttl(
                     &YIELD_REGISTRY_KEY,
+                    REGISTRY_LIFETIME_THRESHOLD,
                     REGISTRY_BUMP_AMOUNT, 
-                    REGISTRY_LIFETIME_THRESHOLD
+                    
                 );
             
             registry_map
@@ -30,8 +31,8 @@ fn write_yield_adapter_registry(e: &Env, registry_map: YieldAdapterRegistryMap) 
         .persistent()
         .extend_ttl(
             &YIELD_REGISTRY_KEY,
+            REGISTRY_LIFETIME_THRESHOLD,
             REGISTRY_BUMP_AMOUNT,
-            REGISTRY_LIFETIME_THRESHOLD
         );
 }
 

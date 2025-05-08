@@ -30,6 +30,7 @@ contractmeta!(
 );
 
 pub trait YieldAdapterRegistryTrait {
+    fn __constructor(e: Env, admin: Address);
     fn set_yield_adapter_admin(e: &Env, caller: Address, new_admin: Address);
     fn register_adapter(e: &Env, caller: Address, protocol: SupportedAdapter, adapter_address: Address);
     fn get_adapter(e: &Env, protocol: SupportedAdapter) -> Address;
@@ -42,16 +43,8 @@ pub trait YieldAdapterRegistryTrait {
 #[contract]
 pub struct YieldAdapterRegistry;
 
-#[contractimpl]
 impl YieldAdapterRegistry {
-    fn __constructor(e: Env, admin: Address) {
 
-        let access_control = default_access_control(&e);
-
-        access_control.initialize(&e, &admin);
-        access_control.set_role_admin(&e, DEFAULT_ADMIN_ROLE, DEFAULT_ADMIN_ROLE); 
-        access_control._grant_role(&e, DEFAULT_ADMIN_ROLE, &admin);
-    }
     fn only_admin(e: &Env, caller: Address) {
         let access_control = default_access_control(e);
         access_control.only_role(&e, &caller, DEFAULT_ADMIN_ROLE);
@@ -60,6 +53,15 @@ impl YieldAdapterRegistry {
 
 #[contractimpl]
 impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
+    fn __constructor(e: Env, admin: Address) {
+
+        let access_control = default_access_control(&e);
+
+        access_control.initialize(&e, &admin);
+        access_control.set_role_admin(&e, DEFAULT_ADMIN_ROLE, DEFAULT_ADMIN_ROLE); 
+        access_control._grant_role(&e, DEFAULT_ADMIN_ROLE, &admin);
+    }
+
     fn set_yield_adapter_admin(e: &Env, caller: Address, new_admin: Address) {
         let access_control = default_access_control(e);
         access_control.grant_role(&e, caller, DEFAULT_ADMIN_ROLE, &new_admin);
@@ -79,9 +81,9 @@ impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
 
     fn remove_adapter(e: &Env, caller: Address, protocol: SupportedAdapter) {
         Self::only_admin(e, caller);
+        let adapter_address = get_yield_adapter(e, protocol.id());
         remove_yield_adapter(e, protocol.id());
-        YieldAdapterRegistryEvents::remove_adapter(&e, protocol.id());
-        
+        YieldAdapterRegistryEvents::remove_adapter(&e, protocol.id(), adapter_address);
     }
     
     fn get_adapter(e: &Env, protocol: SupportedAdapter) -> Address {

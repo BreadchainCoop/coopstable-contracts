@@ -1677,6 +1677,7 @@ name = "yield_adapter_registry"
 version = "0.0.0"
 dependencies = [
  "access_control",
+ "pretty_assertions",
  "soroban-sdk",
  "yield_adapter",
 ]

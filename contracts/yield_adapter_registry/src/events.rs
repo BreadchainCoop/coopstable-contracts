@@ -26,10 +26,11 @@ impl YieldAdapterRegistryEvents {
     pub fn remove_adapter(
         e: &Env,
         protocol: Symbol,
+        adapter_address: Address,
     ) {
-        let topics = (Symbol::new(e, "remove_adapter"), );
+        let topics = (Symbol::new(e, "remove_adapter"), protocol);
         e.events()
-            .publish(topics, protocol);
+            .publish(topics, adapter_address);
     }
     
     pub fn add_support_for_asset(
