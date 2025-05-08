@@ -3,25 +3,28 @@ use soroban_sdk::{
     contractimpl,
     contractmeta,
     Address,
-    Env,
+    Env, 
+    Vec,
 };
 use crate::{
     events::YieldAdapterRegistryEvents,
     storage::{
+        get_yield_adapter, 
+        get_yield_adapters, 
+        get_yield_adapters_with_assets, 
+        is_asset_supported, 
         register_yield_adapter, 
-        remove_yield_adapter,
-        get_yield_adapter,
-        verify_if_yield_adapter_exists,
-        support_asset,
-        remove_asset_support,
-        is_asset_supported
+        remove_asset_support, 
+        remove_yield_adapter, 
+        support_asset, 
+        verify_if_yield_adapter_exists
     }};
 
 use access_control::{
     access::default_access_control,
     constants::DEFAULT_ADMIN_ROLE
 };
-use yield_adapter::contract_types::SupportedAdapter;
+use yield_adapter::contract_types::{SupportedAdapter, SupportedYieldType};
 
 
 contractmeta!(
@@ -32,12 +35,14 @@ contractmeta!(
 pub trait YieldAdapterRegistryTrait {
     fn __constructor(e: Env, admin: Address);
     fn set_yield_adapter_admin(e: &Env, caller: Address, new_admin: Address);
-    fn register_adapter(e: &Env, caller: Address, protocol: SupportedAdapter, adapter_address: Address);
-    fn get_adapter(e: &Env, protocol: SupportedAdapter) -> Address;
-    fn remove_adapter(e: &Env, caller: Address, protocol: SupportedAdapter);
-    fn add_support_for_asset(e: &Env, caller: Address, protocol: SupportedAdapter, asset_address: Address);
-    fn remove_support_for_asset(e: &Env, caller: Address, protocol: SupportedAdapter, asset_address: Address);
-    fn is_supported_asset(e: &Env, protocol: SupportedAdapter, asset_address: Address) -> bool;
+    fn register_adapter(e: &Env, caller: Address, yield_type: SupportedYieldType, protocol: SupportedAdapter, adapter_address: Address);
+    fn get_adapter(e: &Env, yield_type: SupportedYieldType, protocol: SupportedAdapter) -> Address;
+    fn get_adapters(e: &Env, yield_type: SupportedYieldType) -> Vec<Address>;
+    fn get_adapters_with_assets(e: &Env, yield_type: SupportedYieldType) -> Vec<(Address, Vec<Address>)>;
+    fn remove_adapter(e: &Env, caller: Address, yield_type: SupportedYieldType, protocol: SupportedAdapter);
+    fn add_support_for_asset(e: &Env, caller: Address, yield_type: SupportedYieldType, protocol: SupportedAdapter, asset_address: Address);
+    fn remove_support_for_asset(e: &Env, caller: Address, yield_type: SupportedYieldType, protocol: SupportedAdapter, asset_address: Address);
+    fn is_supported_asset(e: &Env, yield_type: SupportedYieldType, protocol: SupportedAdapter, asset_address: Address) -> bool;
 }
 
 #[contract]
@@ -71,43 +76,51 @@ impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
     fn register_adapter(
         e: &Env, 
         caller: Address,
+        yield_type: SupportedYieldType,
         protocol: SupportedAdapter,
         adapter_address: Address
     ) {        
         Self::only_admin(e, caller);
-        register_yield_adapter(e, protocol.id(), adapter_address.clone());
-        YieldAdapterRegistryEvents::register_adapter(&e, protocol.id(), adapter_address);
+        register_yield_adapter(e, yield_type.id(), protocol.id(), adapter_address.clone());
+        YieldAdapterRegistryEvents::register_adapter(&e, yield_type.id(), protocol.id(), adapter_address);
     }
 
-    fn remove_adapter(e: &Env, caller: Address, protocol: SupportedAdapter) {
+    fn remove_adapter(e: &Env, caller: Address, yield_type: SupportedYieldType,protocol: SupportedAdapter) {
         Self::only_admin(e, caller);
-        let adapter_address = get_yield_adapter(e, protocol.id());
-        remove_yield_adapter(e, protocol.id());
-        YieldAdapterRegistryEvents::remove_adapter(&e, protocol.id(), adapter_address);
+        let adapter_address = get_yield_adapter(e, yield_type.id(), protocol.id());
+        remove_yield_adapter(e, yield_type.id(), protocol.id());
+        YieldAdapterRegistryEvents::remove_adapter(&e, yield_type.id(), protocol.id(), adapter_address);
     }
     
-    fn get_adapter(e: &Env, protocol: SupportedAdapter) -> Address {
-        if verify_if_yield_adapter_exists(e, protocol.id()) {
-            get_yield_adapter(e, protocol.id())
+    fn get_adapter(e: &Env, yield_type: SupportedYieldType, protocol: SupportedAdapter) -> Address {
+        if verify_if_yield_adapter_exists(e, yield_type.id(),protocol.id()) {
+            get_yield_adapter(e, yield_type.id(), protocol.id())
         } else {
             panic!("Yield adapter not found")
         }
     }
 
-    fn add_support_for_asset(e: &Env, caller: Address, protocol: SupportedAdapter, asset_address: Address) {
+    fn add_support_for_asset(e: &Env, caller: Address, yield_type: SupportedYieldType, protocol: SupportedAdapter, asset_address: Address) {
         Self::only_admin(e, caller);
-        support_asset(e, protocol.id(), asset_address.clone());
-        YieldAdapterRegistryEvents::add_support_for_asset(&e, protocol.id(), asset_address);
+        support_asset(e, yield_type.id(), protocol.id(), asset_address.clone());
+        YieldAdapterRegistryEvents::add_support_for_asset(&e, yield_type.id(), protocol.id(), asset_address);
     }
 
-    fn remove_support_for_asset(e: &Env, caller: Address, protocol: SupportedAdapter, asset_address: Address) {
+    fn remove_support_for_asset(e: &Env, caller: Address, yield_type: SupportedYieldType, protocol: SupportedAdapter, asset_address: Address) {
         Self::only_admin(e, caller);
-        remove_asset_support(&e, protocol.id(), asset_address.clone());
-        YieldAdapterRegistryEvents::remove_support_for_asset(&e, protocol.id(), asset_address);
+        remove_asset_support(&e, yield_type.id(), protocol.id(), asset_address.clone());
+        YieldAdapterRegistryEvents::remove_support_for_asset(&e, yield_type.id(), protocol.id(), asset_address);
     }
 
-    fn is_supported_asset(e: &Env, protocol: SupportedAdapter, asset_address: Address) -> bool {
-        is_asset_supported(e, protocol.id(), asset_address)
+    fn is_supported_asset(e: &Env, yield_type: SupportedYieldType, protocol: SupportedAdapter, asset_address: Address) -> bool {
+        is_asset_supported(e, yield_type.id(), protocol.id(), asset_address)
     }
     
+    fn get_adapters(e: &Env, yield_type: SupportedYieldType) -> Vec<Address> {
+        get_yield_adapters(e, yield_type.id())
+    }
+
+    fn get_adapters_with_assets(e: &Env, yield_type: SupportedYieldType) -> Vec<(Address, Vec<Address>)> {
+        get_yield_adapters_with_assets(e, yield_type.id())
+    }
 }

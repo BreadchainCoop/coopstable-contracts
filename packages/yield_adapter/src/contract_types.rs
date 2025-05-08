@@ -15,3 +15,22 @@ impl SupportedAdapter {
         }
     }
 }
+
+
+#[derive(Clone)]
+#[contracttype]
+pub enum SupportedYieldType {
+    Lending,
+    Liquidity,
+    Custom(Symbol)
+}
+
+impl SupportedYieldType {
+    pub fn id(&self) -> Symbol {
+        match self {
+            SupportedYieldType::Lending => symbol_short!("LEND"),
+            SupportedYieldType::Liquidity => symbol_short!("LIQUIDITY"),
+            SupportedYieldType::Custom(s) => s.clone(),
+        }
+    }
+}

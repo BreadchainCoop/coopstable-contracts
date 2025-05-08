@@ -20,6 +20,13 @@
                 {
                   "vec": [
                     {
+                      "symbol": "Lending"
+                    }
+                  ]
+                },
+                {
+                  "vec": [
+                    {
                       "symbol": "BlendCapital"
                     }
                   ]
@@ -45,6 +52,13 @@
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+                },
+                {
+                  "vec": [
+                    {
+                      "symbol": "Lending"
+                    }
+                  ]
                 },
                 {
                   "vec": [
@@ -147,7 +161,7 @@
           "contract_data": {
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
             "key": {
-              "symbol": "YREG"
+              "symbol": "LEND"
             },
             "durability": "persistent"
           }
@@ -160,7 +174,7 @@
                 "ext": "v0",
                 "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
                 "key": {
-                  "symbol": "YREG"
+                  "symbol": "LEND"
                 },
                 "durability": "persistent",
                 "val": {
@@ -206,6 +220,14 @@
                             }
                           }
                         ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "yield_type"
+                      },
+                      "val": {
+                        "symbol": "LEND"
                       }
                     }
                   ]

@@ -2,16 +2,23 @@
 extern crate std;
 
 use soroban_sdk::{
-    log, symbol_short, testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation, Events}, vec, Address, Env, IntoVal, Map, Symbol, Val, Vec
+    log, 
+    symbol_short, 
+    testutils::{Address as _, Events}, 
+    vec, 
+    Address, 
+    Env, 
+    IntoVal, 
+    Symbol
 };
 use pretty_assertions::assert_eq;
 
 use crate::{
     contract::{YieldAdapterRegistry, YieldAdapterRegistryClient, YieldAdapterRegistryArgs},
-    storage_types::{YieldAdapterRegistryMap, YIELD_REGISTRY_KEY},
+    storage_types::YieldAdapterRegistryMap,
 };
 
-use yield_adapter::contract_types::SupportedAdapter;
+use yield_adapter::contract_types::{SupportedAdapter, SupportedYieldType};
 
 // Test fixture to simplify test setup and provide common utilities
 struct TestFixture {
@@ -57,7 +64,7 @@ impl TestFixture {
     // Helper to verify an adapter exists in storage
     fn verify_adapter_exists(&self, protocol: SupportedAdapter, expected_address: &Address) -> bool {
         self.env.as_contract(&self.registry.address, || {
-            if let Some(registry_map) = self.env.storage().persistent().get::<Symbol, YieldAdapterRegistryMap>(&YIELD_REGISTRY_KEY) {
+            if let Some(registry_map) = self.env.storage().persistent().get::<Symbol, YieldAdapterRegistryMap>(&SupportedYieldType::Lending.id()) {
                 if registry_map.contains_key(protocol.id()) {
                     let stored_address = registry_map.get_adapter(protocol.id());
                     return stored_address == *expected_address;
@@ -70,7 +77,7 @@ impl TestFixture {
     // Helper to verify an asset is supported
     fn verify_asset_supported(&self, protocol: SupportedAdapter, asset: &Address) -> bool {
         self.env.as_contract(&self.registry.address, || {
-            if let Some(registry_map) = self.env.storage().persistent().get::<Symbol, YieldAdapterRegistryMap>(&YIELD_REGISTRY_KEY) {
+            if let Some(registry_map) = self.env.storage().persistent().get::<Symbol, YieldAdapterRegistryMap>(&SupportedYieldType::Lending.id()) {
                 return registry_map.supports_asset(protocol.id(), asset.clone());
             }
             false
@@ -87,7 +94,7 @@ fn test_constructor() {
     
     // The admin should be able to call admin-only functions
     let (adapter_address, protocol) = fixture.create_adapter();
-    fixture.registry.register_adapter(&fixture.admin, &protocol, &adapter_address);
+    fixture.registry.register_adapter(&fixture.admin, &SupportedYieldType::Lending, &protocol, &adapter_address);
     
     // Verify adapter is registered in storage
     assert!(fixture.verify_adapter_exists(protocol, &adapter_address));
@@ -120,7 +127,7 @@ fn test_set_yield_adapter_admin() {
     
     // New admin should now be able to register adapters
     let (adapter_address, protocol) = fixture.create_adapter();
-    fixture.registry.register_adapter(&new_admin, &protocol, &adapter_address);
+    fixture.registry.register_adapter(&new_admin, &SupportedYieldType::Lending, &protocol, &adapter_address);
     
     // Verify adapter is registered in storage
     assert!(fixture.verify_adapter_exists(protocol, &adapter_address));
@@ -139,7 +146,7 @@ fn test_register_adapter() {
     let _ = fixture.env.events().all();
     
     // Register adapter
-    fixture.registry.register_adapter(&fixture.admin, &protocol, &adapter_address);
+    fixture.registry.register_adapter(&fixture.admin, &SupportedYieldType::Lending, &protocol, &adapter_address);
     
     // Verify event emission
     log!(&fixture.env, "All events: {:?}", fixture.env.events().all());
@@ -148,8 +155,8 @@ fn test_register_adapter() {
         &fixture.env,
         (
             fixture.registry.address.clone(),
-            (Symbol::new(&fixture.env, "register_adapter"), protocol.id().clone()).into_val(&fixture.env),
-            adapter_address.into_val(&fixture.env)
+            (Symbol::new(&fixture.env, "register_adapter"), SupportedYieldType::Lending.id()).into_val(&fixture.env),
+            (protocol.id().clone(), adapter_address.clone()).into_val(&fixture.env)
         )
     ];
     assert_eq!(published_event, expected_event);
@@ -158,7 +165,7 @@ fn test_register_adapter() {
     assert!(fixture.verify_adapter_exists(protocol.clone(), &adapter_address));
     
     // Test getting the adapter
-    let retrieved_address = fixture.registry.get_adapter(&protocol);
+    let retrieved_address = fixture.registry.get_adapter(&SupportedYieldType::Lending, &protocol);
     assert_eq!(retrieved_address, adapter_address);
 }
 
@@ -171,7 +178,7 @@ fn test_register_adapter_unauthorized() {
     
     // This should fail with an access control error
     fixture.env.mock_all_auths();
-    fixture.registry.register_adapter(&fixture.user, &protocol, &adapter_address);
+    fixture.registry.register_adapter(&fixture.user, &SupportedYieldType::Lending, &protocol, &adapter_address); 
 }
 
 #[test]
@@ -181,12 +188,12 @@ fn test_remove_adapter() {
 
     fixture.env.mock_all_auths();
     
-    fixture.registry.register_adapter(&fixture.admin, &protocol, &adapter_address);
+    fixture.registry.register_adapter(&fixture.admin, &SupportedYieldType::Lending, &protocol, &adapter_address);
     assert!(fixture.verify_adapter_exists(protocol.clone(), &adapter_address));
     
     let _ = fixture.env.events().all();
     
-    fixture.registry.remove_adapter(&fixture.admin, &protocol);
+    fixture.registry.remove_adapter(&fixture.admin, &SupportedYieldType::Lending, &protocol);
     
     
     let published_event = vec![&fixture.env, fixture.env.events().all().last_unchecked()];
@@ -194,8 +201,8 @@ fn test_remove_adapter() {
         &fixture.env,
         (
             fixture.registry.address.clone(),
-            (Symbol::new(&fixture.env, "remove_adapter"), protocol.id().clone()).into_val(&fixture.env),
-            adapter_address.into_val(&fixture.env)
+            (Symbol::new(&fixture.env, "remove_adapter"), SupportedYieldType::Lending.id()).into_val(&fixture.env),
+            (protocol.id().clone(), adapter_address.clone()).into_val(&fixture.env)
         )
     ];
     assert_eq!(
@@ -214,9 +221,9 @@ fn test_remove_adapter_unauthorized() {
     let (adapter_address, protocol) = fixture.create_adapter();
     
     fixture.env.mock_all_auths();
-    fixture.registry.register_adapter(&fixture.admin, &protocol, &adapter_address);
+    fixture.registry.register_adapter(&fixture.admin,&SupportedYieldType::Lending, &protocol, &adapter_address);
     
-    fixture.registry.remove_adapter(&fixture.user, &protocol);
+    fixture.registry.remove_adapter(&fixture.user, &SupportedYieldType::Lending, &protocol);
 }
 
 #[test]
@@ -226,7 +233,7 @@ fn test_get_non_existent_adapter() {
     let protocol = SupportedAdapter::BlendCapital;
     
     // This should panic with "Yield adapter not found"
-    fixture.registry.get_adapter(&protocol);
+    fixture.registry.get_adapter(&SupportedYieldType::Lending, &protocol);
 }
 
 #[test]
@@ -239,13 +246,13 @@ fn test_add_support_for_asset() {
     fixture.env.mock_all_auths();
     
     // Register adapter first
-    fixture.registry.register_adapter(&fixture.admin, &protocol, &adapter_address);
+    fixture.registry.register_adapter(&fixture.admin,&SupportedYieldType::Lending, &protocol, &adapter_address);
     
     // Clear events before adding asset support
     let _ = fixture.env.events().all();
     
     // Add asset support
-    fixture.registry.add_support_for_asset(&fixture.admin, &protocol, &asset);
+    fixture.registry.add_support_for_asset(&fixture.admin, &SupportedYieldType::Lending, &protocol, &asset);
     
     // Verify event emission
     let published_event = vec![&fixture.env, fixture.env.events().all().last_unchecked()];
@@ -253,15 +260,15 @@ fn test_add_support_for_asset() {
         &fixture.env,
         (
             fixture.registry.address.clone(),
-            (Symbol::new(&fixture.env, "add_support_for_asset"), protocol.id().clone()).into_val(&fixture.env),
-            asset.into_val(&fixture.env)
+            (Symbol::new(&fixture.env, "add_support_for_asset"), SupportedYieldType::Lending.id()).into_val(&fixture.env),
+            (protocol.id().clone(), asset.clone()).into_val(&fixture.env) 
         )
     ];
     assert_eq!(published_event, expected_event);
 
     // Verify asset is supported
     assert!(fixture.verify_asset_supported(protocol.clone(), &asset));
-    let is_supported = fixture.registry.is_supported_asset(&protocol, &asset);
+    let is_supported = fixture.registry.is_supported_asset(&SupportedYieldType::Lending, &protocol, &asset);
     assert!(is_supported);
     
 }
@@ -275,10 +282,10 @@ fn test_add_support_for_asset_unauthorized() {
     
     // Mock authorization for the admin to register adapter
     fixture.env.mock_all_auths();
-    fixture.registry.register_adapter(&fixture.admin, &protocol, &adapter_address);
+    fixture.registry.register_adapter(&fixture.admin, &SupportedYieldType::Lending, &protocol, &adapter_address);
         
     // This should fail with an unauthorized error
-    fixture.registry.add_support_for_asset(&fixture.user, &protocol, &asset);
+    fixture.registry.add_support_for_asset(&fixture.user, &SupportedYieldType::Lending, &protocol, &asset);
 }
 
 #[test]
@@ -291,30 +298,30 @@ fn test_remove_support_for_asset() {
     fixture.env.mock_all_auths();
     
     // Register adapter and add asset support first
-    fixture.registry.register_adapter(&fixture.admin, &protocol, &adapter_address);
-    fixture.registry.add_support_for_asset(&fixture.admin, &protocol, &asset);
+    fixture.registry.register_adapter(&fixture.admin, &SupportedYieldType::Lending, &protocol, &adapter_address);
+    fixture.registry.add_support_for_asset(&fixture.admin, &SupportedYieldType::Lending, &protocol, &asset);
     assert!(fixture.verify_asset_supported(protocol.clone(), &asset));
     
     // Clear events before removing asset support
     let _ = fixture.env.events().all();
     
     // Remove asset support
-    fixture.registry.remove_support_for_asset(&fixture.admin, &protocol.clone(), &asset);
+    fixture.registry.remove_support_for_asset(&fixture.admin, &SupportedYieldType::Lending, &protocol.clone(), &asset);
     
     let published_event = vec![&fixture.env, fixture.env.events().all().last_unchecked()];
     let expected_event = vec![
         &fixture.env,
         (
             fixture.registry.address.clone(),
-            (Symbol::new(&fixture.env, "remove_support_for_asset"), protocol.id().clone()).into_val(&fixture.env),
-            asset.into_val(&fixture.env)
+            (Symbol::new(&fixture.env, "remove_support_for_asset"), SupportedYieldType::Lending.id()).into_val(&fixture.env),
+            (protocol.id().clone(), asset.clone()).into_val(&fixture.env)
         )
     ];
     assert_eq!(published_event, expected_event);
 
     // Verify asset is no longer supported
     assert!(!fixture.verify_asset_supported(protocol.clone(), &asset));
-    let is_supported = fixture.registry.is_supported_asset(&protocol, &asset);
+    let is_supported = fixture.registry.is_supported_asset(&SupportedYieldType::Lending, &protocol, &asset);
     assert!(!is_supported);
     
 }
@@ -328,11 +335,11 @@ fn test_remove_support_for_asset_unauthorized() {
     
     // Mock authorization for the admin to register adapter and add asset support
     fixture.env.mock_all_auths();
-    fixture.registry.register_adapter(&fixture.admin, &protocol, &adapter_address);
-    fixture.registry.add_support_for_asset(&fixture.admin, &protocol, &asset);
+    fixture.registry.register_adapter(&fixture.admin, &SupportedYieldType::Lending, &protocol, &adapter_address);
+    fixture.registry.add_support_for_asset(&fixture.admin,&SupportedYieldType::Lending, &protocol, &asset);
     
     // This should fail with an unauthorized error
-    fixture.registry.remove_support_for_asset(&fixture.user, &protocol, &asset);
+    fixture.registry.remove_support_for_asset(&fixture.user, &SupportedYieldType::Lending, &protocol, &asset);
 }
 
 // Test checking if an asset is supported
@@ -347,20 +354,20 @@ fn test_is_supported_asset() {
     fixture.env.mock_all_auths();
     
     // Register adapter and add support for asset1 only
-    fixture.registry.register_adapter(&fixture.admin, &protocol, &adapter_address);
-    fixture.registry.add_support_for_asset(&fixture.admin, &protocol, &asset1);
+    fixture.registry.register_adapter(&fixture.admin, &SupportedYieldType::Lending, &protocol, &adapter_address);
+    fixture.registry.add_support_for_asset(&fixture.admin, &SupportedYieldType::Lending, &protocol, &asset1);
     
     // Verify asset1 is supported
-    let is_supported1 = fixture.registry.is_supported_asset(&protocol, &asset1);
+    let is_supported1 = fixture.registry.is_supported_asset(&SupportedYieldType::Lending, &protocol, &asset1);
     assert!(is_supported1);
     
     // Verify asset2 is not supported
-    let is_supported2 = fixture.registry.is_supported_asset(&protocol, &asset2);
+    let is_supported2 = fixture.registry.is_supported_asset(&SupportedYieldType::Lending, &protocol, &asset2);
     assert!(!is_supported2);
     
     // Verify non-existent protocol returns false for supported assets
     let non_existent_protocol = SupportedAdapter::Custom(symbol_short!("SIMP")); // We're using the same enum but treating it as a different protocol
-    let is_supported_non_existent = fixture.registry.is_supported_asset(&non_existent_protocol, &asset1);
+    let is_supported_non_existent = fixture.registry.is_supported_asset(&SupportedYieldType::Lending, &non_existent_protocol, &asset1);
     assert!(!is_supported_non_existent);
 }
 
