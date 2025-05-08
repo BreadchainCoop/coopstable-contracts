@@ -763,6 +763,7 @@ dependencies = [
  "soroban-sdk",
  "yield_adapter",
  "yield_adapter_registry",
+ "yield_distributor",
 ]
 
 [[package]]
@@ -1680,6 +1681,15 @@ dependencies = [
  "pretty_assertions",
  "soroban-sdk",
  "yield_adapter",
+]
+
+[[package]]
+name = "yield_distributor"
+version = "0.0.0"
+dependencies = [
+ "access_control",
+ "pretty_assertions",
+ "soroban-sdk",
 ]
 
 [[package]]

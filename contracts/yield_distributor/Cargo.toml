@@ -1,5 +1,5 @@
 [package]
-name = "lending_yield_controller"
+name = "yield_distributor"
 version = "0.0.0"
 edition = { workspace = true }
 publish = false
@@ -9,11 +9,9 @@ crate-type = ["lib", "cdylib"]
 doctest = false
 
 [dependencies]
+access_control = { workspace = true }
 soroban-sdk = { workspace = true }
-yield_adapter_registry = { workspace = true }
-yield_adapter = { workspace = true }
-yield_distributor = { workspace = true }
-cusd_manager = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+pretty_assertions = { workspace = true }

@@ -10,18 +10,24 @@ use::soroban_sdk::{
 };
 use crate::constants::{
     INSTANCE_BUMP_AMOUNT, 
-    INSTANCE_LIFETIME_THRESHOLD
+    INSTANCE_LIFETIME_THRESHOLD,
+    ADAPTER_REGISTRY_KEY,
+    CUSD_MANAGER_KEY,
+    YIELD_TYPE,
+    YIELD_DISTRIBUTOR_KEY
 };
 use yield_adapter::{
     lending_adapter::LendingAdapterClient,
-    contract_types::{SupportedAdapter,SupportedYieldType}
+    contract_types::{
+        SupportedAdapter,
+        SupportedYieldType
+}
 };
 use cusd_manager::contract::CUSDManagerClient;
 use yield_adapter_registry::contract::YieldAdapterRegistryClient;
+use yield_distributor::contract::YieldDistributorClient;
 
-const ADAPTER_REGISTRY_KEY: Symbol = symbol_short!("AR");
-const CUSD_MANAGER_KEY: Symbol = symbol_short!("CM");
-const YIELD_TYPE: SupportedYieldType = SupportedYieldType::Lending;
+
 pub trait LendingYieldControllerTrait {
     fn __constructor(
         e: Env, 
@@ -63,6 +69,18 @@ impl LendingYieldController {
     fn adapter_registry_client(e: &Env) -> YieldAdapterRegistryClient {
         YieldAdapterRegistryClient::new(e, &Self::get_adapter_registry(&e))
     }
+    
+    fn get_yield_distributor(e: &Env) -> Address {
+        e.storage().instance().extend_ttl(
+            INSTANCE_LIFETIME_THRESHOLD, 
+            INSTANCE_BUMP_AMOUNT
+        );
+        e.storage().instance().get(&YIELD_DISTRIBUTOR_KEY).unwrap()
+    }
+
+    fn distributor_client(e: &Env) -> YieldDistributorClient {
+        YieldDistributorClient::new(e, &Self::get_yield_distributor(&e))
+    }
 }
 
 #[contractimpl]
@@ -79,7 +97,9 @@ impl LendingYieldControllerTrait for LendingYieldController {
         );
         e.storage().instance().set(&ADAPTER_REGISTRY_KEY, &adapter_registry);
         e.storage().instance().set(&CUSD_MANAGER_KEY, &cusd_manager);
+        e.storage().instance().set(&YIELD_DISTRIBUTOR_KEY, &yield_distributor);
     }
+
     fn deposit_collateral(
         e: &Env,
         protocol: SupportedAdapter,
@@ -142,7 +162,6 @@ impl LendingYieldControllerTrait for LendingYieldController {
         adapter.withdraw(&user, &asset, &amount);
         
         // Burn cUSD
-        // will transfer usdc asset to yield controller
         cusd_manager_client.burn_cusd(&e.current_contract_address(),&user, &amount);
                 
         // Transfer asset to user
@@ -173,7 +192,47 @@ impl LendingYieldControllerTrait for LendingYieldController {
     }
     
     fn claim_yield(e: &Env) -> i128 {
-        0
+
+        let total_yield = Self::get_yield(e);
+        
+        if total_yield <= 0 {
+            return 0;
+        }
+        
+        // Check if distribution is available
+        let distributor = Self::distributor_client(e);
+        if !distributor.is_distribution_available() {
+            return 0; // Distribution not available yet
+        }
+        
+        // Track total claimed
+        let mut total_claimed: i128 = 0;
+        
+        // Get all protocols and assets
+        let registry_client = Self::adapter_registry_client(e);
+        let lend_protocols_with_assets = registry_client.get_adapters_with_assets(&YIELD_TYPE);
+        let user = e.current_contract_address();
+        
+        // For each protocol and asset
+        for (adapter_address, supported_assets) in lend_protocols_with_assets.iter() {
+            let adapter_client = LendingAdapterClient::new(e, &adapter_address);
+            
+            for asset in supported_assets.iter() {
+                // Claim yield for this adapter and asset
+                let claimed = adapter_client.claim_yield(&user, &asset);
+                
+                if claimed > 0 {
+                    let token_client = TokenClient::new(e, &asset);
+                    token_client.approve(&user, &distributor.address, &total_claimed, &u32::MAX);
+                    
+                    // Distribute the yield
+                    distributor.distribute_yield(&user, &asset, &claimed);
+                    total_claimed += claimed           
+                }
+            }
+        }
+        
+        total_claimed
     }
 }
 
