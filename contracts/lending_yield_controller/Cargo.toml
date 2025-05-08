@@ -11,14 +11,13 @@ doctest = false
 
 [dependencies]
 soroban-sdk = { workspace = true }
-yield_adapter_registry = { workspace = true }
 yield_adapter = { workspace = true }
-yield_distributor = { workspace = true }
-cusd_manager = { workspace = true }
-
+blend_capital_adapter = { workspace = true }
 
 [dev-dependencies]
-blend_capital_adapter = { workspace = true }
+yield_distributor = { workspace = true }
+yield_adapter_registry = { workspace = true }
+cusd_manager = { workspace = true }
 pretty_assertions = { workspace = true }
 soroban-sdk = { workspace = true, features = ["testutils"] }
 

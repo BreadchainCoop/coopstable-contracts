@@ -16,7 +16,11 @@ use crate::contract::{
 use yield_adapter::contract_types::{SupportedAdapter, SupportedYieldType};
 use yield_adapter_registry::contract::{YieldAdapterRegistryClient, YieldAdapterRegistry, YieldAdapterRegistryArgs};
 use yield_distributor::contract::{YieldDistributorClient, YieldDistributor, YieldDistributorArgs};
-use cusd_manager::contract::{CUSDManagerClient, CUSDManager, CUSDManagerArgs};
+use cusd_manager::contract::{
+    CUSDManagerClient,
+    CUSDManager,
+    CUSDManagerArgs
+};
 
 // Import mock lending adapter
 // use blend_capital_adapter::mocks::mock_adapter::{MockLendingAdapter};
@@ -233,8 +237,7 @@ fn test_deposit_collateral() {
     let fixture = TestFixture::create();
     
     // Create a mock lending adapter
-    let protocol = SupportedAdapter::BlendCapital;
-    let _ = fixture.create_mock_lending_adapter(protocol.clone());
+    let _ = fixture.create_mock_lending_adapter(SupportedAdapter::BlendCapital);
     
     // Setup token approval
     let deposit_amount = 1000_0000000;
@@ -243,7 +246,7 @@ fn test_deposit_collateral() {
     // Deposit collateral
     fixture.env.mock_all_auths();
     let result = fixture.controller.deposit_collateral(
-        &protocol,
+        &crate::yield_adapter_registry::SupportedAdapter::BlendCapital,
         &fixture.user,
         &fixture.usdc_token,
         &deposit_amount

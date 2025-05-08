@@ -16,14 +16,10 @@ use crate::{
     }, 
     events::LendingYieldControllerEvents
 };
-use yield_adapter::{
-    lending_adapter::LendingAdapterClient,
-    contract_types::SupportedAdapter
-};
-use cusd_manager::contract::CUSDManagerClient;
-use yield_adapter_registry::contract::YieldAdapterRegistryClient;
-use yield_distributor::contract::YieldDistributorClient;
-
+use yield_adapter::lending_adapter::LendingAdapterClient;
+use crate::yield_adapter_registry::{Client as YieldAdapterRegistryClient, SupportedAdapter};
+use crate::yield_distributor::Client as YieldDistributorClient;
+use crate::cusd_manager::Client as CUSDManagerClient;
 
 pub trait LendingYieldControllerTrait {
     fn __constructor(
@@ -64,7 +60,7 @@ impl LendingYieldController {
         CUSDManagerClient::new(e, &Self::get_cusd_manager(&e))
     }
 
-    fn adapter_registry_client(e: &Env) -> YieldAdapterRegistryClient {
+    fn adapter_registry_client(e: &Env) -> YieldAdapterRegistryClient<'static> {
         YieldAdapterRegistryClient::new(e, &Self::get_adapter_registry(&e))
     }
     
@@ -115,7 +111,7 @@ impl LendingYieldControllerTrait for LendingYieldController {
         let asset_client = TokenClient::new(e, &asset);
 
         // require supported asset for adapter
-        let is_asset_supported = registry_client.is_supported_asset(&YIELD_TYPE,&protocol, &asset);
+        let is_asset_supported = registry_client.is_supported_asset(&YIELD_TYPE, &protocol, &asset);
         if !is_asset_supported {
             panic!("Asset is not supported by the adapter registry");
         };
