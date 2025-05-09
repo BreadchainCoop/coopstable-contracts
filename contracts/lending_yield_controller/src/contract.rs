@@ -1,9 +1,9 @@
+use soroban_sdk::log;
 use::soroban_sdk::{
     contract, 
     contractimpl, 
     Env,
     Address,
-    log, 
     Symbol,
     token::TokenClient
 };
@@ -21,7 +21,6 @@ use crate::{
 use crate::yield_adapter_registry::Client as YieldAdapterRegistryClient;
 use crate::yield_distributor::Client as YieldDistributorClient;
 use crate::cusd_manager::Client as CUSDManagerClient;
-// use crate::yield_adapter::Client as LendingAdapterClient;
 use yield_adapter::lending_adapter::LendingAdapterClient;
 
 pub trait LendingYieldControllerTrait {
@@ -143,12 +142,15 @@ impl LendingYieldControllerTrait for LendingYieldController {
         amount: i128
     ) -> i128 {
         
+        user.require_auth();
+
         // Get the Lending Adapter
         let registry_client = Self::adapter_registry_client(&e);
         let cusd_manager_client = Self::cusd_manager_client(&e);
         let adapter = LendingAdapterClient::new(e, &registry_client.get_adapter(&YIELD_TYPE.id(), &protocol));
         let asset_client = TokenClient::new(e, &asset);
-
+        let cusd_token_client = TokenClient::new(e, &cusd_manager_client.get_cusd_id());
+        
         // require supported asset for adapter
         let is_asset_supported = registry_client.is_supported_asset(&YIELD_TYPE.id(), &protocol, &asset);
         if !is_asset_supported {
@@ -159,7 +161,9 @@ impl LendingYieldControllerTrait for LendingYieldController {
         adapter.withdraw(&user, &asset, &amount);
         
         // Burn cUSD
-        cusd_manager_client.burn_cusd(&e.current_contract_address(),&user, &amount);
+        cusd_token_client.transfer_from(&e.current_contract_address(), &user, &e.current_contract_address(), &amount);
+        cusd_token_client.approve(&e.current_contract_address(), &cusd_manager_client.address, &amount, &100_u32);
+        cusd_manager_client.burn_cusd(&e.current_contract_address(), &e.current_contract_address(), &amount); 
                 
         // Transfer asset to user
         asset_client.transfer(
@@ -198,36 +202,28 @@ impl LendingYieldControllerTrait for LendingYieldController {
             return 0;
         }
         
-        // Check if distribution is available
         let distributor = Self::distributor_client(e);
         if !distributor.is_distribution_available() {
-            return 0; // Distribution not available yet
+            panic!("Distribution not ready yet");
         }
-        
-        // Track total claimed
+
         let mut total_claimed: i128 = 0;
-        
-        // Get all protocols and assets
         let registry_client = Self::adapter_registry_client(e);
         let lend_protocols_with_assets = registry_client.get_adapters_with_assets(&YIELD_TYPE.id());
-        let user = e.current_contract_address();
-        
-        // For each protocol and asset
         for (adapter_address, supported_assets) in lend_protocols_with_assets.iter() {
             let adapter_client = LendingAdapterClient::new(e, &adapter_address);
             
             for asset in supported_assets.iter() {
-                // Claim yield for this adapter and asset
-                let claimed = adapter_client.claim_yield(&user, &asset);
-                
+
+                let token_client = TokenClient::new(e, &asset);
+                let claimed = adapter_client.claim_yield(&e.current_contract_address(), &asset);
+
                 if claimed > 0 {
-                    let token_client = TokenClient::new(e, &asset);
-                    token_client.approve(&user, &distributor.address, &total_claimed, &100_u32);
-                    
-                    // Distribute the yield
-                    distributor.distribute_yield(&user, &asset, &claimed);
-                    total_claimed += claimed;            
-                    LendingYieldControllerEvents::claim_yield(&e, user.clone(), asset.clone(), claimed);
+                    token_client.approve(&e.current_contract_address(), &distributor.address, &claimed, &100_u32);
+                    distributor.distribute_yield(&e.current_contract_address(), &asset, &claimed);
+                    LendingYieldControllerEvents::claim_yield(&e, e.current_contract_address(), asset.clone(), claimed);
+
+                    total_claimed += claimed;
                 }
             }
         }

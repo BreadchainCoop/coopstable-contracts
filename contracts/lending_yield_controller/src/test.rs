@@ -22,16 +22,29 @@ use cusd_manager::contract::{
     CUSDManagerArgs
 };
 
-// Import mock lending adapter
-// use blend_capital_adapter::mocks::mock_adapter::{MockLendingAdapter};
-
 mod mock_adapter {
-    use soroban_sdk::{contract, contractimpl, token::TokenClient, Address, Env};
+    use soroban_sdk::{contract, contractimpl, contracttype, token::TokenClient, Address, Env, IntoVal};
+    
+    #[derive(Clone)]
+    #[contracttype]
+    struct Yield {
+        amount: i128,
+        asset: Address
+    }
+    
     #[contract]
     pub struct MockLendingAdapter;
 
     #[contractimpl]
     impl MockLendingAdapter {
+        pub fn set_mock_yield(e: &Env, user: Address, asset: Address, amount: i128) {
+            let mock_yield = Yield {
+                amount,
+                asset
+            };
+            e.storage().instance().set(&user, &mock_yield);
+        }
+
         pub fn deposit(
             e: &Env,
             user: Address,
@@ -57,8 +70,11 @@ mod mock_adapter {
             user: Address,
             asset: Address
         ) -> i128 {
-            // Return the mock yield value for this user and asset
-            100_000_000
+            let mock_yield: Option<Yield> = e.storage().instance().get(&user);
+            match mock_yield {
+                Some(yield_data) => yield_data.amount,
+                None => 0
+            }
         }
 
         pub fn claim_yield(
@@ -66,13 +82,12 @@ mod mock_adapter {
             user: Address,
             asset: Address
         )   -> i128 {
-                let yield_amount = 100_000_000;
-                
-                let token_client = TokenClient::new(e, &asset);
-                token_client.transfer(&e.current_contract_address(), &user, &yield_amount);
+            let yield_amount = Self::get_yield(e, user.clone(), asset.clone());
 
-                // Return the claimed yield amount
-                yield_amount
+            let token_client = TokenClient::new(e, &asset);
+            token_client.transfer(&e.current_contract_address(), &user, &yield_amount);
+
+            yield_amount
         }
     }       
 }
@@ -220,6 +235,12 @@ impl TestFixture {
         self.env.mock_all_auths();
         self.usdc_client.approve(from, &self.controller.address, &amount, &100000);
     }
+
+    fn set_adapter_mock_yield(&self, adapter_id: &Address, user: &Address, asset: &Address, amount: i128) {
+        self.env.mock_all_auths();
+        mock_adapter::MockLendingAdapterClient::new(&self.env, &adapter_id).set_mock_yield(user, asset, &amount);
+    }
+
 }
 
 #[test]
@@ -250,7 +271,7 @@ fn test_deposit_collateral() {
     fixture.approve_tokens(&fixture.user, deposit_amount);
     
     // Deposit collateral
-    fixture.env.mock_all_auths();
+    fixture.env.mock_all_auths_allowing_non_root_auth();
     let result = fixture.controller.deposit_collateral(
         &SupportedAdapter::BlendCapital.id(),
         &fixture.user,
@@ -283,240 +304,208 @@ fn test_deposit_collateral() {
     assert_eq!(cusd_balance, deposit_amount, "CUSD tokens not issued correctly");
 }
 
-// #[test]
-// fn test_withdraw_collateral() {
-//     let fixture = TestFixture::create();
+#[test]
+fn test_withdraw_collateral() {
+    let fixture = TestFixture::create();
+    fixture.env.mock_all_auths_allowing_non_root_auth();
+    let _ = fixture.create_mock_lending_adapter(SupportedAdapter::BlendCapital);
     
-//     // Create a mock lending adapter
-//     let protocol = SupportedAdapter::BlendCapital;
-//     let adapter_id = fixture.create_mock_lending_adapter(protocol.clone());
+    // Create a mock lending adapter
+    let protocol = SupportedAdapter::BlendCapital;
     
-//     // First deposit collateral
-//     let deposit_amount = 1000_0000000;
-//     fixture.approve_tokens(&fixture.user, deposit_amount);
+    // First deposit collateral
+    let deposit_amount = 1000_0000000;
+    fixture.approve_tokens(&fixture.user, deposit_amount);
     
-//     fixture.env.mock_all_auths();
-//     fixture.controller.deposit_collateral(
-//         &protocol,
-//         &fixture.user,
-//         &fixture.usdc_token,
-//         &deposit_amount
-//     );
+    fixture.env.mock_all_auths_allowing_non_root_auth();
+    fixture.controller.deposit_collateral(
+        &protocol.id(),
+        &fixture.user,
+        &fixture.usdc_token,
+        &deposit_amount
+    );
     
-//     // Now withdraw half of the collateral
-//     let withdraw_amount = 500_0000000;
-    
-//     fixture.env.mock_all_auths();
-//     let result = fixture.controller.withdraw_collateral(
-//         &protocol,
-//         &fixture.user,
-//         &fixture.usdc_token,
-//         &withdraw_amount
-//     );
-    
-//     // Verify result
-//     assert_eq!(result, withdraw_amount);
-    
-//     // Verify events
-//     let events = fixture.env.events().all();
-    
-//     // Check for withdraw event from adapter
-//     let has_withdraw_event = events.iter().any(|(addr, topics, data)| {
-//         addr == &adapter_id && 
-//         topics.to_string().contains("withdraw") &&
-//         data.to_string().contains(&fixture.usdc_token.to_string()) &&
-//         data.to_string().contains(&withdraw_amount.to_string())
-//     });
-//     assert!(has_withdraw_event, "Expected withdraw event not found");
-    
-//     // Check CUSD balance was reduced
-//     let cusd_id = fixture.cusd_manager.get_cusd_id();
-//     let cusd_client = TokenClient::new(&fixture.env, &cusd_id);
-//     let cusd_balance = cusd_client.balance(&fixture.user);
-//     assert_eq!(cusd_balance, deposit_amount - withdraw_amount, "CUSD tokens not burned correctly");
-// }
+    let cusd_id = fixture.cusd_manager.get_cusd_id();
+    let cusd_client = TokenClient::new(&fixture.env, &cusd_id);
+    // Now withdraw half of the collateral
+    let withdraw_amount = 500_0000000;
 
-// #[test]
-// fn test_get_yield() {
-//     let fixture = TestFixture::create();
     
-//     // Create two mock lending adapters with different protocols
-//     let protocol1 = SupportedAdapter::BlendCapital;
-//     let protocol2 = SupportedAdapter::Custom(Symbol::new(&fixture.env, "OTHER"));
+    fixture.env.mock_all_auths_allowing_non_root_auth();
+    cusd_client.approve(&fixture.user, &fixture.controller.address, &withdraw_amount, &100);
     
-//     let adapter_id1 = fixture.create_mock_lending_adapter(protocol1.clone());
-//     let adapter_id2 = fixture.create_mock_lending_adapter(protocol2.clone());
+    let result = fixture.controller.withdraw_collateral(
+        &protocol.id(),
+        &fixture.user,
+        &fixture.usdc_token,
+        &withdraw_amount
+    );
     
-//     // Set mock yield values
-//     fixture.set_adapter_mock_yield(&adapter_id1, &fixture.controller.address, &fixture.usdc_token, 100);
-//     fixture.set_adapter_mock_yield(&adapter_id2, &fixture.controller.address, &fixture.usdc_token, 150);
+    // Verify result
+    let cusd_balance = cusd_client.balance(&fixture.user);
+    assert_eq!(cusd_balance, deposit_amount - withdraw_amount, "CUSD tokens not burned correctly");
+    assert_eq!(result, withdraw_amount);
     
-//     // Test get_yield should return the sum of yields from all adapters
-//     let yield_amount = fixture.controller.get_yield();
-    
-//     // Should be sum of the mock yield values
-//     assert_eq!(yield_amount, 250);
-// }
+    // Check CUSD balance was reduced
+}
 
-// #[test]
-// fn test_claim_yield() {
-//     let fixture = TestFixture::create();
+#[test]
+fn test_get_yield() {
+    let fixture = TestFixture::create();
     
-//     // Create a mock lending adapter
-//     let protocol = SupportedAdapter::BlendCapital;
-//     let adapter_id = fixture.create_mock_lending_adapter(protocol.clone());
+    let protocol1 = SupportedAdapter::BlendCapital;
+    let protocol2 = SupportedAdapter::Custom(Symbol::new(&fixture.env, "OTHER"));
     
-//     // Set a mock yield value
-//     fixture.set_adapter_mock_yield(&adapter_id, &fixture.controller.address, &fixture.usdc_token, 100);
+    let adapter_id1 = fixture.create_mock_lending_adapter(protocol1.clone());
+    let adapter_id2 = fixture.create_mock_lending_adapter(protocol2.clone());
     
-//     // Add yield distributor members
-//     fixture.env.mock_all_auths();
-//     fixture.yield_distributor.add_member(&fixture.admin, &fixture.user);
+    fixture.set_adapter_mock_yield(&adapter_id1.address, &fixture.controller.address, &fixture.usdc_token, 100);
+    fixture.set_adapter_mock_yield(&adapter_id2.address, &fixture.controller.address, &fixture.usdc_token, 150);
     
-//     // Mint tokens to the adapter that will be distributed
-//     fixture.env.mock_all_auths();
-//     StellarAssetClient::new(&fixture.env, &fixture.usdc_token).mint(&adapter_id, &100);
+    let yield_amount = fixture.controller.get_yield();
     
-//     // Jump forward in time to enable distribution
-//     fixture.jump(86400 + 10); // Distribution period + buffer
-    
-//     // Setup token approval from adapter to yield distributor
-//     fixture.env.mock_all_auths();
-//     fixture.usdc_client.approve(&adapter_id, &fixture.yield_distributor.address, &100, &100000);
-    
-//     // Claim yield
-//     fixture.env.mock_all_auths();
-//     let claimed_yield = fixture.controller.claim_yield();
-    
-//     // Verify claimed amount
-//     assert_eq!(claimed_yield, 100);
-    
-//     // Verify claim_yield event from adapter
-//     let events = fixture.env.events().all();
-//     let has_claim_event = events.iter().any(|(addr, topics, data)| {
-//         addr == &adapter_id && 
-//         topics.to_string().contains("claim_yield") &&
-//         data.to_string().contains(&fixture.usdc_token.to_string()) &&
-//         data.to_string().contains(&100_i128.to_string())
-//     });
-//     assert!(has_claim_event, "Expected claim_yield event not found");
-    
-//     // Verify distribution event from yield distributor
-//     let has_distribution_event = events.iter().any(|(addr, topics, _)| {
-//         addr == &fixture.yield_distributor.address && 
-//         topics.to_string().contains("distribute_yield")
-//     });
-//     assert!(has_distribution_event, "Expected yield distribution event not found");
-// }
+    assert_eq!(yield_amount, 250);
+}
 
-// #[test]
-// fn test_claim_yield_distribution_not_available() {
-//     let fixture = TestFixture::create();
+#[test]
+fn test_claim_yield() {
+    let fixture = TestFixture::create();
     
-//     // Create a mock lending adapter
-//     let protocol = SupportedAdapter::BlendCapital;
-//     let adapter_id = fixture.create_mock_lending_adapter(protocol.clone());
+    // Create a mock lending adapter
+    let protocol = SupportedAdapter::BlendCapital;
+    let adapter_client = fixture.create_mock_lending_adapter(protocol.clone());
     
-//     // Set a mock yield value
-//     fixture.set_adapter_mock_yield(&adapter_id, &fixture.controller.address, &fixture.usdc_token, 100);
-    
-//     // Claim yield without advancing time (distribution not available)
-//     fixture.env.mock_all_auths();
-//     let claimed_yield = fixture.controller.claim_yield();
-    
-//     // Should return 0 if distribution not available
-//     assert_eq!(claimed_yield, 0);
-// }
+    // Set a mock yield value
+    fixture.set_adapter_mock_yield(&adapter_client.address, &fixture.controller.address, &fixture.usdc_token, 100);
 
-// #[test]
-// fn test_claim_yield_no_yield_available() {
-//     let fixture = TestFixture::create();
+    // Add yield distributor members
+    fixture.env.mock_all_auths_allowing_non_root_auth();
+    fixture.yield_distributor.add_member(&fixture.admin, &fixture.user);
     
-//     // Create a mock lending adapter that returns 0 yield
-//     let protocol = SupportedAdapter::BlendCapital;
-//     let adapter_id = fixture.create_mock_lending_adapter(protocol.clone());
-    
-//     // Set mock yield to 0
-//     fixture.set_adapter_mock_yield(&adapter_id, &fixture.controller.address, &fixture.usdc_token, 0);
-    
-//     // Jump forward in time to enable distribution
-//     fixture.jump(86400 + 10);
-    
-//     // Claim yield
-//     fixture.env.mock_all_auths();
-//     let claimed_yield = fixture.controller.claim_yield();
-    
-//     // Should return 0 if no yield available
-//     assert_eq!(claimed_yield, 0);
-// }
+    // Jump forward in time to enable distribution
+    fixture.jump(86400 + 10); // Distribution period + buffer
 
-// #[test]
-// #[should_panic(expected = "Asset is not supported by the adapter registry")]
-// fn test_deposit_unsupported_asset() {
-//     let fixture = TestFixture::create();
-    
-//     // Create a mock lending adapter
-//     let protocol = SupportedAdapter::BlendCapital;
-//     let _adapter_id = fixture.create_mock_lending_adapter(protocol.clone());
-    
-//     // Create an unsupported asset
-//     let unsupported_token = fixture.env.register_stellar_asset_contract_v2(fixture.admin.clone());
-//     let unsupported_token_id = unsupported_token.address();
-    
-//     // Try to deposit unsupported asset
-//     fixture.env.mock_all_auths();
-//     fixture.controller.deposit_collateral(
-//         &protocol,
-//         &fixture.user,
-//         &unsupported_token_id,
-//         &1000_0000000
-//     );
-// }
+    // Mint tokens to the adapter that will be distributed
+    fixture.env.mock_all_auths_allowing_non_root_auth();
+    fixture.usdc_client.transfer(&fixture.user, &adapter_client.address, &100);
 
-// #[test]
-// #[should_panic(expected = "Asset is not supported by the adapter registry")]
-// fn test_withdraw_unsupported_asset() {
-//     let fixture = TestFixture::create();
+    // Claim yield
+    // transfer usdc to the yield distributor
+    fixture.env.mock_all_auths();
+    let claimed_yield = fixture.controller.claim_yield();
     
-//     // Create a mock lending adapter
-//     let protocol = SupportedAdapter::BlendCapital;
-//     let _adapter_id = fixture.create_mock_lending_adapter(protocol.clone());
-    
-//     // Create an unsupported asset
-//     let unsupported_token = fixture.env.register_stellar_asset_contract_v2(fixture.admin.clone());
-//     let unsupported_token_id = unsupported_token.address();
-    
-//     // Try to withdraw unsupported asset
-//     fixture.env.mock_all_auths();
-//     fixture.controller.withdraw_collateral(
-//         &protocol,
-//         &fixture.user,
-//         &unsupported_token_id,
-//         &1000_0000000
-//     );
-// }
+    // Verify claimed amount
+    assert_eq!(claimed_yield, 100);
+}
 
-// #[test]
-// #[should_panic(expected = "Unauthorized function call for address")]
-// fn test_deposit_without_user_auth() {
-//     let fixture = TestFixture::create();
+#[test]
+#[should_panic(expected = "Distribution not ready yet")]
+fn test_claim_yield_distribution_not_available() {
+    let fixture = TestFixture::create();
     
-//     // Create a mock lending adapter
-//     let protocol = SupportedAdapter::BlendCapital;
-//     let _adapter_id = fixture.create_mock_lending_adapter(protocol.clone());
+    // Create a mock lending adapter
+    let protocol = SupportedAdapter::BlendCapital;
+    let adapter_id = fixture.create_mock_lending_adapter(protocol.clone());
     
-//     // Setup token approval
-//     let deposit_amount = 1000_0000000;
-//     fixture.approve_tokens(&fixture.user, deposit_amount);
+    // Set a mock yield value
+    fixture.set_adapter_mock_yield(&adapter_id.address, &fixture.controller.address, &fixture.usdc_token, 100);
     
-//     // Don't mock user authorization
-//     fixture.controller.deposit_collateral(
-//         &protocol,
-//         &fixture.user,
-//         &fixture.usdc_token,
-//         &deposit_amount
-//     );
-// }
+    // Claim yield without advancing time (distribution not available)
+    fixture.env.mock_all_auths();
+    let claimed_yield = fixture.controller.claim_yield();
+    
+    // Should return 0 if distribution not available
+    assert_eq!(claimed_yield, 0);
+}
+
+#[test]
+fn test_claim_yield_no_yield_available() {
+    let fixture = TestFixture::create();
+    
+    // Create a mock lending adapter that returns 0 yield
+    let protocol = SupportedAdapter::BlendCapital;
+    let adapter_id = fixture.create_mock_lending_adapter(protocol.clone());
+    
+    // Set mock yield to 0
+    fixture.set_adapter_mock_yield(&adapter_id.address, &fixture.controller.address, &fixture.usdc_token, 0);
+    
+    // Jump forward in time to enable distribution
+    fixture.jump(86400 + 10);
+    
+    // Claim yield
+    fixture.env.mock_all_auths();
+    let claimed_yield = fixture.controller.claim_yield();
+    
+    // Should return 0 if no yield available
+    assert_eq!(claimed_yield, 0);
+}
+
+#[test]
+#[should_panic(expected = "Asset is not supported by the adapter registry")]
+fn test_deposit_unsupported_asset() {
+    let fixture = TestFixture::create();
+    
+    // Create a mock lending adapter
+    let protocol = SupportedAdapter::BlendCapital;
+    let _adapter_id = fixture.create_mock_lending_adapter(protocol.clone());
+    
+    // Create an unsupported asset
+    let unsupported_token = fixture.env.register_stellar_asset_contract_v2(fixture.admin.clone());
+    let unsupported_token_id = unsupported_token.address();
+    
+    // Try to deposit unsupported asset
+    fixture.env.mock_all_auths();
+    fixture.controller.deposit_collateral(
+        &protocol.id(),
+        &fixture.user,
+        &unsupported_token_id,
+        &1000_0000000
+    );
+}
+
+#[test]
+#[should_panic(expected = "Asset is not supported by the adapter registry")]
+fn test_withdraw_unsupported_asset() {
+    let fixture = TestFixture::create();
+    
+    // Create a mock lending adapter
+    let protocol = SupportedAdapter::BlendCapital;
+    let _adapter_id = fixture.create_mock_lending_adapter(protocol.clone());
+    
+    // Create an unsupported asset
+    let unsupported_token = fixture.env.register_stellar_asset_contract_v2(fixture.admin.clone());
+    let unsupported_token_id = unsupported_token.address();
+    
+    // Try to withdraw unsupported asset
+    fixture.env.mock_all_auths();
+    fixture.controller.withdraw_collateral(
+        &protocol.id(),
+        &fixture.user,
+        &unsupported_token_id,
+        &1000_0000000
+    );
+}
+
+#[test]
+#[should_panic(expected = "Unauthorized function call for address")]
+fn test_deposit_without_user_auth() {
+    let fixture = TestFixture::create();
+    
+    // Create a mock lending adapter
+    let protocol = SupportedAdapter::BlendCapital;
+    let _adapter_id = fixture.create_mock_lending_adapter(protocol.clone());
+    
+    // Setup token approval
+    let deposit_amount = 1000_0000000;
+
+    // Don't mock user authorization
+    fixture.controller.deposit_collateral(
+        &protocol.id(),
+        &Address::generate(&fixture.env),
+        &fixture.usdc_token,
+        &deposit_amount
+    );
+}
 
 // #[test]
 // fn test_multiple_adapters() {
