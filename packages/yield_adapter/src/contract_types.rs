@@ -1,10 +1,10 @@
-use soroban_sdk::{contracttype, Symbol, symbol_short};
+use soroban_sdk::{contracttype, symbol_short, Symbol};
 
 #[derive(Clone)]
 #[contracttype]
 pub enum SupportedAdapter {
     BlendCapital,
-    Custom(Symbol)
+    Custom(Symbol),
 }
 
 impl SupportedAdapter {
@@ -16,13 +16,12 @@ impl SupportedAdapter {
     }
 }
 
-
 #[derive(Clone)]
 #[contracttype]
 pub enum SupportedYieldType {
     Lending,
     Liquidity,
-    Custom(Symbol)
+    Custom(Symbol),
 }
 
 impl SupportedYieldType {

@@ -1,6 +1,4 @@
-use soroban_sdk::{
-    contracttype, Address, Symbol, symbol_short
-};
+use soroban_sdk::{contracttype, symbol_short, Address, Symbol};
 
 pub(crate) const DAY_IN_LEDGERS: u32 = 17280;
 pub(crate) const INSTANCE_BUMP_AMOUNT: u32 = 30 * DAY_IN_LEDGERS;
@@ -18,7 +16,7 @@ pub const LAST_DISTRIBUTION_KEY: Symbol = symbol_short!("LAST_DIST");
 #[contracttype]
 pub struct DistributionConfig {
     pub treasury: Address,
-    pub treasury_share_bps: u32, // Basis points (e.g., 1000 = 10%)
+    pub treasury_share_bps: u32,  // Basis points (e.g., 1000 = 10%)
     pub distribution_period: u64, // In seconds
     pub last_distribution: u64,   // Timestamp of last distribution
 }
@@ -47,8 +45,8 @@ pub struct Distribution {
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
-    Member(Address),        // Map address to Member
-    Members,                // Vec of all member addresses
-    Distribution(u64),      // Map timestamp to Distribution
-    Distributions,          // Vec of all distribution timestamps
+    Member(Address),   // Map address to Member
+    Members,           // Vec of all member addresses
+    Distribution(u64), // Map timestamp to Distribution
+    Distributions,     // Vec of all distribution timestamps
 }

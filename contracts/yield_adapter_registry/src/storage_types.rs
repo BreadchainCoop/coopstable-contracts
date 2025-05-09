@@ -1,11 +1,4 @@
-use soroban_sdk::{
-    contracttype, 
-    Address, 
-    Env, 
-    Map, 
-    Symbol, 
-    Vec 
-};
+use soroban_sdk::{contracttype, Address, Env, Map, Symbol, Vec};
 
 pub(crate) const DAY_IN_LEDGERS: u32 = 17280;
 pub(crate) const REGISTRY_BUMP_AMOUNT: u32 = 30 * DAY_IN_LEDGERS;
@@ -16,7 +9,7 @@ pub(crate) const REGISTRY_LIFETIME_THRESHOLD: u32 = REGISTRY_BUMP_AMOUNT - DAY_I
 pub struct YieldAdapterRegistryMap {
     pub yield_type: Symbol,
     registry_map: Map<Symbol, Address>,
-    supported_assets: Map<Symbol, Map<Address, bool>>
+    supported_assets: Map<Symbol, Map<Address, bool>>,
 }
 
 impl YieldAdapterRegistryMap {
@@ -33,18 +26,21 @@ impl YieldAdapterRegistryMap {
         Self {
             yield_type,
             registry_map: Map::new(env),
-            supported_assets: Map::new(env)
+            supported_assets: Map::new(env),
         }
     }
-    
+
     pub fn contains_key(&self, key: Symbol) -> bool {
         self.registry_map.contains_key(key)
     }
-    
+
     pub fn contains_value(&self, value: Address) -> bool {
-        self.registry_map.keys().iter().any(|key| self.registry_map.get(key) == Some(value.clone()))
+        self.registry_map
+            .keys()
+            .iter()
+            .any(|key| self.registry_map.get(key) == Some(value.clone()))
     }
-    
+
     pub fn set_adapter(&mut self, key: Symbol, value: Address) {
         self.registry_map.set(key, value);
     }
@@ -76,39 +72,35 @@ impl YieldAdapterRegistryMap {
 
     pub fn adapters(&self) -> Vec<Address> {
         let env = self.registry_map.env();
-        
+
         let mut adapter_addresses = Vec::new(env);
-        
+
         for (_protocol_id, adapter_address) in self.registry_map.iter() {
             adapter_addresses.push_back(adapter_address);
         }
-        
+
         adapter_addresses
     }
-    
+
     pub fn adapter_with_assets(&self) -> Vec<(Address, Vec<Address>)> {
-    
         let env = self.registry_map.env();
-        
+
         let mut result = Vec::new(env);
-        
+
         for (protocol_id, adapter_address) in self.registry_map.iter() {
             let mut supported_assets = Vec::new(env);
-            
+
             if let Some(asset_map) = self.supported_assets.get(protocol_id.clone()) {
-
                 for (asset_address, is_supported) in asset_map.iter() {
-
                     if is_supported {
                         supported_assets.push_back(asset_address);
                     }
                 }
             }
-            
+
             result.push_back((adapter_address, supported_assets));
         }
-        
+
         result
     }
 }
-

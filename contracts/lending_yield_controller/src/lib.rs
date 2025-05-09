@@ -23,7 +23,7 @@ pub mod yield_distributor {
 //     );
 // }
 
-mod contract;
 mod constants;
+mod contract;
 mod events;
 mod test;

@@ -1,4 +1,4 @@
-use soroban_sdk::{Symbol, symbol_short};
+use soroban_sdk::{symbol_short, Symbol};
 
 // Constants for storage lifetimes - configurable through initialization
 pub const DAY_IN_LEDGERS: u32 = 17280;

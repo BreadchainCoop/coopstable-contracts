@@ -18,7 +18,7 @@ impl AccessControlEvents {
     /// - data - `sender: Address`
     pub fn role_revoked(e: &Env, role: Symbol, account: Address) {
         let topics = (Symbol::new(e, "role_revoked"), role);
-        e.events().publish(topics,account);
+        e.events().publish(topics, account);
     }
 
     /// Emitted when a role's admin role is changed
@@ -27,6 +27,6 @@ impl AccessControlEvents {
     /// - data - `sender: Address`
     pub fn role_admin_changed(e: &Env, role: Symbol, new_admin_role: Symbol) {
         let topics = (Symbol::new(e, "role_admin_changed"), role);
-        e.events().publish(topics,new_admin_role);
+        e.events().publish(topics, new_admin_role);
     }
 }

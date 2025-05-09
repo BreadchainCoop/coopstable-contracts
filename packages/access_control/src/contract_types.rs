@@ -1,10 +1,4 @@
-use soroban_sdk::{
-    contracttype, 
-    Symbol, 
-    Map,
-    Address,
-    Env
-};
+use soroban_sdk::{contracttype, Address, Env, Map, Symbol};
 
 #[derive(Clone)]
 #[contracttype]
@@ -43,9 +37,7 @@ pub struct RolesMap {
 
 impl RolesMap {
     pub fn new(e: &Env) -> Self {
-        Self {
-            roles: Map::new(e),
-        }
+        Self { roles: Map::new(e) }
     }
 
     pub fn get_role_data(&self, role: Symbol) -> Option<RoleData> {
