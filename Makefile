@@ -1,4 +1,4 @@
-SUBDIRS := contracts/cusd_manager contracts/lending_yield_controller contracts/yield_adapter_registry packages/blend_capital_adapter packages/yield_adapter
+SUBDIRS := packages/blend_capital_adapter packages/yield_adapter packages/access_control contracts/cusd_manager contracts/yield_adapter_registry contracts/yield_distributor contracts/lending_yield_controller
 BUILD_FLAGS ?=
 
 default: build

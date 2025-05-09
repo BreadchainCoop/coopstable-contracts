@@ -105,6 +105,7 @@ impl TestFixture {
         let usdc_token = env.register_stellar_asset_contract_v2(token_admin.clone());
         let usdc_token_id = usdc_token.address();
         let usdc_client = TokenClient::new(&env, &usdc_token_id);
+        let usdc_admin_client = StellarAssetClient::new(&env, &usdc_token_id);
         
         // Initialize USDC with some balance for the test user
         env.mock_all_auths();
@@ -142,7 +143,11 @@ impl TestFixture {
             CUSDManagerArgs::__constructor(&cusd_token_id, &admin, &admin)
         );
         let cusd_manager = CUSDManagerClient::new(&env, &cusd_manager_id);
-        
+        env.mock_all_auths();
+        usdc_admin_client.set_admin(&cusd_manager_id);
+        // env.mock_all_auths();
+        // cusd_manager.set_cusd_issuer(&admin, &cusd_manager_id);
+
         // Deploy LendingYieldController
         let controller_id = env.register(
             LendingYieldController,
@@ -153,6 +158,7 @@ impl TestFixture {
             )
         );
         let controller = LendingYieldControllerClient::new(&env, &controller_id);
+        cusd_manager.set_cusd_manager_admin(&admin, &controller_id);
         
         // Update yield distributor to use our controller as the yield controller
         env.mock_all_auths();
@@ -186,16 +192,16 @@ impl TestFixture {
         self.env.mock_all_auths();
         self.adapter_registry.register_adapter(
             &self.admin,
-            &SupportedYieldType::Lending,
-            &protocol,
+            &SupportedYieldType::Lending.id(),
+            &protocol.id(),
             &mock_adapter_id
         );
         
         // Add support for USDC in this adapter
         self.adapter_registry.add_support_for_asset(
             &self.admin,
-            &SupportedYieldType::Lending,
-            &protocol,
+            &SupportedYieldType::Lending.id(),
+            &protocol.id(),
             &self.usdc_token
         );
         
@@ -246,7 +252,7 @@ fn test_deposit_collateral() {
     // Deposit collateral
     fixture.env.mock_all_auths();
     let result = fixture.controller.deposit_collateral(
-        &crate::yield_adapter_registry::SupportedAdapter::BlendCapital,
+        &SupportedAdapter::BlendCapital.id(),
         &fixture.user,
         &fixture.usdc_token,
         &deposit_amount

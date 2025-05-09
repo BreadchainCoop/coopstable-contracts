@@ -1,5 +1,5 @@
 use::soroban_sdk::{Symbol, symbol_short};
-use crate::yield_adapter_registry::SupportedYieldType; 
+use yield_adapter::contract_types::SupportedYieldType;
 
 pub(crate) const DAY_IN_LEDGERS: u32 = 17280;
 pub(crate) const INSTANCE_BUMP_AMOUNT: u32 = 7 * DAY_IN_LEDGERS;

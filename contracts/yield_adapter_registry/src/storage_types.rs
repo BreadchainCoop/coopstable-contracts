@@ -111,3 +111,4 @@ impl YieldAdapterRegistryMap {
         result
     }
 }
+

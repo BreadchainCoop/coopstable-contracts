@@ -3,6 +3,8 @@ use::soroban_sdk::{
     contractimpl, 
     Env,
     Address,
+    log, 
+    Symbol,
     token::TokenClient
 };
 use crate::{
@@ -16,10 +18,11 @@ use crate::{
     }, 
     events::LendingYieldControllerEvents
 };
-use yield_adapter::lending_adapter::LendingAdapterClient;
-use crate::yield_adapter_registry::{Client as YieldAdapterRegistryClient, SupportedAdapter};
+use crate::yield_adapter_registry::Client as YieldAdapterRegistryClient;
 use crate::yield_distributor::Client as YieldDistributorClient;
 use crate::cusd_manager::Client as CUSDManagerClient;
+// use crate::yield_adapter::Client as LendingAdapterClient;
+use yield_adapter::lending_adapter::LendingAdapterClient;
 
 pub trait LendingYieldControllerTrait {
     fn __constructor(
@@ -28,8 +31,8 @@ pub trait LendingYieldControllerTrait {
         adapter_registry: Address, 
         cusd_manager: Address,
     );
-    fn deposit_collateral(e: &Env, protocol: SupportedAdapter, user: Address, asset: Address, amount: i128) -> i128;
-    fn withdraw_collateral(e: &Env, protocol: SupportedAdapter, user: Address, asset: Address, amount: i128) -> i128;
+    fn deposit_collateral(e: &Env, protocol: Symbol, user: Address, asset: Address, amount: i128) -> i128;
+    fn withdraw_collateral(e: &Env, protocol: Symbol, user: Address, asset: Address, amount: i128) -> i128;
     fn get_yield(e: &Env) -> i128;
     fn claim_yield(e: &Env) -> i128;
 }
@@ -96,7 +99,7 @@ impl LendingYieldControllerTrait for LendingYieldController {
 
     fn deposit_collateral(
         e: &Env,
-        protocol: SupportedAdapter,
+        protocol: Symbol,
         user: Address,
         asset: Address,
         amount: i128
@@ -107,11 +110,11 @@ impl LendingYieldControllerTrait for LendingYieldController {
         // deps
         let registry_client = Self::adapter_registry_client(&e);
         let cusd_manager_client = Self::cusd_manager_client(&e);
-        let adapter = LendingAdapterClient::new(e, &registry_client.get_adapter(&YIELD_TYPE, &protocol));
+        let adapter = LendingAdapterClient::new(e, &registry_client.get_adapter(&YIELD_TYPE.id(), &protocol));
         let asset_client = TokenClient::new(e, &asset);
 
         // require supported asset for adapter
-        let is_asset_supported = registry_client.is_supported_asset(&YIELD_TYPE, &protocol, &asset);
+        let is_asset_supported = registry_client.is_supported_asset(&YIELD_TYPE.id(), &protocol, &asset);
         if !is_asset_supported {
             panic!("Asset is not supported by the adapter registry");
         };
@@ -123,7 +126,7 @@ impl LendingYieldControllerTrait for LendingYieldController {
             &e.current_contract_address(), 
             &amount
         );
-        asset_client.approve(&e.current_contract_address(), &adapter.address, &amount, &u32::MAX); 
+        asset_client.approve(&e.current_contract_address(), &adapter.address, &amount, &100_u32); 
         adapter.deposit(&e.current_contract_address(), &asset, &amount);
         cusd_manager_client.issue_cusd(&e.current_contract_address(), &user, &amount);
         
@@ -134,7 +137,7 @@ impl LendingYieldControllerTrait for LendingYieldController {
 
     fn withdraw_collateral(
         e: &Env,
-        protocol: SupportedAdapter,
+        protocol: Symbol,
         user: Address,
         asset: Address,
         amount: i128
@@ -143,11 +146,11 @@ impl LendingYieldControllerTrait for LendingYieldController {
         // Get the Lending Adapter
         let registry_client = Self::adapter_registry_client(&e);
         let cusd_manager_client = Self::cusd_manager_client(&e);
-        let adapter = LendingAdapterClient::new(e, &registry_client.get_adapter(&YIELD_TYPE,&protocol));
+        let adapter = LendingAdapterClient::new(e, &registry_client.get_adapter(&YIELD_TYPE.id(), &protocol));
         let asset_client = TokenClient::new(e, &asset);
 
         // require supported asset for adapter
-        let is_asset_supported = registry_client.is_supported_asset(&YIELD_TYPE, &protocol, &asset);
+        let is_asset_supported = registry_client.is_supported_asset(&YIELD_TYPE.id(), &protocol, &asset);
         if !is_asset_supported {
             panic!("Asset is not supported by the adapter registry");
         };
@@ -172,7 +175,7 @@ impl LendingYieldControllerTrait for LendingYieldController {
 
     fn get_yield(e: &Env) -> i128 {
         let registry_client = Self::adapter_registry_client(e);
-        let lend_protocols_with_assets = registry_client.get_adapters_with_assets(&YIELD_TYPE);
+        let lend_protocols_with_assets = registry_client.get_adapters_with_assets(&YIELD_TYPE.id());
         let user = e.current_contract_address();
         
         // Use fold to accumulate the total yield across all adapters and assets
@@ -206,7 +209,7 @@ impl LendingYieldControllerTrait for LendingYieldController {
         
         // Get all protocols and assets
         let registry_client = Self::adapter_registry_client(e);
-        let lend_protocols_with_assets = registry_client.get_adapters_with_assets(&YIELD_TYPE);
+        let lend_protocols_with_assets = registry_client.get_adapters_with_assets(&YIELD_TYPE.id());
         let user = e.current_contract_address();
         
         // For each protocol and asset
@@ -219,7 +222,7 @@ impl LendingYieldControllerTrait for LendingYieldController {
                 
                 if claimed > 0 {
                     let token_client = TokenClient::new(e, &asset);
-                    token_client.approve(&user, &distributor.address, &total_claimed, &u32::MAX);
+                    token_client.approve(&user, &distributor.address, &total_claimed, &100_u32);
                     
                     // Distribute the yield
                     distributor.distribute_yield(&user, &asset, &claimed);
