@@ -217,6 +217,7 @@ impl LendingYieldControllerTrait for LendingYieldController {
 
                 let token_client = TokenClient::new(e, &asset);
                 let claimed = adapter_client.claim_yield(&e.current_contract_address(), &asset);
+                log!(&e, "address: {}, claimed: {}", asset, claimed);
 
                 if claimed > 0 {
                     token_client.approve(&e.current_contract_address(), &distributor.address, &claimed, &100_u32);
