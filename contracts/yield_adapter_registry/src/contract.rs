@@ -13,7 +13,10 @@ contractmeta!(
     key = "Description",
     val = "Yield adapter registry for the Coopstable cUSD system"
 );
-
+fn only_admin(e: &Env, caller: Address) {
+    let access_control = default_access_control(e);
+    access_control.only_role(&e, &caller, DEFAULT_ADMIN_ROLE);
+}
 pub trait YieldAdapterRegistryTrait {
     fn __constructor(e: Env, admin: Address);
     fn set_yield_adapter_admin(e: &Env, caller: Address, new_admin: Address);
@@ -53,13 +56,6 @@ pub trait YieldAdapterRegistryTrait {
 #[contract]
 pub struct YieldAdapterRegistry;
 
-impl YieldAdapterRegistry {
-    fn only_admin(e: &Env, caller: Address) {
-        let access_control = default_access_control(e);
-        access_control.only_role(&e, &caller, DEFAULT_ADMIN_ROLE);
-    }
-}
-
 #[contractimpl]
 impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
     fn __constructor(e: Env, admin: Address) {
@@ -83,7 +79,7 @@ impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
         protocol: Symbol,
         adapter_address: Address,
     ) {
-        Self::only_admin(e, caller);
+        only_admin(e, caller);
         register_yield_adapter(
             e,
             yield_type.clone(),
@@ -94,7 +90,7 @@ impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
     }
 
     fn remove_adapter(e: &Env, caller: Address, yield_type: Symbol, protocol: Symbol) {
-        Self::only_admin(e, caller);
+        only_admin(e, caller);
         let adapter_address = get_yield_adapter(e, yield_type.clone(), protocol.clone());
         remove_yield_adapter(e, yield_type.clone(), protocol.clone());
         YieldAdapterRegistryEvents::remove_adapter(&e, yield_type, protocol, adapter_address);
@@ -115,7 +111,7 @@ impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
         protocol: Symbol,
         asset_address: Address,
     ) {
-        Self::only_admin(e, caller);
+        only_admin(e, caller);
         support_asset(
             e,
             yield_type.clone(),
@@ -132,7 +128,7 @@ impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
         protocol: Symbol,
         asset_address: Address,
     ) {
-        Self::only_admin(e, caller);
+        only_admin(e, caller);
         remove_asset_support(
             &e,
             yield_type.clone(),
