@@ -1,0 +1,30 @@
+{
+    "contracts": {
+        "cusd": {
+            "code": "CUSD",
+            "id":  "CBM3BHMIMZLU2GEKDLFPMNFODTXT7VOHEGM52HYTQ6Q33KN4A66Z6H5K"
+        },
+        "cusd_manager": {
+            "alias": "cusd_manager",
+            "id": "CCNQPW2YNYJBNJVKOACP37FN2WXNUNXSXF6KLNTF645IAUPCELUMMVHA",
+            "wasm": "befcb0f5a23232d4117b98635ef4866a1caabebcf43e6759e3d7583dc54bd5f7"
+        },
+        "yield_adapter_registry": {
+            "alias": "yield_adapter_registry",
+            "id":  "CBO23O6LUFW7NDL3W7BHQC3CWKK6ENC54G4BNVXTT4UMFXJHWEU2FD64",
+            "wasm": "784be73cc00115db51fc13230b38eb9eac96fb63028f0d3e70c7bee90046de3d"
+        },
+        "yield_distributor": {
+            "id": "CCSMC5D3POWVMZKUUZ3MAYRBKE5OD3YTRIDVDXNGG6SOZENXWN6XFANG",
+            "wasm": "7dfa6a13cd880bc101df5dc3d265f49a1b27cba2a6eb465bc596bd0e750fe695"
+        },
+        "lending_yield_controller": {
+            "id":  "CAAW3I3M3NTE2LNBEM6HARCWJTDVYGN32UXMCEM47XDJD3S723EGD64S",
+            "wasm": "bcb02eb4b3cae23a252931f105c400b6a78d4072ba4c4a633b9d79a51a2ce8ff"
+        },  
+        "blend_capital_adapter": {
+            "id": "CBMTLQ7YDINX3HF47NGN7KTTCR53CLKWCX6JKR4MGA4CCDPPI6HLQ2P3",
+            "wasm": "5c0c8f77a5583ea12969de6811153af58a9f83a7490cf93d4654aafe6ab63740"
+        }
+    }
+}

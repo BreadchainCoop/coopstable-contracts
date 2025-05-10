@@ -1,0 +1,20 @@
+{
+    "contracts": {
+        "cusd": {
+            "code": "CUSD",
+            "id":  "CBT3CXNXEXDRMNSLA2HQKKEWHR5TEOGYUMPA3UXQXCU2VXQQ67B2MZML"
+        },
+        "lending_yield_controller": {
+            "id":  "CBT3CXNXEXDRMNSLA2HQKKEWHR5TEOGYUMPA3UXQXCU2VXQQ67B2MZML"
+        },
+        "yield_adapter_registry": {
+            "id":  "CBT3CXNXEXDRMNSLA2HQKKEWHR5TEOGYUMPA3UXQXCU2VXQQ67B2MZML"
+        },
+        "cusd_manager": {
+            "id":  "CBT3CXNXEXDRMNSLA2HQKKEWHR5TEOGYUMPA3UXQXCU2VXQQ67B2MZML"
+        },
+        "blend_capital_adapter": {
+            "id": "CBT3CXNXEXDRMNSLA2HQKKEWHR5TEOGYUMPA3UXQXCU2VXQQ67B2MZML"
+        }
+    }
+}

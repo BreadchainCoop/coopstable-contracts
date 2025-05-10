@@ -9,5 +9,6 @@ build:
 	@ls -l $(WORKSPACE_ROOT)/target/wasm32-unknown-unknown/release/*.wasm
 fmt:
 	cargo fmt --all
+	
 clean:
 	cargo clean

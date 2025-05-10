@@ -14,7 +14,18 @@ contractmeta!(
     val = "Yield distributor for Coopstable"
 );
 
-// Define your contract trait
+fn require_admin(e: &Env, caller: &Address) {
+    let access_control = default_access_control(e);
+    access_control.only_role(e, caller, DEFAULT_ADMIN_ROLE);
+}
+
+fn require_yield_controller(e: &Env, caller: &Address) {
+    let controller = get_yield_controller(e);
+    if caller != &controller {
+        panic!("Only the yield controller can call this function");
+    }
+}
+
 pub trait YieldDistributorTrait {
     fn __constructor(
         e: Env,
@@ -24,7 +35,7 @@ pub trait YieldDistributorTrait {
         yield_controller: Address,
         distribution_period: u64,
     );
-
+    fn set_yield_controller(e: &Env, caller: Address, yield_controller: Address);
     fn add_member(e: &Env, caller: Address, member: Address);
     fn remove_member(e: &Env, caller: Address, member: Address);
     fn list_members(e: &Env) -> Vec<Address>;
@@ -47,20 +58,6 @@ pub trait YieldDistributorTrait {
 #[contract]
 pub struct YieldDistributor;
 
-impl YieldDistributor {
-    fn require_admin(e: &Env, caller: &Address) {
-        let access_control = default_access_control(e);
-        access_control.only_role(e, caller, DEFAULT_ADMIN_ROLE);
-    }
-
-    fn require_yield_controller(e: &Env, caller: &Address) {
-        let controller = get_yield_controller(e);
-        if caller != &controller {
-            panic!("Only the yield controller can call this function");
-        }
-    }
-}
-
 #[contractimpl]
 impl YieldDistributorTrait for YieldDistributor {
     fn __constructor(
@@ -81,8 +78,14 @@ impl YieldDistributorTrait for YieldDistributor {
         set_distribution_period(&e, distribution_period);
     }
 
+    fn set_yield_controller(e: &Env, caller: Address, yield_controller: Address) {
+        require_admin(e, &caller);
+        set_yield_controller(e, &yield_controller);
+        YieldDistributorEvents::set_yield_controller(&e, yield_controller);
+    }
+
     fn add_member(e: &Env, caller: Address, member: Address) {
-        Self::require_admin(e, &caller);
+        require_admin(e, &caller);
 
         if let Some(existing) = get_member(e, &member) {
             if existing.active {
@@ -95,7 +98,7 @@ impl YieldDistributorTrait for YieldDistributor {
     }
 
     fn remove_member(e: &Env, caller: Address, member: Address) {
-        Self::require_admin(e, &caller);
+        require_admin(e, &caller);
 
         if let None = get_member(e, &member) {
             panic!("Member does not exist");
@@ -110,7 +113,7 @@ impl YieldDistributorTrait for YieldDistributor {
     }
 
     fn set_treasury(e: &Env, caller: Address, treasury: Address) {
-        Self::require_admin(e, &caller);
+        require_admin(e, &caller);
         set_treasury(e, &treasury);
         YieldDistributorEvents::set_treasury(e, treasury);
     }
@@ -120,7 +123,7 @@ impl YieldDistributorTrait for YieldDistributor {
     }
 
     fn set_treasury_share(e: &Env, caller: Address, share_bps: u32) {
-        Self::require_admin(e, &caller);
+        require_admin(e, &caller);
         set_treasury_share_bps(e, share_bps);
         YieldDistributorEvents::set_treasury_share(e, share_bps);
     }
@@ -130,7 +133,7 @@ impl YieldDistributorTrait for YieldDistributor {
     }
 
     fn set_distribution_period(e: &Env, caller: Address, period: u64) {
-        Self::require_admin(e, &caller);
+        require_admin(e, &caller);
         set_distribution_period(e, period);
         YieldDistributorEvents::set_distribution_period(e, period);
     }
@@ -152,7 +155,7 @@ impl YieldDistributorTrait for YieldDistributor {
     }
 
     fn distribute_yield(e: &Env, caller: Address, token: Address, amount: i128) -> bool {
-        Self::require_yield_controller(e, &caller);
+        require_yield_controller(e, &caller);
 
         if !Self::is_distribution_available(e) {
             return false;

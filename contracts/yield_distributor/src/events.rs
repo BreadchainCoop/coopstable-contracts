@@ -27,6 +27,11 @@ impl YieldDistributorEvents {
         let topics = (Symbol::new(e, "set_distribution_period"),);
         e.events().publish(topics, period);
     }
+    
+    pub fn set_yield_controller(e: &Env, yield_controller: Address) {
+        let topics = (Symbol::new(e, "set_yield_controller"),);
+        e.events().publish(topics, yield_controller);
+    }
 
     pub fn distribute_yield(
         e: &Env,
