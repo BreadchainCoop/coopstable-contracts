@@ -31,4 +31,9 @@ impl LendingYieldControllerEvents {
         let topics = (Symbol::new(e, "set_cusd_manager"), );
         e.events().publish(topics,  cusd_manager.clone());
     }
+    
+    pub fn set_admin(e: &Env, new_admin: Address) { 
+        let topics = (Symbol::new(e, "set_admin"), );
+        e.events().publish(topics,  new_admin.clone());
+    }
 }

@@ -40,6 +40,7 @@ trait BlendCapitalAdapterTrait {
     fn get_reserve_token_id(e: &Env, asset: Address) -> Option<u32>;
 }
 
+#[contractimpl]
 impl BlendCapitalAdapterTrait for BlendCapitalAdapter {
     fn create_request(request_type: RequestType, asset: Address, amount: i128) -> Request {
         Request {

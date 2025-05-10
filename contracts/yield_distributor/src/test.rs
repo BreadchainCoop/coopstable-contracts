@@ -30,11 +30,12 @@ fn setup_test() -> (
     let contract_id = env.register(
         YieldDistributor,
         YieldDistributorArgs::__constructor(
-            &admin,
             &treasury,
             &treasury_share_bps,
             &yield_controller,
             &distribution_period,
+            &admin,
+            &admin,
         ),
     );
 
@@ -391,4 +392,29 @@ fn test_sequential_distributions() {
 
     assert_eq!(treasury_balance, treasury_amount1 + treasury_amount2);
     assert_eq!(member1_balance, member_amount1 + member_amount2);
+}
+
+#[test]
+fn test_set_admin() {
+    let (env, client, admin, treasury, yield_controller) = setup_test();
+
+    // Mock admin auth
+    env.mock_all_auths();
+    let new_admin = Address::generate(&env);
+
+    // Set new admin
+    client.set_admin(&admin, &new_admin);
+}
+
+#[test]
+#[should_panic(expected = "AccessControl: sender must be an admin to grant role")]
+fn test_set_admin_unauthorized() {
+    let (env, client, admin, treasury, yield_controller) = setup_test();
+
+    // Mock admin auth
+    env.mock_all_auths();
+    let new_admin = Address::generate(&env);
+
+    // Set new admin
+    client.set_admin(&new_admin, &new_admin);
 }

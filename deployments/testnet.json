@@ -2,7 +2,7 @@
     "contracts": {
         "cusd": {
             "code": "CUSD",
-            "id":  "CBT3CXNXEXDRMNSLA2HQKKEWHR5TEOGYUMPA3UXQXCU2VXQQ67B2MZML"
+            "id":  "CDHHR356G725HNLAAQ74WBGVT6Y6ZFZLM2TIHLDCOZTJ2SVZ7P3EANYT"
         },
         "lending_yield_controller": {
             "id":  "CBT3CXNXEXDRMNSLA2HQKKEWHR5TEOGYUMPA3UXQXCU2VXQQ67B2MZML"

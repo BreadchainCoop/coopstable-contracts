@@ -1,8 +1,14 @@
 use crate::{
     events::YieldAdapterRegistryEvents,
     storage::{
-        get_yield_adapter, get_yield_adapters, get_yield_adapters_with_assets, is_asset_supported,
-        register_yield_adapter, remove_asset_support, remove_yield_adapter, support_asset,
+        get_yield_adapter, 
+        get_yield_adapters, 
+        get_yield_adapters_with_assets, 
+        is_asset_supported,
+        register_yield_adapter, 
+        remove_asset_support, 
+        remove_yield_adapter, 
+        support_asset,
         verify_if_yield_adapter_exists,
     },
 };

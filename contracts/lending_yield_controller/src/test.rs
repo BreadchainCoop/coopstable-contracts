@@ -81,7 +81,6 @@ struct TestFixture {
     cusd_manager: CUSDManagerClient<'static>,
     admin: Address,
     user: Address,
-    treasury: Address,
     usdc_token: Address,
     usdc_client: TokenClient<'static>,
 }
@@ -120,11 +119,12 @@ impl TestFixture {
         let yield_distributor_id = env.register(
             YieldDistributor,
             YieldDistributorArgs::__constructor(
-                &admin,
                 &treasury,
                 &treasury_share_bps,
                 &token_admin, // Temporarily use token_admin as yield controller
                 &distribution_period,
+                &admin,
+                &admin,
             ),
         );
         let yield_distributor = YieldDistributorClient::new(&env, &yield_distributor_id);
@@ -173,7 +173,6 @@ impl TestFixture {
             cusd_manager,
             admin,
             user,
-            treasury,
             usdc_token: usdc_token_id,
             usdc_client,
         }

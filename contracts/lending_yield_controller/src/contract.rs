@@ -1,6 +1,3 @@
-use crate::cusd_manager::Client as CUSDManagerClient;
-use crate::yield_adapter_registry::Client as YieldAdapterRegistryClient;
-use crate::yield_distributor::Client as YieldDistributorClient;
 use crate::{
     constants::{
         ADAPTER_REGISTRY_KEY, CUSD_MANAGER_KEY, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD,
@@ -16,7 +13,15 @@ use ::soroban_sdk::{contract, contractimpl, token::TokenClient, Address, Env, Sy
 use soroban_sdk::log;
 use yield_adapter::lending_adapter::LendingAdapterClient;
 use crate::storage::{
-    adapter_registry_client, cusd_manager_client, distributor_client, set_adapter_registry, set_cusd_manager, set_yield_distributor
+    adapter_registry_client, 
+    cusd_manager_client, 
+    distributor_client, 
+    get_adapter_registry, 
+    get_cusd_manager, 
+    get_yield_distributor, 
+    set_adapter_registry, 
+    set_cusd_manager, 
+    set_yield_distributor
 };
 
 pub trait LendingYieldControllerTrait {
@@ -29,8 +34,12 @@ pub trait LendingYieldControllerTrait {
         owner: Address,
     );
     fn set_yield_distributor(e: &Env, yield_distributor: Address);
+    fn get_yield_distributor(e: &Env) -> Address;
     fn set_adapter_registry(e: &Env, adapter_registry: Address);
+    fn get_adapter_registry(e: &Env) -> Address;
     fn set_cusd_manager(e: &Env, cusd_manager: Address);
+    fn get_cusd_manager(e: &Env) -> Address;
+    fn set_admin(e: &Env, caller: Address, new_admin: Address);
 
     fn deposit_collateral(
         e: &Env,
@@ -265,5 +274,24 @@ impl LendingYieldControllerTrait for LendingYieldController {
         access_control.only_role(e, &e.current_contract_address(), YIELD_CONTROLLER_ADMIN_ROLE);
         set_cusd_manager(e, cusd_manager.clone());
         LendingYieldControllerEvents::set_cusd_manager(e, cusd_manager.clone());
+    }
+
+    fn get_yield_distributor(e: &Env) -> Address {
+        get_yield_distributor(e)
+    }
+
+    fn get_adapter_registry(e: &Env) -> Address {
+        get_adapter_registry(e)
+    }
+
+    fn get_cusd_manager(e: &Env) -> Address {
+        get_cusd_manager(e)
+    }
+
+
+    fn set_admin(e: &Env, caller: Address, new_admin: Address) {
+        let access_control = default_access_control(e);
+        access_control.grant_role(e, caller, YIELD_CONTROLLER_ADMIN_ROLE, &new_admin);
+        LendingYieldControllerEvents::set_admin(e, new_admin);
     }
 }

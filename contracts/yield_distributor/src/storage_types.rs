@@ -5,11 +5,12 @@ pub(crate) const INSTANCE_BUMP_AMOUNT: u32 = 30 * DAY_IN_LEDGERS;
 pub(crate) const INSTANCE_LIFETIME_THRESHOLD: u32 = INSTANCE_BUMP_AMOUNT - DAY_IN_LEDGERS;
 
 // Keys for instance storage
-pub const TREASURY_KEY: Symbol = symbol_short!("TREASURY");
-pub const TREASURY_SHARE_KEY: Symbol = symbol_short!("TR_SHARE");
-pub const YIELD_CONTROLLER_KEY: Symbol = symbol_short!("YC");
-pub const DISTRIBUTION_PERIOD_KEY: Symbol = symbol_short!("DIST_PRD");
-pub const LAST_DISTRIBUTION_KEY: Symbol = symbol_short!("LAST_DIST");
+pub (crate) const TREASURY_KEY: Symbol = symbol_short!("TREASURY");
+pub (crate) const TREASURY_SHARE_KEY: Symbol = symbol_short!("TR_SHARE");
+pub (crate) const YIELD_CONTROLLER_KEY: Symbol = symbol_short!("YC");
+pub (crate) const DISTRIBUTION_PERIOD_KEY: Symbol = symbol_short!("DIST_PRD");
+pub (crate) const LAST_DISTRIBUTION_KEY: Symbol = symbol_short!("LAST_DIST");
+pub (crate) const YIELD_DISTRIBUTOR_ADMIN_ROLE: Symbol = symbol_short!("YD_ADMN");
 
 // Structure to hold distribution configuration
 #[derive(Clone)]
