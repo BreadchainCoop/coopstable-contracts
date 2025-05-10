@@ -3,8 +3,7 @@ use crate::storage_types::{CUSD_ADDRESS_KEY, CUSD_ADMIN, INSTANCE_BUMP_AMOUNT, I
 use crate::token::{process_token_burn, process_token_mint};
 use access_control::{access::default_access_control, constants::DEFAULT_ADMIN_ROLE};
 use soroban_sdk::{
-    contract, contractimpl, contractmeta, symbol_short, token::StellarAssetClient, Address, Env,
-    Symbol,
+    contract, contractimpl, contractmeta, token::StellarAssetClient, Address, Env
 };
 
 

@@ -4,13 +4,20 @@ use crate::yield_distributor::Client as YieldDistributorClient;
 use crate::{
     constants::{
         ADAPTER_REGISTRY_KEY, CUSD_MANAGER_KEY, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD,
-        YIELD_DISTRIBUTOR_KEY, YIELD_TYPE,
+        YIELD_DISTRIBUTOR_KEY, YIELD_TYPE, YIELD_CONTROLLER_ADMIN_ROLE
     },
     events::LendingYieldControllerEvents,
+};
+use access_control::{
+    access::default_access_control,
+    constants::DEFAULT_ADMIN_ROLE,
 };
 use ::soroban_sdk::{contract, contractimpl, token::TokenClient, Address, Env, Symbol};
 use soroban_sdk::log;
 use yield_adapter::lending_adapter::LendingAdapterClient;
+use crate::storage::{
+    adapter_registry_client, cusd_manager_client, distributor_client, set_adapter_registry, set_cusd_manager, set_yield_distributor
+};
 
 pub trait LendingYieldControllerTrait {
     fn __constructor(
@@ -18,7 +25,13 @@ pub trait LendingYieldControllerTrait {
         yield_distributor: Address,
         adapter_registry: Address,
         cusd_manager: Address,
+        admin: Address,
+        owner: Address,
     );
+    fn set_yield_distributor(e: &Env, yield_distributor: Address);
+    fn set_adapter_registry(e: &Env, adapter_registry: Address);
+    fn set_cusd_manager(e: &Env, cusd_manager: Address);
+
     fn deposit_collateral(
         e: &Env,
         protocol: Symbol,
@@ -40,41 +53,6 @@ pub trait LendingYieldControllerTrait {
 #[contract]
 pub struct LendingYieldController;
 
-#[contractimpl]
-impl LendingYieldController {
-    fn get_cusd_manager(e: &Env) -> Address {
-        e.storage()
-            .instance()
-            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        e.storage().instance().get(&CUSD_MANAGER_KEY).unwrap()
-    }
-
-    fn get_adapter_registry(e: &Env) -> Address {
-        e.storage()
-            .instance()
-            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        e.storage().instance().get(&ADAPTER_REGISTRY_KEY).unwrap()
-    }
-
-    fn cusd_manager_client(e: &Env) -> CUSDManagerClient {
-        CUSDManagerClient::new(e, &Self::get_cusd_manager(&e))
-    }
-
-    fn adapter_registry_client(e: &Env) -> YieldAdapterRegistryClient<'static> {
-        YieldAdapterRegistryClient::new(e, &Self::get_adapter_registry(&e))
-    }
-
-    fn get_yield_distributor(e: &Env) -> Address {
-        e.storage()
-            .instance()
-            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-        e.storage().instance().get(&YIELD_DISTRIBUTOR_KEY).unwrap()
-    }
-
-    fn distributor_client(e: &Env) -> YieldDistributorClient {
-        YieldDistributorClient::new(e, &Self::get_yield_distributor(&e))
-    }
-}
 
 #[contractimpl]
 impl LendingYieldControllerTrait for LendingYieldController {
@@ -83,7 +61,15 @@ impl LendingYieldControllerTrait for LendingYieldController {
         yield_distributor: Address,
         adapter_registry: Address,
         cusd_manager: Address,
+        admin: Address,
+        owner: Address,
     ) {
+        let access_control = default_access_control(&e);
+
+        access_control.initialize(&e, &owner);
+        access_control.set_role_admin(&e, YIELD_CONTROLLER_ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
+        access_control._grant_role(&e, YIELD_CONTROLLER_ADMIN_ROLE, &admin);
+
         e.storage()
             .instance()
             .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
@@ -106,8 +92,8 @@ impl LendingYieldControllerTrait for LendingYieldController {
         user.require_auth();
 
         // deps
-        let registry_client = Self::adapter_registry_client(&e);
-        let cusd_manager_client = Self::cusd_manager_client(&e);
+        let registry_client = adapter_registry_client(&e);
+        let cusd_manager_client = cusd_manager_client(&e);
         let adapter =
             LendingAdapterClient::new(e, &registry_client.get_adapter(&YIELD_TYPE.id(), &protocol));
         let asset_client = TokenClient::new(e, &asset);
@@ -150,8 +136,8 @@ impl LendingYieldControllerTrait for LendingYieldController {
         user.require_auth();
 
         // Get the Lending Adapter
-        let registry_client = Self::adapter_registry_client(&e);
-        let cusd_manager_client = Self::cusd_manager_client(&e);
+        let registry_client = adapter_registry_client(&e);
+        let cusd_manager_client = cusd_manager_client(&e);
         let adapter =
             LendingAdapterClient::new(e, &registry_client.get_adapter(&YIELD_TYPE.id(), &protocol));
         let asset_client = TokenClient::new(e, &asset);
@@ -195,7 +181,7 @@ impl LendingYieldControllerTrait for LendingYieldController {
     }
 
     fn get_yield(e: &Env) -> i128 {
-        let registry_client = Self::adapter_registry_client(e);
+        let registry_client = adapter_registry_client(e);
         let lend_protocols_with_assets = registry_client.get_adapters_with_assets(&YIELD_TYPE.id());
         let user = e.current_contract_address();
 
@@ -221,13 +207,13 @@ impl LendingYieldControllerTrait for LendingYieldController {
             return 0;
         }
 
-        let distributor = Self::distributor_client(e);
+        let distributor = distributor_client(e);
         if !distributor.is_distribution_available() {
             panic!("Distribution not ready yet");
         }
 
         let mut total_claimed: i128 = 0;
-        let registry_client = Self::adapter_registry_client(e);
+        let registry_client = adapter_registry_client(e);
         let lend_protocols_with_assets = registry_client.get_adapters_with_assets(&YIELD_TYPE.id());
         for (adapter_address, supported_assets) in lend_protocols_with_assets.iter() {
             let adapter_client = LendingAdapterClient::new(e, &adapter_address);
@@ -258,5 +244,26 @@ impl LendingYieldControllerTrait for LendingYieldController {
         }
 
         total_claimed
+    }
+
+    fn set_yield_distributor(e: &Env, yield_distributor: Address) {
+        let access_control = default_access_control(e);
+        access_control.only_role(e, &e.current_contract_address(), YIELD_CONTROLLER_ADMIN_ROLE);
+        set_yield_distributor(e, yield_distributor.clone());
+        LendingYieldControllerEvents::set_yield_distributor(e, yield_distributor.clone());
+    }
+
+    fn set_adapter_registry(e: &Env, adapter_registry: Address) {
+        let access_control = default_access_control(e);
+        access_control.only_role(e, &e.current_contract_address(), YIELD_CONTROLLER_ADMIN_ROLE);
+        set_adapter_registry(e, adapter_registry.clone());
+        LendingYieldControllerEvents::set_adapter_registry(e, adapter_registry.clone());
+    }
+    
+    fn set_cusd_manager(e: &Env, cusd_manager: Address) {
+        let access_control = default_access_control(e);
+        access_control.only_role(e, &e.current_contract_address(), YIELD_CONTROLLER_ADMIN_ROLE);
+        set_cusd_manager(e, cusd_manager.clone());
+        LendingYieldControllerEvents::set_cusd_manager(e, cusd_manager.clone());
     }
 }

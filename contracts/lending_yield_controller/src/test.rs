@@ -20,7 +20,7 @@ use yield_distributor::contract::{YieldDistributor, YieldDistributorArgs, YieldD
 
 mod mock_adapter {
     use soroban_sdk::{
-        contract, contractimpl, contracttype, token::TokenClient, Address, Env, IntoVal,
+        contract, contractimpl, contracttype, token::TokenClient, Address, Env
     };
 
     #[derive(Clone)]
@@ -150,6 +150,8 @@ impl TestFixture {
                 &yield_distributor_id,
                 &adapter_registry_id,
                 &cusd_manager_id,
+                &admin,
+                &admin,
             ),
         );
         let controller = LendingYieldControllerClient::new(&env, &controller_id);

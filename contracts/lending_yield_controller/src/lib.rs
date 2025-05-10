@@ -17,12 +17,7 @@ pub mod yield_distributor {
     );
 }
 
-// pub mod yield_adapter {
-//     soroban_sdk::contractimport!(
-//         file = "../../target/wasm32-unknown-unknown/release/deps/yield_adapter.wasm"
-//     );
-// }
-
+mod storage;
 mod constants;
 mod contract;
 mod events;

@@ -9,3 +9,4 @@ pub(crate) const ADAPTER_REGISTRY_KEY: Symbol = symbol_short!("AR");
 pub(crate) const CUSD_MANAGER_KEY: Symbol = symbol_short!("CM");
 pub(crate) const YIELD_TYPE: SupportedYieldType = SupportedYieldType::Lending;
 pub(crate) const YIELD_DISTRIBUTOR_KEY: Symbol = symbol_short!("YD");
+pub(crate) const YIELD_CONTROLLER_ADMIN_ROLE: Symbol = symbol_short!("YCADMN");

@@ -16,4 +16,19 @@ impl LendingYieldControllerEvents {
         let topics = (Symbol::new(e, "claim_yield"), user.clone());
         e.events().publish(topics, (asset, amount));
     }
+
+    pub fn set_yield_distributor(e: &Env, yield_distributor: Address) { 
+        let topics = (Symbol::new(e, "set_yield_distributor"), );
+        e.events().publish(topics,  yield_distributor.clone());
+    }
+
+    pub fn set_adapter_registry(e: &Env, adapter_registry: Address) { 
+        let topics = (Symbol::new(e, "set_adapter_registry"), );
+        e.events().publish(topics,  adapter_registry.clone());
+    }
+
+    pub fn set_cusd_manager(e: &Env, cusd_manager: Address) { 
+        let topics = (Symbol::new(e, "set_cusd_manager"), );
+        e.events().publish(topics,  cusd_manager.clone());
+    }
 }
