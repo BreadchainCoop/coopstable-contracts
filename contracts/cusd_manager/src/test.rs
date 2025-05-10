@@ -2,10 +2,10 @@
 extern crate std;
 
 use crate::{
-    contract::{CUSDManager, CUSDManagerArgs, CUSDManagerClient},
-    token::{process_token_burn, process_token_mint},
+    contract::{CUSDManager, CUSDManagerArgs, CUSDManagerClient}, storage_types::CUSD_ADMIN, token::{process_token_burn, process_token_mint}
 };
 
+use access_control::access::default_access_control;
 use pretty_assertions::assert_eq;
 use soroban_sdk::{
     testutils::{Address as _, Events},
@@ -50,41 +50,8 @@ fn test_constructor() {
     // Test that the token ID is correctly set
     let stored_token_id = client.get_cusd_id();
     assert_eq!(stored_token_id, cusd_token_id);
-
-    // Test admin access
-    env.mock_all_auths();
-    client.only_admin(&admin); // Should not panic
 }
 
-// Test admin access - should succeed for admin
-#[test]
-fn test_admin_access_success() {
-    let (env, cusd_manager_id, _owner, admin, _cusd_token_id) = setup_test();
-
-    let client = CUSDManagerClient::new(&env, &cusd_manager_id);
-
-    // Mock admin authentication
-    env.mock_all_auths();
-
-    // Should not panic
-    client.only_admin(&admin);
-}
-
-// Test admin access - should fail for non-admin
-#[test]
-#[should_panic(expected = "AccessControl: account does not have role")]
-fn test_admin_access_failure() {
-    let (env, cusd_manager_id, _owner, _admin, _cusd_token_id) = setup_test();
-
-    let client = CUSDManagerClient::new(&env, &cusd_manager_id);
-    let not_admin = Address::generate(&env);
-
-    // Mock authentication
-    env.mock_all_auths();
-
-    // Should panic because not_admin doesn't have the CUSD_ADMIN role
-    client.only_admin(&not_admin);
-}
 
 // Test setting a new default admin
 #[test]
@@ -115,8 +82,10 @@ fn test_set_cusd_manager_admin() {
     // Set new admin (should succeed)
     client.set_cusd_manager_admin(&_owner, &new_admin);
 
-    // Verify the new admin has access
-    client.only_admin(&new_admin);
+    env.as_contract(&client.address, || {
+        let access_control = default_access_control(&env);
+        assert!(access_control.has_role(&env, CUSD_ADMIN, &new_admin));
+    });
 }
 
 // Test setting a new CUSD issuer

@@ -1,5 +1,5 @@
 use crate::events::CUSDManagerEvents;
-use crate::storage_types::{INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD};
+use crate::storage_types::{CUSD_ADDRESS_KEY, CUSD_ADMIN, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD};
 use crate::token::{process_token_burn, process_token_mint};
 use access_control::{access::default_access_control, constants::DEFAULT_ADMIN_ROLE};
 use soroban_sdk::{
@@ -7,8 +7,6 @@ use soroban_sdk::{
     Symbol,
 };
 
-const CUSD_ADMIN: Symbol = symbol_short!("CUSD_ADMN");
-const CUSD_ADDRESS_KEY: Symbol = symbol_short!("cUSD");
 
 contractmeta!(
     key = "Description",
@@ -21,6 +19,11 @@ fn check_nonnegative_amount(amount: i128) {
     }
 }
 
+fn only_admin(e: &Env, caller: Address) {
+    let access_control = default_access_control(e);
+    access_control.only_role(&e, &caller, CUSD_ADMIN);
+}
+
 // TODO: add appropriate error handling
 #[contract]
 pub struct CUSDManager;
@@ -29,7 +32,6 @@ pub trait CUSDManagerTrait {
     fn __constructor(e: Env, cusd_id: Address, owner: Address, admin: Address);
     fn set_default_admin(e: &Env, caller: Address, new_admin: Address);
     fn set_cusd_manager_admin(e: &Env, caller: Address, new_manager: Address);
-    fn only_admin(e: &Env, caller: Address);
     fn set_cusd_issuer(e: &Env, caller: Address, new_issuer: Address);
     fn issue_cusd(e: &Env, caller: Address, to: Address, amount: i128);
     fn burn_cusd(e: &Env, caller: Address, from: Address, amount: i128);
@@ -58,10 +60,6 @@ impl CUSDManagerTrait for CUSDManager {
         CUSDManagerEvents::set_cusd_manager_admin(&e, new_admin);
     }
 
-    fn only_admin(e: &Env, caller: Address) {
-        let access_control = default_access_control(e);
-        access_control.only_role(&e, &caller, CUSD_ADMIN);
-    }
 
     fn set_cusd_issuer(e: &Env, caller: Address, new_issuer: Address) {
         let access_control = default_access_control(e);
@@ -81,14 +79,14 @@ impl CUSDManagerTrait for CUSDManager {
     }
 
     fn issue_cusd(e: &Env, caller: Address, to: Address, amount: i128) {
-        Self::only_admin(e, caller);
+        only_admin(e, caller);
         check_nonnegative_amount(amount);
         process_token_mint(&e, to.clone(), Self::get_cusd_id(&e), amount);
         CUSDManagerEvents::issue_cusd(&e, to, amount);
     }
 
     fn burn_cusd(e: &Env, caller: Address, from: Address, amount: i128) {
-        Self::only_admin(e, caller);
+        only_admin(e, caller);
         check_nonnegative_amount(amount);
         process_token_burn(
             &e,
