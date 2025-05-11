@@ -37,6 +37,7 @@ impl YieldDistributorEvents {
         let topics = (Symbol::new(e, "set_admin"),);
         e.events().publish(topics, new_admin);
     }
+    
     pub fn distribute_yield(
         e: &Env,
         asset: Address,
