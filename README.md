@@ -22,7 +22,6 @@ The Coopstable system consists of several interconnected smart contracts that wo
 1. **Manage collateralized stable coin minting and burning**
 2. **Generate yield through yield adapters** (e.g., Blend Capital integration)
 3. **Distribute yield to cooperative members**
-4. **Provide governance through role-based access control**
 
 ### Key Features
 
