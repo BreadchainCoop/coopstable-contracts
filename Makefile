@@ -28,26 +28,6 @@ clean:
 		$(MAKE) -C $$dir clean WORKSPACE_ROOT=$(PWD) || exit 1; \
 	done
 
-RPC_URL := http://localhost:8000
-NETWORK_PASSPHRASE := "Standalone Network ; February 2017" 
-NETWORK := Standalone
-CONTRACT_ID := CBWH54OKUK6U2J2A4J2REJEYB625NEFCHISWXLOPR2D2D6FTN63TJTWN
-
-generate-ts-bindings: build
-	@echo "Generating TypeScript bindings for all contracts and packages..."
-	@mkdir -p $(BINDINGS_BASE_DIR)
-	@for dir in $(CONTRACT_DIRS) ; do \
-		contract_name=$$(basename $$dir); \
-		wasm_path=./target/wasm32-unknown-unknown/release/$$contract_name.wasm; \
-		output_dir=$(BINDINGS_BASE_DIR)/ts-$$contract_name; \
-		mkdir -p $$output_dir; \
-		echo "Generating bindings for $$contract_name..."; \
-		stellar contract bindings typescript --overwrite \
-			--contract-id $(CONTRACT_ID) \
-			--wasm $$wasm_path \
-			--output-dir $$output_dir \
-			--rpc-url $(RPC_URL) \
-			--network-passphrase $(NETWORK_PASSPHRASE) \
-			--network $(NETWORK) || echo "Failed to generate bindings for $$contract_name"; \
-	done
-	@echo "TypeScript bindings generation complete!"
+# TODO:
+# add automated scripts to deploy to any network
+# add automate scripts to generate contract bindings

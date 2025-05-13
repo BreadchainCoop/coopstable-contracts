@@ -4,17 +4,38 @@
             "code": "CUSD",
             "id":  "CDHHR356G725HNLAAQ74WBGVT6Y6ZFZLM2TIHLDCOZTJ2SVZ7P3EANYT"
         },
-        "lending_yield_controller": {
-            "id":  "CBT3CXNXEXDRMNSLA2HQKKEWHR5TEOGYUMPA3UXQXCU2VXQQ67B2MZML"
+        "cusd_manager": {
+            "alias": "cusd_manager",
+            "id": "CDBTUAXLICFWL7UN4BFDOQEB44YSBCYKLEU3CWOSICJYK2SHK4C6X5EK",
+            "wasm-hash": "06a85472b38ee52ee655dc4fb7a7e43b34ce466840e86b4d31f436a34db2f6c4",
+            "deployment_hash": "bda3dd3d0fd1658b27f63d4168d618a53a80cbe2c540e7c2f4537880b39de2ff"
         },
         "yield_adapter_registry": {
-            "id":  "CBT3CXNXEXDRMNSLA2HQKKEWHR5TEOGYUMPA3UXQXCU2VXQQ67B2MZML"
+            "alias": "yield_adapter_registry",
+            "id":  "CDCNLYXOK25MUIVMM4ZCZKKGOHKGRGCQBBVWPM3OI6NFWEEJJQMJVQ7G",
+            "wasm-hash": "a29775f0b122d451065a74686ee919a1ef40f5ee0b2a91f1756be07293ac2eb6",
+            "deployment-hash": "81e67c06c59160ecb65c6ab028a650934b5fe8006fe6ceb7d6d8535e64d60b73"
         },
-        "cusd_manager": {
-            "id":  "CBT3CXNXEXDRMNSLA2HQKKEWHR5TEOGYUMPA3UXQXCU2VXQQ67B2MZML"
+        "yield_distributor": {
+            "alias": "yield_distributor", 
+            "id": "CABILPCXTCOYQO7YDSPTKBXGVOTMLQH5L5M3JSLZXPQBBQ6OFXFHMQ7J",
+            "wasm-hash": "52f1fdc18f213a87d43b1ec8d3cbb34c0332d8bd88410ad467e7894a17c030d1",
+            "deployment-hash": "5e0473780bba946fec758ce1dbd18e3c695afbecca258842ff80e5928d13c69b"
         },
+        "lending_yield_controller": {
+            "alias": "lending_yield_controller",
+            "id":  "CBQSGJM2A4EWTBEW2BDIP2OBNZB2SAZSV5K7MPELISICR7BFDLNH3B6H",
+            "wasm-hash": "3708d6e5579ba954a89710d2ce1dd3412e128003efc236c3fa7e6efeaf7e47fa",
+            "deployment-hash": "5485361163a8016fed24d1f17f0564f4aa5f66ee64a652b0b3d194abc3c8efa9"
+        },  
         "blend_capital_adapter": {
-            "id": "CBT3CXNXEXDRMNSLA2HQKKEWHR5TEOGYUMPA3UXQXCU2VXQQ67B2MZML"
+            "id": "CB3N27OIEKO7TM2GICY5Q243AVMZ3ELX2F7VKVFB6FNLWIPXF3O2TLZI",
+            "wasm-hash": "9eab4a18ec6dcd9b9bfbdbfaff5f601a9e7b08246e925eff6bc427347f8cd8cf",
+            "deployment-hash": "ca97a7e520f8c737cd333758bfed4c5221659d342ef73452cc5dd0a28c6558ae"
+        },
+        "blend_usdc_lending_pool": {
+            "id": "CAMKTT6LIXNOKZJVFI64EBEQE25UYAQZBTHDIQ4LEDJLTCM6YVME6IIY",
+            "wasm-hash": "6a7c67449f6bad0d5f641cfbdf03f430ec718faa85107ecb0b97df93410d1c43"
         }
     }
 }
