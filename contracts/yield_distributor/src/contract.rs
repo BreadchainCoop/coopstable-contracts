@@ -1,7 +1,10 @@
-use soroban_sdk::{contract, contractimpl, contractmeta, token::TokenClient, Address, Env, Vec};
+use core::panic;
+
+use soroban_sdk::{contract, contractimpl, contractmeta, token::TokenClient, Address, Env, Vec, panic_with_error};
 use access_control::{access::default_access_control, constants::DEFAULT_ADMIN_ROLE};
 
 use crate::events::YieldDistributorEvents;
+use crate::error::YieldDistributorError;
 use crate::storage;
 use crate::storage_types::YIELD_DISTRIBUTOR_ADMIN_ROLE;
 
@@ -93,7 +96,7 @@ impl YieldDistributorTrait for YieldDistributor {
 
         if let Some(existing) = storage::get_member(e, &member) {
             if existing.active {
-                panic!("Member already exists and is active");
+                panic_with_error!(e, YieldDistributorError::MemberAlreadyExists);
             }
         }
 
@@ -105,7 +108,7 @@ impl YieldDistributorTrait for YieldDistributor {
         require_admin(e, &caller);
 
         if let None = storage::get_member(e, &member) {
-            panic!("Member does not exist");
+            panic_with_error!(e, YieldDistributorError::MemberDoesNotExist);
         }
 
         storage::remove_member(e, &member);

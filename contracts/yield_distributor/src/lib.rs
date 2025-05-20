@@ -4,3 +4,4 @@ mod events;
 mod storage;
 mod storage_types;
 mod test;
+mod error;

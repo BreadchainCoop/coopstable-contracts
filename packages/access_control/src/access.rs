@@ -1,4 +1,11 @@
-use soroban_sdk::{vec, Address, Env, Symbol, Vec};
+use soroban_sdk::{
+    vec, 
+    Address, 
+    Env, 
+    Symbol, 
+    Vec, 
+    panic_with_error
+};
 
 use crate::{
     constants::{
@@ -7,6 +14,7 @@ use crate::{
     },
     contract_types::{RoleData, RolesMap},
     events::AccessControlEvents,
+    error::AccessControlError
 };
 
 pub struct AccessControl {
@@ -94,7 +102,7 @@ impl AccessControl {
 
         let admin_role = self.get_role_admin(e, role.clone());
         if !self.has_role(e, admin_role, &sender) {
-            panic!("AccessControl: sender must be an admin to grant role");
+            panic_with_error!(e, AccessControlError::OnlyRoleAdmin);
         }
 
         self._grant_role(e, role, account);
@@ -130,7 +138,7 @@ impl AccessControl {
 
         let admin_role = self.get_role_admin(e, role.clone());
         if !self.has_role(e, admin_role, &sender) {
-            panic!("AccessControl: sender must be an admin to revoke role");
+            panic_with_error!(e, AccessControlError::OnlyRoleAdmin);
         }
 
         self._revoke_role(e, role, account);
@@ -158,7 +166,7 @@ impl AccessControl {
 
     pub fn check_role(&self, e: &Env, role: Symbol, account: &Address) {
         if !self.has_role(e, role, account) {
-            panic!("AccessControl: account does not have role");
+            panic_with_error!(e, AccessControlError::UnAuhtorizedRole);
         }
     }
 

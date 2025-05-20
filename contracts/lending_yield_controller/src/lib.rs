@@ -21,4 +21,5 @@ mod storage;
 mod constants;
 mod contract;
 mod events;
+mod error;
 mod test;
