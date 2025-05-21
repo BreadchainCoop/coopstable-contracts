@@ -11,9 +11,10 @@ use crate::{
         support_asset,
         verify_if_yield_adapter_exists,
     },
+    error::YieldAdapterRegistryError
 };
 use access_control::{access::default_access_control, constants::DEFAULT_ADMIN_ROLE};
-use soroban_sdk::{contract, contractimpl, contractmeta, Address, Env, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, contractmeta, panic_with_error, Address, Env, Symbol, Vec};
 
 contractmeta!(
     key = "Description",
@@ -103,11 +104,10 @@ impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
     }
 
     fn get_adapter(e: &Env, yield_type: Symbol, protocol: Symbol) -> Address {
-        if verify_if_yield_adapter_exists(e, yield_type.clone(), protocol.clone()) {
-            get_yield_adapter(e, yield_type, protocol)
-        } else {
-            panic!("Yield adapter not found")
+        if !verify_if_yield_adapter_exists(e, yield_type.clone(), protocol.clone()) {
+            panic_with_error!(e, YieldAdapterRegistryError::InvalidYieldAdapter);
         }
+        get_yield_adapter(e, yield_type, protocol)
     }
 
     fn add_support_for_asset(

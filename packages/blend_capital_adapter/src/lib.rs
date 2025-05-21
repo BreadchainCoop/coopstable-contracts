@@ -1,6 +1,7 @@
 #![no_std]
 mod constants;
 mod contract;
+mod adapter;
 pub mod contract_types;
 mod storage;
 pub mod artifacts {

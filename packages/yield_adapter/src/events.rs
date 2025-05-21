@@ -17,4 +17,9 @@ impl LendingAdapterEvents {
         let topics = (Symbol::new(e, "claim_yield"), adapter, user);
         e.events().publish(topics, (asset, amount));
     }
+
+    pub fn claim_emissions(e: &Env, from: Address, to: Address, asset: Address, amount: i128) {
+        let topics = (Symbol::new(e, "emissions_claimed"), from);
+        e.events().publish(topics, (to, asset, amount));
+    }
 }
