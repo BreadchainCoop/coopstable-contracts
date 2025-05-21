@@ -102,19 +102,17 @@ impl LendingYieldControllerTrait for LendingYieldController {
 
         // deps
         let registry_client = adapter_registry_client(&e);
+        let is_asset_supported =
+        registry_client.is_supported_asset(&YIELD_TYPE.id(), &protocol, &asset);
+        if !is_asset_supported {
+            panic!("Asset is not supported by the adapter registry");
+        };
+        
         let cusd_manager_client = cusd_manager_client(&e);
         let adapter =
             LendingAdapterClient::new(e, &registry_client.get_adapter(&YIELD_TYPE.id(), &protocol));
         let asset_client = TokenClient::new(e, &asset);
 
-        // require supported asset for adapter
-        let is_asset_supported =
-            registry_client.is_supported_asset(&YIELD_TYPE.id(), &protocol, &asset);
-        if !is_asset_supported {
-            panic!("Asset is not supported by the adapter registry");
-        };
-
-        // Deposit collateral
         asset_client.transfer_from(
             &e.current_contract_address(),
             &user,
@@ -228,10 +226,10 @@ impl LendingYieldControllerTrait for LendingYieldController {
             let adapter_client = LendingAdapterClient::new(e, &adapter_address);
 
             for asset in supported_assets.iter() {
+                
                 let token_client = TokenClient::new(e, &asset);
                 let claimed = adapter_client.claim_yield(&e.current_contract_address(), &asset);
-                log!(&e, "address: {}, claimed: {}", asset, claimed);
-
+                
                 if claimed > 0 {
                     token_client.approve(
                         &e.current_contract_address(),
@@ -249,6 +247,9 @@ impl LendingYieldControllerTrait for LendingYieldController {
 
                     total_claimed += claimed;
                 }
+
+                let treasury = distributor.get_treasury();
+                adapter_client.claim_emissions(&treasury, &asset);
             }
         }
 

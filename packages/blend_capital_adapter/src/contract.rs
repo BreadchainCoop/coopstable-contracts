@@ -83,8 +83,8 @@ impl LendingAdapter for BlendCapitalAdapter {
     }
 
     fn claim_emissions(e: &Env, to: Address, asset: Address) -> i128 {
-        let from = e.current_contract_address();
         storage::require_yield_controller(e);
+        let from = e.current_contract_address();
 
         let emissions = adapter::claim(e, from.clone(), to.clone(), asset.clone());
         
