@@ -6,7 +6,6 @@ use crate::{
     constants::SCALAR_12
 };
 
-
 fn create_request(
     request_type: RequestType, 
     asset: Address, 
@@ -21,7 +20,6 @@ fn create_request(
 
 pub fn supply_collateral(
     e: &Env, 
-    user: Address, 
     asset: Address, 
     amount: i128
 ) -> i128 {
@@ -30,14 +28,15 @@ pub fn supply_collateral(
 
     let request = create_request(RequestType::SupplyCollateral, asset.clone(), amount);
     let request_vec: Vec<Request> = vec![e, request];
-    pool_client.submit_with_allowance(
-        &user, // user in this case will be the yield controller
-        &e.current_contract_address(),
-        &user, // user in this case will be the yield controller
+    
+    pool_client.submit(
+        &e.current_contract_address(), // user in this case will be the yield controller
+        &e.current_contract_address(), // spender is the adapter
+        &e.current_contract_address(), // all emissions are forwarded to the adapter
         &request_vec,
     );
 
-    storage::store_deposit(e, &user, &asset, amount);
+    storage::store_deposit(e, &e.current_contract_address(), &asset, amount);
 
     amount
 }
@@ -54,14 +53,14 @@ pub fn withdraw_collateral(
 
     let request_vec: Vec<Request> = vec![e, request];
 
-    pool_client.submit_with_allowance(
-        &user, // user in this case will be the yield controller
+    pool_client.submit(
         &e.current_contract_address(),
-        &user, // user in this case will be the yield controller
+        &e.current_contract_address(),
+        &user,
         &request_vec,
     );
 
-    storage::remove_deposit(e, &user, &asset, amount);
+    storage::remove_deposit(e, &e.current_contract_address(), &asset, amount);
 
     amount
 }
@@ -110,6 +109,23 @@ fn get_reserve_token_id(e: &Env, asset: Address) -> Option<u32> {
     }
 
     None
+}
+
+pub fn get_user_emissions(e: &Env, user: Address, asset: Address)
+-> i128 {
+    let pool_id: Address = storage::read_lend_pool_id(e);
+    let pool_client = PoolClient::new(e, &pool_id);
+
+    if let Some(reserve_token_id) = get_reserve_token_id(e, asset) {
+        
+        if let Some(user_emission_data) = pool_client.get_user_emissions(&user, &reserve_token_id) {
+
+            return user_emission_data.accrued;
+        }
+
+        return 0;
+    }
+    0
 }
 
 pub fn claim(e: &Env, from: Address, to: Address, asset: Address) -> i128 {

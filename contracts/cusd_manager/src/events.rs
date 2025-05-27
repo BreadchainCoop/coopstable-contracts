@@ -21,4 +21,9 @@ impl CUSDManagerEvents {
         let topics = (Symbol::new(e, "set_cusd_manager_admin"),);
         e.events().publish(topics, new_admin);
     }
+    
+    pub fn set_yield_controller(e: &Env, yield_controller: Address) {
+        let topics = (Symbol::new(e, "set_yield_controller"),);
+        e.events().publish(topics, yield_controller);
+    }
 }

@@ -274,7 +274,6 @@ fn test_process_token_burn() {
     process_token_burn(
         &env,
         token_admin.clone(),
-        user.clone(),
         token_id.clone(),
         amount / 2,
     );

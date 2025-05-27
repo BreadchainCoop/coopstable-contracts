@@ -9,7 +9,7 @@ use crate::{
         YIELD_TYPE
     }, 
     error::LendingYieldControllerError, 
-    events::LendingYieldControllerEvents
+    events::LendingYieldControllerEvents,
 };
 use crate::storage;
 use access_control::{
@@ -53,6 +53,7 @@ pub trait LendingYieldControllerTrait {
     ) -> i128;
     fn get_yield(e: &Env) -> i128;
     fn claim_yield(e: &Env) -> i128;
+    fn claim_emissions(e: &Env, protocol: Symbol, asset: Address) -> i128;
 }
 
 #[contract]
@@ -120,7 +121,7 @@ impl LendingYieldControllerTrait for LendingYieldController {
             &amount,
             &100_u32,
         );
-        adapter.deposit(&e.current_contract_address(), &asset, &amount);
+        adapter.deposit(&asset, &amount);
         cusd_manager_client.issue_cusd(&e.current_contract_address(), &user, &amount);
 
         LendingYieldControllerEvents::deposit_collateral(&e, user, asset, amount);
@@ -142,7 +143,6 @@ impl LendingYieldControllerTrait for LendingYieldController {
         let cusd_manager_client = storage::cusd_manager_client(&e);
         let adapter =
             LendingAdapterClient::new(e, &registry_client.get_adapter(&YIELD_TYPE.id(), &protocol));
-        let asset_client = TokenClient::new(e, &asset);
         let cusd_token_client = TokenClient::new(e, &cusd_manager_client.get_cusd_id());
 
         // require supported asset for adapter
@@ -152,31 +152,24 @@ impl LendingYieldControllerTrait for LendingYieldController {
             panic_with_error!(e, LendingYieldControllerError::UnsupportedAsset);
         };
 
-        // Withdraw collateral
-        adapter.withdraw(&user, &asset, &amount);
-
         // Burn cUSD
+        // if users withdraw more than their cusd balance it will revert here because of insufficient balance
         cusd_token_client.transfer_from(
             &e.current_contract_address(),
             &user,
-            &e.current_contract_address(),
+            &cusd_manager_client.address,
             &amount,
         );
-        cusd_token_client.approve(
+        
+        cusd_manager_client.burn_cusd(
             &e.current_contract_address(),
             &cusd_manager_client.address,
             &amount,
-            &100_u32,
         );
-        cusd_manager_client.burn_cusd(
-            &e.current_contract_address(),
-            &e.current_contract_address(),
-            &amount,
-        );
-
-        // Transfer asset to user
-        asset_client.transfer(&e.current_contract_address(), &user, &amount);
-
+        
+        // Withdraw collateral
+        adapter.withdraw(&user, &asset, &amount);
+        
         LendingYieldControllerEvents::withdraw_collateral(&e, user, asset, amount);
 
         amount
@@ -185,16 +178,14 @@ impl LendingYieldControllerTrait for LendingYieldController {
     fn get_yield(e: &Env) -> i128 {
         let registry_client = storage::adapter_registry_client(e);
         let lend_protocols_with_assets = registry_client.get_adapters_with_assets(&YIELD_TYPE.id());
-        let user = e.current_contract_address();
-
-        // Use fold to accumulate the total yield across all adapters and assets
+       
         lend_protocols_with_assets.iter().fold(
             0,
             |adapter_acc, (adapter_address, supported_assets)| {
                 let adapter_client = LendingAdapterClient::new(e, &adapter_address);
 
                 let adapter_total = supported_assets.iter().fold(0, |asset_acc, asset| {
-                    let asset_yield = adapter_client.get_yield(&user, &asset);
+                    let asset_yield = adapter_client.get_yield(&asset);
                     asset_acc + asset_yield
                 });
                 adapter_acc + adapter_total
@@ -223,7 +214,8 @@ impl LendingYieldControllerTrait for LendingYieldController {
             for asset in supported_assets.iter() {
                 
                 let token_client = TokenClient::new(e, &asset);
-                let claimed = adapter_client.claim_yield(&e.current_contract_address(), &asset);
+
+                let claimed = adapter_client.claim_yield(&asset);
                 
                 if claimed > 0 {
                     token_client.approve(
@@ -243,12 +235,29 @@ impl LendingYieldControllerTrait for LendingYieldController {
                     total_claimed += claimed;
                 }
 
-                let treasury = distributor.get_treasury();
-                adapter_client.claim_emissions(&treasury, &asset);
             }
         }
 
         total_claimed
+    }
+
+    fn claim_emissions(e: &Env, protocol: Symbol, asset: Address) -> i128 {
+        let registry_client = storage::adapter_registry_client(e);
+        let adapter_client = LendingAdapterClient::new(e, &registry_client.get_adapter(&YIELD_TYPE.id(), &protocol));
+        let emissions = adapter_client.get_emissions(&e.current_contract_address(), &asset);
+        if emissions > 0 {
+            let distributor = storage::distributor_client(e);
+            
+            let claimed = adapter_client.claim_emissions(&distributor.get_treasury(), &asset);
+            
+            LendingYieldControllerEvents::claim_emissions(
+                &e,
+                distributor.get_treasury(),
+                asset.clone(),
+                claimed,
+            );            
+        }
+        0
     }
 
     fn set_yield_distributor(e: &Env, yield_distributor: Address) {

@@ -19,6 +19,8 @@ fn setup_test() -> (Env, Address, Address, Address, Address) {
     // Create asset
     let token_admin = Address::generate(&env);
     let usdc_token = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let blend_token = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let blend_token_id = blend_token.address();
     let usdc_token_id = usdc_token.address();
 
     // Deploy mock Pool contract
@@ -34,7 +36,7 @@ fn setup_test() -> (Env, Address, Address, Address, Address) {
     // Deploy BlendCapitalAdapter contract
     let blend_adapter_id = env.register(
         BlendCapitalAdapter,
-        BlendCapitalAdapterArgs::__constructor(&yield_controller, &pool_contract_id),
+        BlendCapitalAdapterArgs::__constructor(&yield_controller, &pool_contract_id, &blend_token_id),
     );
 
     (
@@ -85,7 +87,7 @@ fn test_deposit_with_events() {
 
     // Clear events then deposit collateral
     let _ = env.events().all();
-    let result = client.deposit(&user, &usdc_token_id, &amount);
+    let result = client.deposit(&usdc_token_id, &amount);
 
     // Get all events
     let events = env.events().all();
@@ -123,11 +125,10 @@ fn test_deposit_non_yield_controller() {
     let (env, blend_adapter_id, _yield_controller, usdc_token_id, _pool_id) = setup_test();
 
     let client = BlendCapitalAdapterClient::new(&env, &blend_adapter_id);
-    let user = Address::generate(&env);
     let amount: i128 = 1000;
 
     // Do not mock authorizations - this should cause a panic
-    client.deposit(&user, &usdc_token_id, &amount);
+    client.deposit(&usdc_token_id, &amount);
 }
 
 // Test withdrawal operation
@@ -144,7 +145,7 @@ fn test_withdraw() {
     env.mock_all_auths();
 
     // First deposit
-    client.deposit(&user, &usdc_token_id, &deposit_amount);
+    client.deposit(&usdc_token_id, &deposit_amount);
 
     // Clear events before withdraw
     let _ = env.events().all();
@@ -196,7 +197,7 @@ fn test_full_withdraw() {
     env.mock_all_auths();
 
     // First deposit
-    client.deposit(&user, &usdc_token_id, &amount);
+    client.deposit(&usdc_token_id, &amount);
 
     // Then withdraw everything
     let result = client.withdraw(&user, &usdc_token_id, &amount);
@@ -232,17 +233,16 @@ fn test_get_yield() {
     let (env, blend_adapter_id, _yield_controller, usdc_token_id, _) = setup_test();
 
     let client = LendingAdapterClient::new(&env, &blend_adapter_id);
-    let user = Address::generate(&env);
     let amount: i128 = 1000_0000000; // Using 7 decimal places
 
     // Mock the yield controller authorization
     env.mock_all_auths();
 
     // Deposit
-    client.deposit(&user, &usdc_token_id, &amount);
+    client.deposit(&usdc_token_id, &amount);
 
     // Initially there should be no yield
-    let initial_yield = client.get_yield(&user, &usdc_token_id);
+    let initial_yield = client.get_yield(&usdc_token_id);
     assert_eq!(initial_yield, 0);
 
     // TODO: Fix this test
@@ -266,17 +266,16 @@ fn test_claim_yield_no_yield() {
     let (env, blend_adapter_id, _yield_controller, usdc_token_id, _pool_id) = setup_test();
 
     let client = LendingAdapterClient::new(&env, &blend_adapter_id);
-    let user = Address::generate(&env);
     let amount: i128 = 1000_0000000; // Using 7 decimal places
 
     // Mock the yield controller authorization
     env.mock_all_auths();
 
     // Deposit
-    client.deposit(&user, &usdc_token_id, &amount);
+    client.deposit(&usdc_token_id, &amount);
 
     // Try to claim yield (should be 0)
-    let claimed_yield = client.claim_yield(&user, &usdc_token_id);
+    let claimed_yield = client.claim_yield(&usdc_token_id);
     assert_eq!(claimed_yield, 0);
 }
 
@@ -287,11 +286,10 @@ fn test_claim_yield_non_yield_controller() {
     let (env, blend_adapter_id, _yield_controller, usdc_token_id, _pool_id) = setup_test();
 
     let client = LendingAdapterClient::new(&env, &blend_adapter_id);
-    let user = Address::generate(&env);
 
     // Do not mock authorizations
     // Claim yield - should fail without yield controller auth
-    client.claim_yield(&user, &usdc_token_id);
+    client.claim_yield(&usdc_token_id);
 }
 
 // Test authorization with explicit requirements
@@ -300,14 +298,13 @@ fn test_authorization_requirements() {
     let (env, blend_adapter_id, yield_controller, usdc_token_id, _pool_id) = setup_test();
 
     let client = LendingAdapterClient::new(&env, &blend_adapter_id);
-    let user = Address::generate(&env);
     let amount: i128 = 1000;
 
     // Setup auth for the yield controller
     env.mock_all_auths();
 
     // Perform deposit
-    client.deposit(&user, &usdc_token_id, &amount);
+    client.deposit(&usdc_token_id, &amount);
 
     // Verify that the yield controller was required to authorize this call
     let auths = env.auths();
@@ -334,11 +331,11 @@ fn test_compound_operations() {
 
     // First deposit
     let deposit1 = 500_0000000;
-    client.deposit(&user, &usdc_token_id, &deposit1);
+    client.deposit(&usdc_token_id, &deposit1);
 
     // Second deposit
     let deposit2 = 300_0000000;
-    client.deposit(&user, &usdc_token_id, &deposit2);
+    client.deposit(&usdc_token_id, &deposit2);
 
     // Verify total deposit tracking
     env.as_contract(&blend_adapter_id, || {
@@ -387,11 +384,11 @@ fn test_multi_user_operations() {
 
     // User 1 deposits
     let deposit1 = 500_0000000;
-    client.deposit(&user1, &usdc_token_id, &deposit1);
+    client.deposit(&usdc_token_id, &deposit1);
 
     // User 2 deposits
     let deposit2 = 300_0000000;
-    client.deposit(&user2, &usdc_token_id, &deposit2);
+    client.deposit(&usdc_token_id, &deposit2);
 
     // Verify each user's deposit tracking
     env.as_contract(&blend_adapter_id, || {
@@ -430,24 +427,23 @@ fn test_negative_yield_handling() {
     let (env, blend_adapter_id, _yield_controller, usdc_token_id, pool_id) = setup_test();
 
     let client = LendingAdapterClient::new(&env, &blend_adapter_id);
-    let user = Address::generate(&env);
     let amount: i128 = 1000_0000000; // Using 7 decimal places
 
     // Mock the yield controller authorization
     env.mock_all_auths();
 
     // Deposit
-    client.deposit(&user, &usdc_token_id, &amount);
+    client.deposit(&usdc_token_id, &amount);
 
     // Simulate negative yield by updating b_rate to a lower value
     let new_b_rate: i128 = 900_000_000_000; // 10% loss
     update_b_rate(&env, &pool_id, &usdc_token_id, new_b_rate);
 
     // Check yield - should return 0 for negative yield
-    let yield_amount = client.get_yield(&user, &usdc_token_id);
+    let yield_amount = client.get_yield(&usdc_token_id);
     assert_eq!(yield_amount, 0, "Negative yield should be reported as 0");
 
     // Try to claim yield - should also return 0
-    let claimed_yield = client.claim_yield(&user, &usdc_token_id);
+    let claimed_yield = client.claim_yield(&usdc_token_id);
     assert_eq!(claimed_yield, 0, "Claiming negative yield should return 0");
 }

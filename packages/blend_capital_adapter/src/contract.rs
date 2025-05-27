@@ -5,7 +5,7 @@ use soroban_sdk::{
     Env, 
 };
 use crate::{
-    constants::{YIELD_CONTROLLER_ID, LENDING_POOL_ID},
+    constants::{YIELD_CONTROLLER_ID, LENDING_POOL_ID, BLEND_TOKEN_ID},
     storage,
     adapter
 };
@@ -19,21 +19,24 @@ pub struct BlendCapitalAdapter;
 
 #[contractimpl]
 impl LendingAdapter for BlendCapitalAdapter {
-    fn __constructor(e: Env, lending_adapter_controller_id: Address, lending_pool_id: Address) {
+    fn __constructor(e: Env, yield_controller: Address, blend_pool_id: Address, blend_token_id: Address) {
         e.storage()
             .instance()
-            .set(&YIELD_CONTROLLER_ID, &lending_adapter_controller_id);
+            .set(&YIELD_CONTROLLER_ID, &yield_controller);
         e.storage()
             .instance()
-            .set(&LENDING_POOL_ID, &lending_pool_id);
+            .set(&LENDING_POOL_ID, &blend_pool_id);
+        e.storage()
+            .instance()
+            .set(&BLEND_TOKEN_ID, &blend_token_id);
     }
 
-    fn deposit(e: &Env, user: Address, asset: Address, amount: i128) -> i128 {
+    fn deposit(e: &Env, asset: Address, amount: i128) -> i128 {
         storage::require_yield_controller(e);
 
-        adapter::supply_collateral(e, user.clone(), asset.clone(), amount);
+        adapter::supply_collateral(e, asset.clone(), amount);
 
-        LendingAdapterEvents::deposit(&e, e.current_contract_address(), user, asset, amount);
+        LendingAdapterEvents::deposit(&e, e.current_contract_address(), asset, amount);
 
         amount
     }
@@ -48,11 +51,11 @@ impl LendingAdapter for BlendCapitalAdapter {
         amount
     }
 
-    fn get_yield(e: &Env, user: Address, asset: Address) -> i128 {
+    fn get_yield(e: &Env, asset: Address) -> i128 {
 
-        let current_value = adapter::get_balance(e, user.clone(), asset.clone());
+        let current_value = adapter::get_balance(e, e.current_contract_address(), asset.clone());
 
-        let original_deposit = storage::get_deposit_amount(e, &user, &asset);
+        let original_deposit = storage::get_deposit_amount(e, &e.current_contract_address(), &asset);
 
         if original_deposit == 0 || current_value <= original_deposit {
             return 0;
@@ -61,20 +64,21 @@ impl LendingAdapter for BlendCapitalAdapter {
         current_value - original_deposit
     }
 
-    fn claim_yield(e: &Env, user: Address, asset: Address) -> i128 {
-        storage::require_yield_controller(e);
+    fn claim_yield(e: &Env, asset: Address) -> i128 {
+        let yield_controller = storage::get_yield_controller(e);
+        yield_controller.require_auth();
 
-        let yield_amount = Self::get_yield(e, user.clone(), asset.clone());
+        let yield_amount = Self::get_yield(e, asset.clone());
         if yield_amount <= 0 {
             return 0;
         }
 
-        adapter::withdraw_collateral(e, user.clone(), asset.clone(), yield_amount);
+        adapter::withdraw_collateral(e, yield_controller.clone(), asset.clone(), yield_amount);
 
         LendingAdapterEvents::claim_yield(
             &e,
             e.current_contract_address(),
-            user,
+            yield_controller,
             asset,
             yield_amount,
         );
@@ -84,6 +88,7 @@ impl LendingAdapter for BlendCapitalAdapter {
 
     fn claim_emissions(e: &Env, to: Address, asset: Address) -> i128 {
         storage::require_yield_controller(e);
+        
         let from = e.current_contract_address();
 
         let emissions = adapter::claim(e, from.clone(), to.clone(), asset.clone());
@@ -91,5 +96,16 @@ impl LendingAdapter for BlendCapitalAdapter {
         LendingAdapterEvents::claim_emissions(e, from, to, asset, emissions);
 
         emissions
+    }
+
+    fn get_emissions(e: &Env, from: Address, asset: Address) -> i128 {
+        
+        storage::require_yield_controller(e);
+        
+        adapter::get_user_emissions(e, from.clone(), asset.clone())
+    }
+
+    fn protocol_token(e: &Env) -> Address {
+        storage::read_blend_token_id(e)
     }
 }

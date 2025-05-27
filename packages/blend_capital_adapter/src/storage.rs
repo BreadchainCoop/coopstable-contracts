@@ -1,7 +1,5 @@
 use crate::constants::{
-    LENDING_POOL_ID, 
-    USER_DEPOSITS, 
-    YIELD_CONTROLLER_ID,
+    BLEND_TOKEN_ID, LENDING_POOL_ID, USER_DEPOSITS, YIELD_CONTROLLER_ID
 };
 use soroban_sdk::{
     Address, 
@@ -12,7 +10,7 @@ use yield_adapter::constants::{
     ADAPTER_INSTANCE_LIFETIME_THRESHOLD
 };
 
-fn get_yield_controller(e: &Env) -> Address {
+pub fn get_yield_controller(e: &Env) -> Address {
     e.storage().instance().extend_ttl(
         ADAPTER_INSTANCE_LIFETIME_THRESHOLD,
         ADAPTER_INSTANCE_BUMP_AMOUNT,
@@ -61,4 +59,8 @@ pub fn require_yield_controller(e: &Env) {
 
 pub fn read_lend_pool_id(e: &Env) -> Address {
     e.storage().instance().get(&LENDING_POOL_ID).unwrap()
+}
+
+pub fn read_blend_token_id(e: &Env) -> Address {
+    e.storage().instance().get(&BLEND_TOKEN_ID).unwrap()
 }

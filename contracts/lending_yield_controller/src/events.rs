@@ -17,6 +17,11 @@ impl LendingYieldControllerEvents {
         e.events().publish(topics, (asset, amount));
     }
 
+    pub fn claim_emissions(e: &Env, user: Address, asset: Address, amount: i128) {
+        let topics = (Symbol::new(e, "claim_emissions"), user.clone());
+        e.events().publish(topics, (asset, amount));
+    }
+
     pub fn set_yield_distributor(e: &Env, yield_distributor: Address) { 
         let topics = (Symbol::new(e, "set_yield_distributor"), );
         e.events().publish(topics,  yield_distributor.clone());
