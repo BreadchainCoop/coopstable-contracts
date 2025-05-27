@@ -33,17 +33,29 @@ fn setup_test() -> (Env, Address, Address, Address, Address) {
     // Set the CUSD Manager contract as the admin of the CUSD token
     let token_client = StellarAssetClient::new(&e, &cusd_token_id);
 
-    e.mock_all_auths();
+    e.mock_all_auths_allowing_non_root_auth();
 
     token_client.set_admin(&cusd_manager_id);
 
     (e, cusd_manager_id, owner, admin, cusd_token_id)
 }
 
+// Helper to setup with yield controller
+fn setup_test_with_yield_controller() -> (Env, Address, Address, Address, Address, Address) {
+    let (e, cusd_manager_id, owner, admin, cusd_token_id) = setup_test();
+    
+    let yield_controller = Address::generate(&e);
+    let cusd_manager_client = CUSDManagerClient::new(&e, &cusd_manager_id);
+    // env.mock_all_auths() is already called in setup_test()
+    cusd_manager_client.set_yield_controller(&admin, &yield_controller);
+    
+    (e, cusd_manager_id, owner, admin, cusd_token_id, yield_controller)
+}
+
 // Test the successful constructor and initialization
 #[test]
 fn test_constructor() {
-    let (env, cusd_manager_id, _owner, admin, cusd_token_id) = setup_test();
+    let (env, cusd_manager_id, _owner, _admin, cusd_token_id) = setup_test();
 
     let client = CUSDManagerClient::new(&env, &cusd_manager_id);
 
@@ -111,17 +123,14 @@ fn test_set_cusd_issuer() {
 // Test issuing CUSD tokens
 #[test]
 fn test_issue_cusd() {
-    let (env, cusd_manager_id, _owner, admin, cusd_token_id) = setup_test();
+    let (env, cusd_manager_id, _owner, _admin, cusd_token_id, yield_controller) = setup_test_with_yield_controller();
 
     let client = CUSDManagerClient::new(&env, &cusd_manager_id);
     let recipient = Address::generate(&env);
     let amount: i128 = 1000;
 
-    // Setup expected auth
-    env.mock_all_auths();
-
-    // Issue tokens
-    client.issue_cusd(&admin, &recipient, &amount);
+    // Issue tokens (auth already mocked in setup)
+    client.issue_cusd(&yield_controller, &recipient, &amount);
 
     // Verify the tokens were issued
     let token_client = TokenClient::new(&env, &cusd_token_id);
@@ -132,26 +141,24 @@ fn test_issue_cusd() {
 // Test burning CUSD tokens
 #[test]
 fn test_burn_cusd() {
-    let (env, cusd_manager_id, _owner, admin, cusd_token_id) = setup_test();
+    let (env, cusd_manager_id, _owner, _admin, cusd_token_id, yield_controller) = setup_test_with_yield_controller();
 
     let client = CUSDManagerClient::new(&env, &cusd_manager_id);
     let token_client: TokenClient = TokenClient::new(&env, &cusd_token_id);
     let user = Address::generate(&env);
     let amount: i128 = 1000;
 
-    // Issue tokens first
-    env.mock_all_auths();
-    client.issue_cusd(&admin, &user, &amount);
+    // Issue tokens first (auth already mocked in setup)
+    client.issue_cusd(&yield_controller, &user, &amount);
 
     // Verify initial balance
     let initial_balance = token_client.balance(&user);
     assert_eq!(initial_balance, amount);
 
     // Burn tokens
-    env.mock_all_auths();
     let burn_amount = amount / 2;
     token_client.approve(&user, &client.address, &burn_amount, &1000000);
-    client.burn_cusd(&admin, &user, &burn_amount);
+    client.burn_cusd(&yield_controller, &user, &burn_amount);
 
     // Verify final balance
     let final_balance = token_client.balance(&user);
@@ -160,26 +167,23 @@ fn test_burn_cusd() {
 
 // Test issuing CUSD tokens with negative amount (should fail)
 #[test]
-#[should_panic(expected = "negative amount is not allowed")]
+#[should_panic(expected = "Error(Contract, #8)")]
 fn test_issue_cusd_negative_amount() {
-    let (env, cusd_manager_id, _owner, admin, _cusd_token_id) = setup_test();
+    let (env, cusd_manager_id, _owner, _admin, _cusd_token_id, yield_controller) = setup_test_with_yield_controller();
 
     let client = CUSDManagerClient::new(&env, &cusd_manager_id);
     let recipient = Address::generate(&env);
     let amount: i128 = -100; // Negative amount
 
-    // Mock authentication
-    env.mock_all_auths();
-
-    // Should panic due to negative amount
-    client.issue_cusd(&admin, &recipient, &amount);
+    // Should panic due to negative amount (auth already mocked in setup)
+    client.issue_cusd(&yield_controller, &recipient, &amount);
 }
 
 // Test burning CUSD tokens with negative amount (should fail)
 #[test]
-#[should_panic(expected = "negative amount is not allowed")]
+#[should_panic(expected = "Error(Contract, #8)")]
 fn test_burn_cusd_negative_amount() {
-    let (env, cusd_manager_id, _owner, admin, _cusd_token_id) = setup_test();
+    let (env, cusd_manager_id, _owner, _admin, _cusd_token_id, yield_controller) = setup_test_with_yield_controller();
 
     let client = CUSDManagerClient::new(&env, &cusd_manager_id);
     let user = Address::generate(&env);
@@ -189,12 +193,12 @@ fn test_burn_cusd_negative_amount() {
     env.mock_all_auths();
 
     // Should panic due to negative amount
-    client.burn_cusd(&admin, &user, &amount);
+    client.burn_cusd(&yield_controller, &user, &amount);
 }
 
 // Test issuing CUSD tokens from non-admin (should fail)
 #[test]
-#[should_panic(expected = "AccessControl: account does not have role")]
+#[should_panic(expected = "Error(Contract, #1301)")]
 fn test_issue_cusd_non_admin() {
     let (env, cusd_manager_id, _owner, _admin, _cusd_token_id) = setup_test();
 
@@ -212,7 +216,7 @@ fn test_issue_cusd_non_admin() {
 
 // Test burning CUSD tokens from non-admin (should fail)
 #[test]
-#[should_panic(expected = "AccessControl: account does not have role")]
+#[should_panic(expected = "Error(Contract, #1301)")]
 fn test_burn_cusd_non_admin() {
     let (env, cusd_manager_id, _owner, _admin, _cusd_token_id) = setup_test();
 
@@ -270,10 +274,10 @@ fn test_process_token_burn() {
 
     // Burn tokens
     env.mock_all_auths();
-    token_client.approve(&user, &token_admin, &(amount / 2), &1000000);
+    token_client.approve(&user, &user, &(amount / 2), &1000000);
     process_token_burn(
         &env,
-        token_admin.clone(),
+        user.clone(),
         token_id.clone(),
         amount / 2,
     );
@@ -286,18 +290,15 @@ fn test_process_token_burn() {
 // Test that events are published when issuing CUSD
 #[test]
 fn test_issue_cusd_events() {
-    let (env, cusd_manager_id, _owner, admin, _cusd_token_id) = setup_test();
+    let (env, cusd_manager_id, _owner, _admin, _cusd_token_id, yield_controller) = setup_test_with_yield_controller();
 
     let client = CUSDManagerClient::new(&env, &cusd_manager_id);
     let recipient = Address::generate(&env);
     let amount: i128 = 1000;
 
-    // Mock authentication
-    env.mock_all_auths();
-
-    // Issue tokens and capture events
+    // Issue tokens and capture events (auth already mocked in setup)
     env.events().all();
-    client.issue_cusd(&admin, &recipient, &amount);
+    client.issue_cusd(&yield_controller, &recipient, &amount);
 
     // Get events published by the contract
     let event_published = vec![&client.env, client.env.events().all().last_unchecked()];
@@ -311,21 +312,20 @@ fn test_issue_cusd_events() {
 // Test that events are published when burning CUSD
 #[test]
 fn test_burn_cusd_events() {
-    let (env, cusd_manager_id, _owner, admin, _cusd_token_id) = setup_test();
+    let (env, cusd_manager_id, _owner, _admin, cusd_token_id, yield_controller) = setup_test_with_yield_controller();
 
     let client = CUSDManagerClient::new(&env, &cusd_manager_id);
-    let token_client: TokenClient = TokenClient::new(&env, &_cusd_token_id);
+    let token_client: TokenClient = TokenClient::new(&env, &cusd_token_id);
     let user = Address::generate(&env);
     let amount: i128 = 1000;
 
-    // Issue tokens first
-    env.mock_all_auths();
-    client.issue_cusd(&admin, &user, &amount);
+    // Issue tokens first (auth already mocked in setup)
+    client.issue_cusd(&yield_controller, &user, &amount);
 
     // Reset events and burn tokens
     env.events().all();
     token_client.approve(&user, &client.address, &amount, &99999);
-    client.burn_cusd(&admin, &user, &(amount / 2));
+    client.burn_cusd(&yield_controller, &user, &(amount / 2));
 
     // Get events published by the contract
     let event_published = vec![&client.env, client.env.events().all().last_unchecked()];

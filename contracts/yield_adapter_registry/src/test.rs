@@ -201,7 +201,7 @@ fn test_register_adapter() {
 
 // Test unauthorized adapter registration (should fail)
 #[test]
-#[should_panic(expected = "AccessControl: account does not have role")]
+#[should_panic(expected = "Error(Contract, #1301)")]
 fn test_register_adapter_unauthorized() {
     let fixture = TestFixture::create();
     let (adapter_address, protocol) = fixture.create_adapter();
@@ -258,7 +258,7 @@ fn test_remove_adapter() {
 }
 
 #[test]
-#[should_panic(expected = "AccessControl: account does not have role")]
+#[should_panic(expected = "Error(Contract, #1301)")]
 fn test_remove_adapter_unauthorized() {
     let fixture = TestFixture::create();
     let (adapter_address, protocol) = fixture.create_adapter();
@@ -279,7 +279,7 @@ fn test_remove_adapter_unauthorized() {
 }
 
 #[test]
-#[should_panic(expected = "Yield adapter not found")]
+#[should_panic(expected = "Error(Contract, #1100)")]
 fn test_get_non_existent_adapter() {
     let fixture = TestFixture::create();
     let protocol = SupportedAdapter::BlendCapital;
@@ -345,7 +345,7 @@ fn test_add_support_for_asset() {
 }
 
 #[test]
-#[should_panic(expected = "AccessControl: account does not have role")]
+#[should_panic(expected = "Error(Contract, #1301)")]
 fn test_add_support_for_asset_unauthorized() {
     let fixture = TestFixture::create();
     let (adapter_address, protocol) = fixture.create_adapter();
@@ -430,7 +430,7 @@ fn test_remove_support_for_asset() {
 }
 
 #[test]
-#[should_panic(expected = "AccessControl: account does not have role")]
+#[should_panic(expected = "Error(Contract, #1301)")]
 fn test_remove_support_for_asset_unauthorized() {
     let fixture = TestFixture::create();
     let (adapter_address, protocol) = fixture.create_adapter();

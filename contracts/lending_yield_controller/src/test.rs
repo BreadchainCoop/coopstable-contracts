@@ -20,7 +20,8 @@ use yield_distributor::contract::{YieldDistributor, YieldDistributorArgs, YieldD
 
 mod mock_adapter {
     use soroban_sdk::{
-        contract, contractimpl, contracttype, token::TokenClient, Address, Env
+        contract, contractimpl, contracttype, token::TokenClient, Address, Env,
+        testutils::Address as _
     };
 
     #[derive(Clone)]
@@ -28,6 +29,12 @@ mod mock_adapter {
     struct Yield {
         amount: i128,
         asset: Address,
+    }
+
+    pub struct MockLendingAdapterArgs {
+        yield_controller: Address,
+        lending_pool_id: Address,
+        protocol_token_id: Address,
     }
 
     #[contract]
@@ -43,7 +50,7 @@ mod mock_adapter {
             e.storage().instance().set(&asset, &mock_yield);
         }
 
-        pub fn deposit(e: &Env, user: Address, asset: Address, amount: i128) -> i128 {
+        pub fn deposit(e: &Env, asset: Address, amount: i128) -> i128 {
             // Return the deposited amount
             amount
         }
@@ -53,7 +60,7 @@ mod mock_adapter {
             amount
         }
 
-        pub fn get_yield(e: &Env, user: Address, asset: Address) -> i128 {
+        pub fn get_yield(e: &Env, asset: Address) -> i128 {
             let mock_yield: Option<Yield> = e.storage().instance().get(&asset);
             match mock_yield {
                 Some(yield_data) => yield_data.amount,
@@ -61,13 +68,33 @@ mod mock_adapter {
             }
         }
 
-        pub fn claim_yield(e: &Env, user: Address, asset: Address) -> i128 {
-            let yield_amount = Self::get_yield(e, user.clone(), asset.clone());
+        pub fn claim_yield(e: &Env, asset: Address) -> i128 {
+            let yield_amount = Self::get_yield(e, asset.clone());
 
             let token_client = TokenClient::new(e, &asset);
-            token_client.transfer(&e.current_contract_address(), &user, &yield_amount);
+            // Transfer to the caller (yield controller)
+            token_client.transfer(&e.current_contract_address(), &e.current_contract_address(), &yield_amount);
 
             yield_amount
+        }
+        
+        pub fn claim_emissions(e: &Env, to: Address, asset: Address) -> i128 {
+            // Mock implementation - return 0
+            0
+        }
+        
+        pub fn get_emissions(e: &Env, from: Address, asset: Address) -> i128 {
+            // Mock implementation - return 0
+            0
+        }
+        
+        pub fn protocol_token(e: &Env) -> Address {
+            // Return a dummy address
+            Address::generate(e)
+        }
+        
+        pub fn __constructor(e: Env, yield_controller: Address, lending_pool_id: Address, protocol_token_id: Address) {
+            // Mock constructor - do nothing
         }
     }
 }
@@ -184,7 +211,12 @@ impl TestFixture {
         protocol: SupportedAdapter,
     ) -> mock_adapter::MockLendingAdapterClient<'static> {
         // Deploy the mock lending adapter contract
-        let mock_adapter_id = self.env.register(mock_adapter::MockLendingAdapter, ());
+        let dummy_pool = Address::generate(&self.env);
+        let dummy_token = Address::generate(&self.env);
+        let mock_adapter_id = self.env.register(
+            mock_adapter::MockLendingAdapter, 
+            (self.controller.address.clone(), dummy_pool, dummy_token)
+        );
 
         // Register the adapter in the registry
         self.env.mock_all_auths();
@@ -433,7 +465,7 @@ fn test_claim_yield() {
 }
 
 #[test]
-#[should_panic(expected = "Distribution not ready yet")]
+#[should_panic(expected = "Error(Contract, #1001)")]
 fn test_claim_yield_distribution_not_available() {
     let fixture = TestFixture::create();
 
@@ -485,7 +517,7 @@ fn test_claim_yield_no_yield_available() {
 }
 
 #[test]
-#[should_panic(expected = "Asset is not supported by the adapter registry")]
+#[should_panic(expected = "Error(Contract, #1000)")]
 fn test_deposit_unsupported_asset() {
     let fixture = TestFixture::create();
 
@@ -510,7 +542,7 @@ fn test_deposit_unsupported_asset() {
 }
 
 #[test]
-#[should_panic(expected = "Asset is not supported by the adapter registry")]
+#[should_panic(expected = "Error(Contract, #1000)")]
 fn test_withdraw_unsupported_asset() {
     let fixture = TestFixture::create();
 

@@ -123,7 +123,7 @@ fn test_configuration_updates() {
 }
 
 #[test]
-#[should_panic(expected = "Only the yield controller can call this function")]
+#[should_panic(expected = "Error(Contract, #4)")]
 fn test_distribute_unauthorized() {
     let (env, client, admin, _treasury, _yield_controller) = setup_test();
 
@@ -407,7 +407,7 @@ fn test_set_admin() {
 }
 
 #[test]
-#[should_panic(expected = "AccessControl: sender must be an admin to grant role")]
+#[should_panic(expected = "Error(Contract, #1300)")]
 fn test_set_admin_unauthorized() {
     let (env, client, admin, treasury, yield_controller) = setup_test();
 

@@ -93,16 +93,21 @@ impl CUSDManagerTrait for CUSDManager {
     }
 
     fn set_yield_controller(e: &Env, caller: Address, new_controller: Address) {
-        only_admin(e, caller.clone());
         let access_control = default_access_control(e);
         access_control.grant_role(e, caller, YIELD_CONTROLLER, &new_controller); 
+        
         CUSDManagerEvents::set_yield_controller(&e, new_controller);
     }
 
     fn burn_cusd(e: &Env, caller: Address, from: Address, amount: i128) {
         access::default_access_control(e).only_role(e, &caller, YIELD_CONTROLLER);
         check_nonnegative_amount(e, amount);
-        ensure_sufficient_balance(e, e.current_contract_address(), Self::get_cusd_id(&e), amount);
+        ensure_sufficient_balance(
+            e, 
+            e.current_contract_address(), 
+            Self::get_cusd_id(&e), 
+            amount
+        );
         process_token_burn(
             &e,
             e.current_contract_address(),

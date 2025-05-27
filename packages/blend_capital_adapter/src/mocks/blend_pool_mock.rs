@@ -1,8 +1,10 @@
-use crate::artifacts::pool::{Positions, Reserve, ReserveConfig, ReserveData};
+use crate::artifacts::pool::{Positions, Reserve, ReserveConfig, ReserveData, Request, UserEmissionData};
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, Map, Symbol, Vec};
 
 // Define basic storage keys
 const KEY_RESERVES: Symbol = symbol_short!("RES");
+const KEY_USER_POS: Symbol = symbol_short!("USERPOS");
+const KEY_B_RATE: Symbol = symbol_short!("BRATE");
 
 #[contract]
 pub struct PoolContract;
@@ -14,12 +16,49 @@ impl PoolContract {
         env.storage().instance().set(&KEY_RESERVES, &reserves);
     }
 
+    pub fn submit(
+        env: Env,
+        user: Address,
+        _spender: Address,
+        _to: Address,
+        requests: Vec<Request>,
+    ) -> Positions {
+        let mut positions = Self::get_positions(env.clone(), user.clone());
+        
+        for request in requests.iter() {
+            match request.request_type {
+                2 => { // SupplyCollateral
+                    // Find the reserve index for the asset
+                    let reserve_list = Self::get_reserve_list(env.clone());
+                    if let Some(idx) = reserve_list.iter().position(|a| a == request.address) {
+                        let current = positions.collateral.get(idx as u32).unwrap_or(0);
+                        positions.collateral.set(idx as u32, current + request.amount);
+                    }
+                }
+                3 => { // WithdrawCollateral
+                    // Find the reserve index for the asset
+                    let reserve_list = Self::get_reserve_list(env.clone());
+                    if let Some(idx) = reserve_list.iter().position(|a| a == request.address) {
+                        let current = positions.collateral.get(idx as u32).unwrap_or(0);
+                        positions.collateral.set(idx as u32, current - request.amount);
+                    }
+                }
+                _ => {}
+            }
+        }
+        
+        // Store updated positions
+        env.storage().instance().set(&(KEY_USER_POS, user.clone()), &positions);
+        
+        positions
+    }
+
     pub fn submit_with_allowance(
         env: Env,
         user: Address,
         _spender: Address,
         _sender: Address,
-        _requests: Vec<crate::contract_types::Request>,
+        _requests: Vec<Request>,
     ) -> Positions {
         Positions {
             liabilities: Map::new(&env),
@@ -28,18 +67,28 @@ impl PoolContract {
         }
     }
 
-    // Return a simple empty map for positions
-    pub fn get_positions(env: Env, _user: Address) -> Positions {
-        Positions {
-            liabilities: Map::new(&env),
-            collateral: Map::new(&env),
-            supply: Map::new(&env),
-        }
+    // Return user positions from storage
+    pub fn get_positions(env: Env, user: Address) -> Positions {
+        env.storage()
+            .instance()
+            .get(&(KEY_USER_POS, user))
+            .unwrap_or_else(|| Positions {
+                liabilities: Map::new(&env),
+                collateral: Map::new(&env),
+                supply: Map::new(&env),
+            })
     }
 
-    // Return a simple structure for reserve data with a default b_rate
-    pub fn get_reserve(asset: Address) -> Reserve {
-        default_reserve(asset)
+    // Return a simple structure for reserve data with stored or default b_rate
+    pub fn get_reserve(env: Env, asset: Address) -> Reserve {
+        let b_rate = env.storage()
+            .instance()
+            .get(&(KEY_B_RATE, asset.clone()))
+            .unwrap_or(1_000_000_000_000);
+        
+        let mut reserve = default_reserve(asset);
+        reserve.data.b_rate = b_rate;
+        reserve
     }
 
     // Return the simple reserves list
@@ -55,9 +104,17 @@ impl PoolContract {
         100
     }
 
-    // Update b_rate helper does nothing in this simplified version
-    pub fn update_b_rate(_env: Env, _asset: Address, _new_rate: i128) {
-        // Do nothing
+    // Update b_rate helper to store the new rate
+    pub fn update_b_rate(env: Env, asset: Address, new_rate: i128) {
+        env.storage().instance().set(&(KEY_B_RATE, asset), &new_rate);
+    }
+
+    // Return mock user emission data
+    pub fn get_user_emissions(_env: Env, _user: Address, _reserve_token_id: u32) -> Option<UserEmissionData> {
+        Some(UserEmissionData {
+            accrued: 100,
+            index: 0,
+        })
     }
 }
 
