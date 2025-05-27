@@ -5,8 +5,8 @@ use access_control::{access::default_access_control, constants::DEFAULT_ADMIN_RO
 
 use crate::events::YieldDistributorEvents;
 use crate::error::YieldDistributorError;
-use crate::storage;
 use crate::storage_types::YIELD_DISTRIBUTOR_ADMIN_ROLE;
+use crate::storage;
 
 contractmeta!(
     key = "Description",
@@ -21,7 +21,7 @@ fn require_admin(e: &Env, caller: &Address) {
 fn require_yield_controller(e: &Env, caller: &Address) {
     let controller = storage::get_yield_controller(e);
     if caller != &controller {
-        panic!("Only the yield controller can call this function");
+        panic_with_error!(e, YieldDistributorError::UnauthorizedError);
     }
 }
 

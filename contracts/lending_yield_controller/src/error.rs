@@ -15,5 +15,5 @@ pub enum LendingYieldControllerError {
 
     // LendingYieldControllerError Errors
     UnsupportedAsset = 1000,
-    UnAuhtorizedRole = 1001,
+    YieldUnavailable = 1001,
 }
