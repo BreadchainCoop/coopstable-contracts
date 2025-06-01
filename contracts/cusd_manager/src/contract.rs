@@ -7,7 +7,7 @@ use crate::storage_types::{
     INSTANCE_LIFETIME_THRESHOLD,
     YIELD_CONTROLLER
 };
-use crate::token::{ensure_sufficient_balance, process_token_burn, process_token_mint};
+use crate::token;
 use access_control::access;
 use access_control::{access::default_access_control, constants::DEFAULT_ADMIN_ROLE};
 use soroban_sdk::{
@@ -26,10 +26,6 @@ fn check_nonnegative_amount(e: &Env, amount: i128) {
     }
 }
 
-fn only_admin(e: &Env, caller: Address) {
-    let access_control = default_access_control(e);
-    access_control.only_role(&e, &caller, CUSD_ADMIN);
-}
 
 #[contract]
 pub struct CUSDManager;
@@ -88,7 +84,7 @@ impl CUSDManagerTrait for CUSDManager {
     fn issue_cusd(e: &Env, caller: Address, to: Address, amount: i128) {
         access::default_access_control(e).only_role(e, &caller, YIELD_CONTROLLER);
         check_nonnegative_amount(e, amount);
-        process_token_mint(&e, to.clone(), Self::get_cusd_id(&e), amount);
+        token::process_token_mint(&e, to.clone(), Self::get_cusd_id(&e), amount);
         CUSDManagerEvents::issue_cusd(&e, to, amount);
     }
 
@@ -102,13 +98,7 @@ impl CUSDManagerTrait for CUSDManager {
     fn burn_cusd(e: &Env, caller: Address, from: Address, amount: i128) {
         access::default_access_control(e).only_role(e, &caller, YIELD_CONTROLLER);
         check_nonnegative_amount(e, amount);
-        ensure_sufficient_balance(
-            e, 
-            e.current_contract_address(), 
-            Self::get_cusd_id(&e), 
-            amount
-        );
-        process_token_burn(
+        token::process_token_burn(
             &e,
             e.current_contract_address(),
             Self::get_cusd_id(&e),

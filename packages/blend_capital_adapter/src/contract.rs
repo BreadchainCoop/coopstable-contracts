@@ -65,6 +65,7 @@ impl LendingAdapter for BlendCapitalAdapter {
     }
 
     fn claim_yield(e: &Env, asset: Address) -> i128 {
+        
         let yield_controller = storage::get_yield_controller(e);
         yield_controller.require_auth();
 
@@ -87,6 +88,7 @@ impl LendingAdapter for BlendCapitalAdapter {
     }
 
     fn claim_emissions(e: &Env, to: Address, asset: Address) -> i128 {
+        
         storage::require_yield_controller(e);
         
         let from = e.current_contract_address();
@@ -106,6 +108,7 @@ impl LendingAdapter for BlendCapitalAdapter {
     }
 
     fn protocol_token(e: &Env) -> Address {
+
         storage::read_blend_token_id(e)
     }
 }

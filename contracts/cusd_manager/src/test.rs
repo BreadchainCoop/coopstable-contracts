@@ -8,9 +8,7 @@ use crate::{
 use access_control::access::default_access_control;
 use pretty_assertions::assert_eq;
 use soroban_sdk::{
-    testutils::{Address as _, Events},
-    token::{StellarAssetClient, TokenClient},
-    vec, Address, Env, IntoVal, Symbol,
+    testutils::{Address as _, Events}, token::{StellarAssetClient, TokenClient}, vec, Address, Env, IntoVal, Symbol
 };
 
 // Helper function to create a test environment with a deployed CUSD token
@@ -154,10 +152,10 @@ fn test_burn_cusd() {
     // Verify initial balance
     let initial_balance = token_client.balance(&user);
     assert_eq!(initial_balance, amount);
-
+    
     // Burn tokens
     let burn_amount = amount / 2;
-    token_client.approve(&user, &client.address, &burn_amount, &1000000);
+    token_client.transfer(&user, &client.address, &burn_amount);
     client.burn_cusd(&yield_controller, &user, &burn_amount);
 
     // Verify final balance
@@ -319,12 +317,10 @@ fn test_burn_cusd_events() {
     let user = Address::generate(&env);
     let amount: i128 = 1000;
 
-    // Issue tokens first (auth already mocked in setup)
     client.issue_cusd(&yield_controller, &user, &amount);
 
-    // Reset events and burn tokens
     env.events().all();
-    token_client.approve(&user, &client.address, &amount, &99999);
+    token_client.transfer(&user, &client.address, &amount);
     client.burn_cusd(&yield_controller, &user, &(amount / 2));
 
     // Get events published by the contract
