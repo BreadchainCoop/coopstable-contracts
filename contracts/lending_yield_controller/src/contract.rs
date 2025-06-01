@@ -101,7 +101,7 @@ impl LendingYieldControllerTrait for LendingYieldController {
         let is_asset_supported =
         registry_client.is_supported_asset(&YIELD_TYPE.id(), &protocol, &asset);
         if !is_asset_supported {
-            panic!("Asset is not supported by the adapter registry");
+            panic_with_error!(e, LendingYieldControllerError::UnsupportedAsset);
         };
         
         let cusd_manager_client = storage::cusd_manager_client(&e);

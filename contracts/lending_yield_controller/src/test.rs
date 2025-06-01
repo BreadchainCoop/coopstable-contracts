@@ -31,18 +31,19 @@ mod mock_adapter {
         asset: Address,
     }
 
-    pub struct MockLendingAdapterArgs {
-        yield_controller: Address,
-        lending_pool_id: Address,
-        protocol_token_id: Address,
-    }
+
+    // pub struct MockLendingAdapterArgs {
+    //     yield_controller: Address,
+    //     lending_pool_id: Address,
+    //     protocol_token_id: Address,
+    // }
 
     #[contract]
     pub struct MockLendingAdapter;
 
     #[contractimpl]
     impl MockLendingAdapter {
-        pub fn set_mock_yield(e: &Env, user: Address, asset: Address, amount: i128) {
+        pub fn set_mock_yield(e: &Env, _user: Address, asset: Address, amount: i128) {
             let mock_yield = Yield {
                 amount,
                 asset: asset.clone(),
@@ -51,11 +52,21 @@ mod mock_adapter {
         }
 
         pub fn deposit(e: &Env, asset: Address, amount: i128) -> i128 {
+            // In a real adapter, this would deposit to the lending protocol
+            // For the mock, we need to pull the tokens from the controller
+            let controller: Address = e.storage().instance().get(&"controller").unwrap();
+            let token_client = TokenClient::new(e, &asset);
+            token_client.transfer_from(&e.current_contract_address(), &controller, &e.current_contract_address(), &amount);
+            
             // Return the deposited amount
             amount
         }
 
         pub fn withdraw(e: &Env, user: Address, asset: Address, amount: i128) -> i128 {
+            // Transfer tokens back to the user
+            let token_client = TokenClient::new(e, &asset);
+            token_client.transfer(&e.current_contract_address(), &user, &amount);
+            
             // Return the withdrawn amount
             amount
         }
@@ -71,19 +82,24 @@ mod mock_adapter {
         pub fn claim_yield(e: &Env, asset: Address) -> i128 {
             let yield_amount = Self::get_yield(e, asset.clone());
 
-            let token_client = TokenClient::new(e, &asset);
-            // Transfer to the caller (yield controller)
-            token_client.transfer(&e.current_contract_address(), &e.current_contract_address(), &yield_amount);
+            if yield_amount > 0 {
+                // Get the yield controller address from storage
+                let controller: Address = e.storage().instance().get(&"controller").unwrap();
+                
+                let token_client = TokenClient::new(e, &asset);
+                // Transfer to the yield controller
+                token_client.transfer(&e.current_contract_address(), &controller, &yield_amount);
+            }
 
             yield_amount
         }
         
-        pub fn claim_emissions(e: &Env, to: Address, asset: Address) -> i128 {
+        pub fn claim_emissions(_e: &Env, _to: Address, _asset: Address) -> i128 {
             // Mock implementation - return 0
             0
         }
         
-        pub fn get_emissions(e: &Env, from: Address, asset: Address) -> i128 {
+        pub fn get_emissions(_e: &Env, _from: Address, _asset: Address) -> i128 {
             // Mock implementation - return 0
             0
         }
@@ -93,8 +109,9 @@ mod mock_adapter {
             Address::generate(e)
         }
         
-        pub fn __constructor(e: Env, yield_controller: Address, lending_pool_id: Address, protocol_token_id: Address) {
-            // Mock constructor - do nothing
+        pub fn __constructor(e: Env, yield_controller: Address, _lending_pool_id: Address, _protocol_token_id: Address) {
+            // Store the yield controller address for claim_yield
+            e.storage().instance().set(&"controller", &yield_controller);
         }
     }
 }
@@ -126,8 +143,6 @@ impl TestFixture {
         let usdc_token = env.register_stellar_asset_contract_v2(token_admin.clone());
         let usdc_token_id = usdc_token.address();
         let usdc_client = TokenClient::new(&env, &usdc_token_id);
-        let usdc_admin_client = StellarAssetClient::new(&env, &usdc_token_id);
-
         // Initialize USDC with some balance for the test user
         env.mock_all_auths();
         StellarAssetClient::new(&env, &usdc_token_id).mint(&user, &10000_0000000);
@@ -166,9 +181,9 @@ impl TestFixture {
         );
         let cusd_manager = CUSDManagerClient::new(&env, &cusd_manager_id);
         env.mock_all_auths();
-        usdc_admin_client.set_admin(&cusd_manager_id);
-        // env.mock_all_auths();
-        // cusd_manager.set_cusd_issuer(&admin, &cusd_manager_id);
+        // Set CUSD token admin to be the CUSD manager
+        let cusd_admin_client = StellarAssetClient::new(&env, &cusd_token_id);
+        cusd_admin_client.set_admin(&cusd_manager_id);
 
         // Deploy LendingYieldController
         let controller_id = env.register(
@@ -182,7 +197,7 @@ impl TestFixture {
             ),
         );
         let controller = LendingYieldControllerClient::new(&env, &controller_id);
-        cusd_manager.set_cusd_manager_admin(&admin, &controller_id);
+        cusd_manager.set_yield_controller(&admin, &controller_id);
 
         // Update yield distributor to use our controller as the yield controller
         env.mock_all_auths();
@@ -575,7 +590,7 @@ fn test_deposit_without_user_auth() {
     let protocol = SupportedAdapter::BlendCapital;
     let _adapter_id = fixture.create_mock_lending_adapter(protocol.clone());
 
-    // Setup token approval so we don't hit the token allowance error first
+    // Setup token approval  
     fixture.env.mock_all_auths();
     fixture.usdc_client.approve(
         &fixture.user,
@@ -585,9 +600,10 @@ fn test_deposit_without_user_auth() {
     );
 
     // Now attempt the deposit WITHOUT mocking the user authorization
-    // The fixture.env.mock_all_auths() above only configured the token approval
-    // We deliberately DON'T call fixture.env.mock_all_auths_allowing_non_root_auth() here
-    // This should now fail with the authorization error rather than allowance error
+    // We use mock_auths to specify exactly what should be authorized
+    fixture.env.mock_auths(&[]);
+    
+    // This should fail with the authorization error
     fixture.controller.deposit_collateral(
         &protocol.id(),
         &fixture.user,

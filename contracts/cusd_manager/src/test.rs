@@ -306,8 +306,6 @@ fn test_issue_cusd_events() {
     assert_eq!(event_published, event_control);
 }
 
-// TODO: Fix this test
-// Test that events are published when burning CUSD
 #[test]
 fn test_burn_cusd_events() {
     let (env, cusd_manager_id, _owner, _admin, cusd_token_id, yield_controller) = setup_test_with_yield_controller();
