@@ -56,6 +56,23 @@ pub trait LendingYieldControllerTrait {
     fn claim_emissions(e: &Env, protocol: Symbol, asset: Address) -> i128;
 }
 
+fn read_yield(e: &Env) -> i128 {
+    let registry_client = storage::adapter_registry_client(e);
+    let lend_protocols_with_assets = registry_client.get_adapters_with_assets(&YIELD_TYPE.id());
+   
+    lend_protocols_with_assets.iter().fold(
+        0,
+        |adapter_acc, (adapter_address, supported_assets)| {
+            let adapter_client = LendingAdapterClient::new(e, &adapter_address);
+
+            let adapter_total = supported_assets.iter().fold(0, |asset_acc, asset| {
+                let asset_yield = adapter_client.get_yield(&asset);
+                asset_acc + asset_yield
+            });
+            adapter_acc + adapter_total
+        },
+    )
+}
 #[contract]
 pub struct LendingYieldController;
 
@@ -113,13 +130,14 @@ impl LendingYieldControllerTrait for LendingYieldController {
             &e.current_contract_address(),
             &user,
             &e.current_contract_address(),
-            &amount,
+            &amount.clone(),
         );
+    
         asset_client.approve(
             &e.current_contract_address(),
             &adapter.address,
             &amount,
-            &100_u32,
+            &1300000_u32,
         );
         adapter.deposit(&asset, &amount);
         cusd_manager_client.issue_cusd(&e.current_contract_address(), &user, &amount);
@@ -152,8 +170,6 @@ impl LendingYieldControllerTrait for LendingYieldController {
             panic_with_error!(e, LendingYieldControllerError::UnsupportedAsset);
         };
 
-        // Burn cUSD
-        // if users withdraw more than their cusd balance it will revert here because of insufficient balance
         cusd_token_client.transfer_from(
             &e.current_contract_address(),
             &user,
@@ -167,7 +183,6 @@ impl LendingYieldControllerTrait for LendingYieldController {
             &amount,
         );
         
-        // Withdraw collateral
         adapter.withdraw(&user, &asset, &amount);
         
         LendingYieldControllerEvents::withdraw_collateral(&e, user, asset, amount);
@@ -175,26 +190,10 @@ impl LendingYieldControllerTrait for LendingYieldController {
         amount
     }
 
-    fn get_yield(e: &Env) -> i128 {
-        let registry_client = storage::adapter_registry_client(e);
-        let lend_protocols_with_assets = registry_client.get_adapters_with_assets(&YIELD_TYPE.id());
-       
-        lend_protocols_with_assets.iter().fold(
-            0,
-            |adapter_acc, (adapter_address, supported_assets)| {
-                let adapter_client = LendingAdapterClient::new(e, &adapter_address);
-
-                let adapter_total = supported_assets.iter().fold(0, |asset_acc, asset| {
-                    let asset_yield = adapter_client.get_yield(&asset);
-                    asset_acc + asset_yield
-                });
-                adapter_acc + adapter_total
-            },
-        )
-    }
+    fn get_yield(e: &Env) -> i128 { read_yield(e) }
 
     fn claim_yield(e: &Env) -> i128 {
-        let total_yield = Self::get_yield(e);
+        let total_yield = read_yield(e);
 
         if total_yield <= 0 {
             return 0;
@@ -222,7 +221,7 @@ impl LendingYieldControllerTrait for LendingYieldController {
                         &e.current_contract_address(),
                         &distributor.address,
                         &claimed,
-                        &100_u32,
+                        &1300000_u32,
                     );
                     distributor.distribute_yield(&e.current_contract_address(), &asset, &claimed);
                     LendingYieldControllerEvents::claim_yield(

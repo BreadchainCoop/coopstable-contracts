@@ -2,7 +2,7 @@ use soroban_sdk::{
     contract, 
     contractimpl, 
     Address, 
-    Env, 
+    Env,
 };
 use crate::{
     constants::{YIELD_CONTROLLER_ID, LENDING_POOL_ID, BLEND_TOKEN_ID},
@@ -35,7 +35,7 @@ impl LendingAdapter for BlendCapitalAdapter {
         storage::require_yield_controller(e);
 
         adapter::supply_collateral(e, asset.clone(), amount);
-
+        
         LendingAdapterEvents::deposit(&e, e.current_contract_address(), asset, amount);
 
         amount
@@ -53,15 +53,7 @@ impl LendingAdapter for BlendCapitalAdapter {
 
     fn get_yield(e: &Env, asset: Address) -> i128 {
 
-        let current_value = adapter::get_balance(e, e.current_contract_address(), asset.clone());
-
-        let original_deposit = storage::get_deposit_amount(e, &e.current_contract_address(), &asset);
-
-        if original_deposit == 0 || current_value <= original_deposit {
-            return 0;
-        }
-
-        current_value - original_deposit
+        adapter::read_yield(e, e.current_contract_address(), asset)
     }
 
     fn claim_yield(e: &Env, asset: Address) -> i128 {
@@ -69,7 +61,7 @@ impl LendingAdapter for BlendCapitalAdapter {
         let yield_controller = storage::get_yield_controller(e);
         yield_controller.require_auth();
 
-        let yield_amount = Self::get_yield(e, asset.clone());
+        let yield_amount = adapter::read_yield(e, e.current_contract_address(), asset.clone());
         if yield_amount <= 0 {
             return 0;
         }

@@ -10,10 +10,10 @@ doctest = false
 
 [dependencies]
 soroban-sdk = { workspace = true }
-test-case =  { workspace = true }
 yield_adapter = { workspace= true, path = "./packages/yield_adapter" }
 
 [dev-dependencies]
+test-case =  { workspace = true }
 pretty_assertions = { workspace = true }
 soroban-sdk = { workspace = true, features = ["testutils"] }
 

@@ -37,5 +37,50 @@
             "id": "CAMKTT6LIXNOKZJVFI64EBEQE25UYAQZBTHDIQ4LEDJLTCM6YVME6IIY",
             "wasm-hash": "6a7c67449f6bad0d5f641cfbdf03f430ec718faa85107ecb0b97df93410d1c43"
         }
+    },
+    "v2": {
+        "cusd": {
+            "code": "CUSD",
+            "id":  "CDHHR356G725HNLAAQ74WBGVT6Y6ZFZLM2TIHLDCOZTJ2SVZ7P3EANYT"
+        },
+        "cusd_manager": {
+            "alias": "cusd_manager",
+            "id": "CDBTUAXLICFWL7UN4BFDOQEB44YSBCYKLEU3CWOSICJYK2SHK4C6X5EK",
+            "wasm-hash": "06a85472b38ee52ee655dc4fb7a7e43b34ce466840e86b4d31f436a34db2f6c4",
+            "deployment_hash": "CCB6Z4Y6NLDBWZTBV7PUJSU63BQ4WHMRTUIOBZZMJQXSVT64SFGZ7FJC"
+        },
+        "yield_adapter_registry": {
+            "alias": "yield_adapter_registry",
+            "id":  "CCMBIA6M2FLCKE4USF2TAU5TAED23TPPPW7JBATGBMF5JI4L5ML4EKHL",
+            "wasm-hash": "4eb7af5f945b0faae207edb1c88bc018da2c752616de745ad9e884ff72d23cd6",
+            "deployment-hash": "c48d84a7b0cfad7e69eb9661ba996f28aec665a2ad417a299338cf98b6aa6740"
+        },
+        "yield_distributor": {
+            "alias": "yield_distributor", 
+            "id": "CBHJBD7PSM524MBLIRBKMVNBDK4EFPS7T4XIPA5OCC4E2BRPM4ZXYUVG",
+            "wasm-hash": "dc1bf3143207d999f416105a9b390d526ad67b21a9ba990712942f74086c149b",
+            "deployment-hash": "b0a76bfa373145b01dc5467259a7bff3f6f34aa285ab9faaad54cd2b395b1e17"
+        },
+        "lending_yield_controller": {
+            "alias": "lending_yield_controller",
+            "id":  "CARY7W62K3TFV5VUPNHODSHBFGNFZOH5GCXGWMBHUI7E32CTMQ6LR2BS",
+            "wasm-hash": "0193cf34fb224d6c73a82ca38c21ed0078f8e4df128ec11e2bb16c0b3b23912c",
+            "deployment-hash": "eeb71969db64ba90c2e8801a26496b4b9d8d9fef8fe5f90cc0edc68e83ec7b11"
+        },  
+        "blend_capital_adapter": {
+            "id": "CCBG4SMOHG5YJRJSGSPPCDH35TU5LTIWI4VXS7C42YN4OLVBBZKDLEVW",
+            "wasm-hash": "eaa43901ef73e9983043a8bf6022347e34e7b9edcbe5a84093c68f1721886fdd",
+            "deployment-hash": "90ae289f85d806a3bd4a7f68a0117149ab18bbd8cb1928c325d3c0d1611f08d6"
+        },
+        "blend_usdc_lending_pool": {
+            "id": "CAMKTT6LIXNOKZJVFI64EBEQE25UYAQZBTHDIQ4LEDJLTCM6YVME6IIY",
+            "wasm-hash": "6a7c67449f6bad0d5f641cfbdf03f430ec718faa85107ecb0b97df93410d1c43"
+        },
+        "blend_token": {
+            "id": "CB22KRA3YZVCNCQI64JQ5WE7UY2VAV7WFLK6A2JN3HEX56T2EDAFO7QF"
+        },
+        "usdc": {
+            "id": "CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU"
+        }
     }
 }

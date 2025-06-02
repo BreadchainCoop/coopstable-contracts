@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env, Vec, vec};
+use soroban_sdk::{Address, Env, Vec, vec, token};
 use crate::{
     artifacts::pool::{Client as PoolClient, Request},
     storage,
@@ -18,21 +18,38 @@ fn create_request(
     }
 }
 
+fn approve_asset(e: &Env, spender: Address, asset: Address, amount: i128) {
+    let token_client = token::TokenClient::new(e, &asset);
+    let yield_controller = storage::get_yield_controller(e);
+    token_client.transfer_from(
+        &e.current_contract_address(),
+        &yield_controller,
+        &e.current_contract_address(),
+        &amount,
+    );
+    token_client.approve(&e.current_contract_address(), &spender, &amount, &1300000_u32);
+}
+
 pub fn supply_collateral(
     e: &Env, 
     asset: Address, 
     amount: i128
 ) -> i128 {
+    
+    // Get the lending pool
     let pool_id: Address = storage::read_lend_pool_id(e);
     let pool_client = PoolClient::new(e, &pool_id);
-
     let request = create_request(RequestType::SupplyCollateral, asset.clone(), amount);
     let request_vec: Vec<Request> = vec![e, request];
     
-    pool_client.submit(
-        &e.current_contract_address(), // user in this case will be the yield controller
-        &e.current_contract_address(), // spender is the adapter
-        &e.current_contract_address(), // all emissions are forwarded to the adapter
+    approve_asset(e, pool_id, asset.clone(), amount);
+    
+    e.authorize_as_current_contract(vec![&e]);
+    
+    pool_client.submit_with_allowance(
+        &e.current_contract_address(), // from - the adapter
+        &e.current_contract_address(), // spender - the adapter
+        &e.current_contract_address(), // to - the adapter (receives any returns)
         &request_vec,
     );
 
@@ -53,6 +70,7 @@ pub fn withdraw_collateral(
 
     let request_vec: Vec<Request> = vec![e, request];
 
+    e.authorize_as_current_contract(vec![&e]);
     pool_client.submit(
         &e.current_contract_address(),
         &e.current_contract_address(),
@@ -142,4 +160,16 @@ pub fn claim(e: &Env, from: Address, to: Address, asset: Address) -> i128 {
     }
     
     0
+}
+
+pub fn read_yield(e: &Env, user: Address, asset: Address) -> i128 {
+    let current_value = get_balance(e, user.clone(), asset.clone());
+
+    let original_deposit = storage::get_deposit_amount(e, &user, &asset);
+
+    if original_deposit == 0 || current_value <= original_deposit {
+        return 0;
+    }
+
+    current_value - original_deposit
 }

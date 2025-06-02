@@ -74,7 +74,7 @@ cargo install --locked stellar-cli
 
 3. Add WebAssembly target:
 ```bash
-rustup target add wasm32-unknown-unknown
+rustup target add wasm32v1-none
 ```
 
 ## Project Structure
@@ -188,7 +188,7 @@ stellar contract asset deploy \
 ```bash
 # Deploy cUSD Manager
 stellar contract deploy \
-  --wasm ./target/wasm32-unknown-unknown/release/cusd_manager.wasm \
+  --wasm ./target/wasm32v1-none/release/cusd_manager.wasm \
   --source owner \
   --network local \
   --alias cusd_manager \
@@ -199,7 +199,7 @@ stellar contract deploy \
 
 # Deploy Yield Adapter Registry
 stellar contract deploy \
-  --wasm ./target/wasm32-unknown-unknown/release/yield_adapter_registry.wasm \
+  --wasm ./target/wasm32v1-none/release/yield_adapter_registry.wasm \
   --source owner \
   --network local \
   --alias yield_adapter_registry \
@@ -208,7 +208,7 @@ stellar contract deploy \
 
 # Deploy Yield Distributor
 stellar contract deploy \
-  --wasm ./target/wasm32-unknown-unknown/release/yield_distributor.wasm \
+  --wasm ./target/wasm32v1-none/release/yield_distributor.wasm \
   --source owner \
   --network local \
   --alias yield_distributor \
@@ -222,7 +222,7 @@ stellar contract deploy \
 
 # Deploy Lending Yield Controller
 stellar contract deploy \
-  --wasm ./target/wasm32-unknown-unknown/release/lending_yield_controller.wasm \
+  --wasm ./target/wasm32v1-none/release/lending_yield_controller.wasm \
   --source owner \
   --network local \
   --alias lending_yield_controller \
@@ -235,7 +235,7 @@ stellar contract deploy \
 
 # Deploy Blend Capital Adapter
 stellar contract deploy \
-  --wasm ./target/wasm32-unknown-unknown/release/blend_capital_adapter.wasm \
+  --wasm ./target/wasm32v1-none/release/blend_capital_adapter.wasm \
   --source owner \
   --network local \
   --alias blend_capital_adapter \

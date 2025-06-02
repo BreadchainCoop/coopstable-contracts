@@ -211,36 +211,6 @@ pub fn record_distribution(e: &Env, total: i128, treasury_amount: i128, member_a
     set_last_distribution(e, timestamp);
 }
 
-pub fn get_distribution(e: &Env, timestamp: u64) -> Option<Distribution> {
-    extend_instance(e);
-    let key = DataKey::Distribution(timestamp);
-    e.storage().persistent().get(&key)
-}
-
-pub fn get_distribution_history(e: &Env) -> Vec<Distribution> {
-    extend_instance(e);
-
-    let distributions_key = DataKey::Distributions;
-
-    if let Some(timestamps) = e
-        .storage()
-        .persistent()
-        .get::<DataKey, Vec<u64>>(&distributions_key)
-    {
-        let mut history = Vec::new(e);
-
-        for timestamp in timestamps.iter() {
-            if let Some(distribution) = get_distribution(e, timestamp) {
-                history.push_back(distribution);
-            }
-        }
-
-        return history;
-    }
-
-    Vec::new(e)
-}
-
 pub fn get_distribution_config(e: &Env) -> DistributionConfig {
     extend_instance(e);
 
@@ -250,4 +220,16 @@ pub fn get_distribution_config(e: &Env) -> DistributionConfig {
         distribution_period: get_distribution_period(e),
         last_distribution: get_last_distribution(e),
     }
+}
+
+pub fn read_next_distribution(e: &Env) -> u64 {
+    let config = get_distribution_config(e);
+    let next_time = config.last_distribution + config.distribution_period;
+    next_time
+}
+
+pub fn check_distribution_availability(e: &Env) -> bool {
+    let current_time = e.ledger().timestamp();
+    let next_time = read_next_distribution(e);
+    current_time >= next_time
 }

@@ -150,21 +150,17 @@ impl YieldDistributorTrait for YieldDistributor {
     }
 
     fn get_next_distribution_time(e: &Env) -> u64 {
-        let config = storage::get_distribution_config(e);
-        let next_time = config.last_distribution + config.distribution_period;
-        next_time
+        storage::read_next_distribution(e)
     }
 
     fn is_distribution_available(e: &Env) -> bool {
-        let current_time = e.ledger().timestamp();
-        let next_time = Self::get_next_distribution_time(e);
-        current_time >= next_time
+        storage::check_distribution_availability(e)
     }
 
     fn distribute_yield(e: &Env, caller: Address, token: Address, amount: i128) -> bool {
         require_yield_controller(e, &caller);
 
-        if !Self::is_distribution_available(e) {
+        if !storage::check_distribution_availability(e) {
             return false;
         }
 

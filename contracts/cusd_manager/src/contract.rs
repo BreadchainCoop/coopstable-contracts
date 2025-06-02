@@ -8,6 +8,7 @@ use crate::storage_types::{
     YIELD_CONTROLLER
 };
 use crate::token;
+use crate::storage;
 use access_control::access;
 use access_control::{access::default_access_control, constants::DEFAULT_ADMIN_ROLE};
 use soroban_sdk::{
@@ -68,23 +69,19 @@ impl CUSDManagerTrait for CUSDManager {
         let access_control = default_access_control(e);
         access_control.only_role(&e, &caller, DEFAULT_ADMIN_ROLE);
 
-        let token_admin_client = StellarAssetClient::new(&e, &Self::get_cusd_id(&e));
+        let token_admin_client = StellarAssetClient::new(&e, &storage::read_cusd_id(e));
         token_admin_client.set_admin(&new_issuer);
         CUSDManagerEvents::set_cusd_issuer(&e, new_issuer);
     }
 
     fn get_cusd_id(e: &Env) -> Address {
-        e.storage()
-            .instance()
-            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-
-        e.storage().instance().get(&CUSD_ADDRESS_KEY).unwrap()
+        storage::read_cusd_id(e)
     }
 
     fn issue_cusd(e: &Env, caller: Address, to: Address, amount: i128) {
         access::default_access_control(e).only_role(e, &caller, YIELD_CONTROLLER);
         check_nonnegative_amount(e, amount);
-        token::process_token_mint(&e, to.clone(), Self::get_cusd_id(&e), amount);
+        token::process_token_mint(&e, to.clone(), storage::read_cusd_id(e), amount);
         CUSDManagerEvents::issue_cusd(&e, to, amount);
     }
 
@@ -101,7 +98,7 @@ impl CUSDManagerTrait for CUSDManager {
         token::process_token_burn(
             &e,
             e.current_contract_address(),
-            Self::get_cusd_id(&e),
+            storage::read_cusd_id(e),
             amount,
         );
         CUSDManagerEvents::burn_cusd(&e, from, amount);

@@ -8,7 +8,7 @@ NETWORK="Standalone"
 CONTRACT_ID="CBWH54OKUK6U2J2A4J2REJEYB625NEFCHISWXLOPR2D2D6FTN63TJTWN"
 
 # Directories
-TARGET_DIR="./target/wasm32-unknown-unknown/release"
+TARGET_DIR="./target/wasm32v1-none/release"
 OUTPUT_BASE_DIR="./ts"
 
 # Create output directory if it doesn't exist
