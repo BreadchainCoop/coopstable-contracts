@@ -6,9 +6,9 @@
         },
         "cusd_manager": {
             "alias": "cusd_manager",
-            "id": "CDBTUAXLICFWL7UN4BFDOQEB44YSBCYKLEU3CWOSICJYK2SHK4C6X5EK",
-            "wasm-hash": "06a85472b38ee52ee655dc4fb7a7e43b34ce466840e86b4d31f436a34db2f6c4",
-            "deployment_hash": "bda3dd3d0fd1658b27f63d4168d618a53a80cbe2c540e7c2f4537880b39de2ff"
+            "id": "CBPQVQ6KFEQMB4W25AJT6MWPINFRJO4CYCJEEA6H5M7UUT5TLXISUCAY",
+            "wasm-hash": "779398a01389249e0abb30c2f3646d4153f7a2b667458b35718df9685a867d95",
+            "deployment_hash": "06a07b5c7e24e60125cb9565e0b0f05032d515b73c1720241f8aad8349c82dee"
         },
         "yield_adapter_registry": {
             "alias": "yield_adapter_registry",
@@ -45,9 +45,9 @@
         },
         "cusd_manager": {
             "alias": "cusd_manager",
-            "id": "CDBTUAXLICFWL7UN4BFDOQEB44YSBCYKLEU3CWOSICJYK2SHK4C6X5EK",
-            "wasm-hash": "06a85472b38ee52ee655dc4fb7a7e43b34ce466840e86b4d31f436a34db2f6c4",
-            "deployment_hash": "CCB6Z4Y6NLDBWZTBV7PUJSU63BQ4WHMRTUIOBZZMJQXSVT64SFGZ7FJC"
+            "id": "CBPQVQ6KFEQMB4W25AJT6MWPINFRJO4CYCJEEA6H5M7UUT5TLXISUCAY",
+            "wasm-hash": "779398a01389249e0abb30c2f3646d4153f7a2b667458b35718df9685a867d95",
+            "deployment_hash": "06a07b5c7e24e60125cb9565e0b0f05032d515b73c1720241f8aad8349c82dee"
         },
         "yield_adapter_registry": {
             "alias": "yield_adapter_registry",
@@ -63,14 +63,14 @@
         },
         "lending_yield_controller": {
             "alias": "lending_yield_controller",
-            "id":  "CARY7W62K3TFV5VUPNHODSHBFGNFZOH5GCXGWMBHUI7E32CTMQ6LR2BS",
-            "wasm-hash": "0193cf34fb224d6c73a82ca38c21ed0078f8e4df128ec11e2bb16c0b3b23912c",
-            "deployment-hash": "eeb71969db64ba90c2e8801a26496b4b9d8d9fef8fe5f90cc0edc68e83ec7b11"
+            "id":  "CDTZYUNULCB426ONSR3XRK75RHKUBJDQWMRRPC4POPJH3PWD46KBDF2M",
+            "wasm-hash": "41011b9e90cef0bca9ea01c7a2e56e7466736d408ab9e4571bd632d21eb5d784",
+            "deployment-hash": "d5adfca18f8fbb523b470b4644d9aa36d86177ebdf009d7d3ffce0749721e486"
         },  
         "blend_capital_adapter": {
-            "id": "CCBG4SMOHG5YJRJSGSPPCDH35TU5LTIWI4VXS7C42YN4OLVBBZKDLEVW",
-            "wasm-hash": "eaa43901ef73e9983043a8bf6022347e34e7b9edcbe5a84093c68f1721886fdd",
-            "deployment-hash": "90ae289f85d806a3bd4a7f68a0117149ab18bbd8cb1928c325d3c0d1611f08d6"
+            "id": "CC2JU4VDRYDEOMW62PV4GM3EXD4ODVIUHD6LSO6DUD5XEH5TQOUKSQCA",
+            "wasm-hash": "1c26de50442a038b76c23d0720b0c19bb35233e8093cb79faacb9339ccac288d",
+            "deployment-hash": "9e07b6928f74407984abf1b917241b5e5a112a37875a78474021be9e8fc8d7cc"
         },
         "blend_usdc_lending_pool": {
             "id": "CAMKTT6LIXNOKZJVFI64EBEQE25UYAQZBTHDIQ4LEDJLTCM6YVME6IIY",

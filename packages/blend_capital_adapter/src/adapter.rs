@@ -27,7 +27,8 @@ fn approve_asset(e: &Env, spender: Address, asset: Address, amount: i128) {
         &e.current_contract_address(),
         &amount,
     );
-    token_client.approve(&e.current_contract_address(), &spender, &amount, &1300000_u32);
+    let ledger_sequence = e.ledger().sequence();
+    token_client.approve(&e.current_contract_address(), &spender, &amount, &(ledger_sequence+5*12));
 }
 
 pub fn supply_collateral(
@@ -71,7 +72,7 @@ pub fn withdraw_collateral(
     let request_vec: Vec<Request> = vec![e, request];
 
     e.authorize_as_current_contract(vec![&e]);
-    pool_client.submit(
+    pool_client.submit_with_allowance(
         &e.current_contract_address(),
         &e.current_contract_address(),
         &user,

@@ -2,9 +2,7 @@ use crate::events::CUSDManagerEvents;
 use crate::error::CUSDManagerError;
 use crate::storage_types::{
     CUSD_ADDRESS_KEY, 
-    CUSD_ADMIN, 
-    INSTANCE_BUMP_AMOUNT, 
-    INSTANCE_LIFETIME_THRESHOLD,
+    CUSD_ADMIN,
     YIELD_CONTROLLER
 };
 use crate::token;
