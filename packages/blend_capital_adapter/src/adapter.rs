@@ -20,14 +20,8 @@ fn create_request(
 
 fn approve_asset(e: &Env, spender: Address, asset: Address, amount: i128) {
     let token_client = token::TokenClient::new(e, &asset);
-    let yield_controller = storage::get_yield_controller(e);
-    token_client.transfer_from(
-        &e.current_contract_address(),
-        &yield_controller,
-        &e.current_contract_address(),
-        &amount,
-    );
     let ledger_sequence = e.ledger().sequence();
+    e.authorize_as_current_contract(vec![&e]);
     token_client.approve(&e.current_contract_address(), &spender, &amount, &(ledger_sequence+5*12));
 }
 
@@ -44,8 +38,6 @@ pub fn supply_collateral(
     let request_vec: Vec<Request> = vec![e, request];
     
     approve_asset(e, pool_id, asset.clone(), amount);
-    
-    e.authorize_as_current_contract(vec![&e]);
     
     pool_client.submit_with_allowance(
         &e.current_contract_address(), // from - the adapter

@@ -3,7 +3,8 @@
 
 # Build configuration
 ALL_DIRS := packages/blend_capital_adapter packages/yield_adapter packages/access_control contracts/cusd_manager contracts/yield_adapter_registry contracts/yield_distributor contracts/lending_yield_controller
-BINDING_DIRS := packages/yield_adapter contracts/cusd_manager contracts/yield_adapter_registry contracts/yield_distributor contracts/lending_yield_controller
+CONTRACTS := cusd_manager yield_adapter_registry yield_distributor lending_yield_controller blend_capital_adapter
+
 BINDINGS_BASE_DIR := ./ts
 BUILD_FLAGS ?=
 
@@ -105,6 +106,14 @@ clean:
 		$(MAKE) -C $$dir clean WORKSPACE_ROOT=$(PWD) || exit 1; \
 	done
 	@rm -f deployed_addresses.mk deployed_addresses.sh
+
+# Generate contract bindings
+# loop through all the contracts and call the contract bindings typescript command
+# export CONTRACT_NAME='lending_yield_controller' && \
+# stellar contract bindings typescript \
+# --wasm ./target/wasm32v1-none/release/${CONTRACT_NAME}.wasm \
+# --output-dir ./ts/${CONTRACT_NAME} \
+# --overwrite
 
 # ========== DEPLOYMENT TARGETS ==========
 
@@ -323,16 +332,16 @@ test-deposit:
 		printf "$(RED)Error: Lending Yield Controller ID not set.$(NC)\n"; \
 		exit 1; \
 	fi
-	stellar contract invoke \
-		--source $(ADMIN_KEY) \
-		--network $(NETWORK) \
-		--id $(USDC_ID) \
-		-- \
-		approve \
-		--from $(ADMIN) \
-		--spender $(LENDING_YIELD_CONTROLLER_ID) \
-		--amount 10000000 \
-		--expiration_ledger $(EXPIRATION_LEDGER)
+	# stellar contract invoke \
+	# 	--source $(ADMIN_KEY) \
+	# 	--network $(NETWORK) \
+	# 	--id $(USDC_ID) \
+	# 	-- \
+	# 	approve \
+	# 	--from $(ADMIN) \
+	# 	--spender $(LENDING_YIELD_CONTROLLER_ID) \
+	# 	--amount 10000000 \
+	# 	--expiration_ledger $(EXPIRATION_LEDGER)
 	stellar contract invoke \
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \

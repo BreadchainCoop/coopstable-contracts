@@ -134,18 +134,15 @@ impl LendingYieldControllerTrait for LendingYieldController {
             LendingAdapterClient::new(e, &registry_client.get_adapter(&YIELD_TYPE.id(), &protocol));
         let asset_client = TokenClient::new(e, &asset);
 
-        asset_client.transfer_from(
-            &e.current_contract_address(),
+        asset_client.transfer(
             &user,
             &e.current_contract_address(),
             &amount.clone(),
         );
-    
-        asset_client.approve(
+        asset_client.transfer(
             &e.current_contract_address(),
             &adapter.address,
-            &amount,
-            &five_minute_deadline(e),
+            &amount
         );
         adapter.deposit(&asset, &amount);
         cusd_manager_client.issue_cusd(&e.current_contract_address(), &user, &amount);
