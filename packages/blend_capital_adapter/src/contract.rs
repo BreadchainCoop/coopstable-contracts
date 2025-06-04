@@ -31,10 +31,10 @@ impl LendingAdapter for BlendCapitalAdapter {
             .set(&BLEND_TOKEN_ID, &blend_token_id);
     }
 
-    fn deposit(e: &Env, asset: Address, amount: i128) -> i128 {
+    fn deposit(e: &Env, user: Address, asset: Address, amount: i128) -> i128 {
         storage::require_yield_controller(e);
 
-        adapter::supply_collateral(e, asset.clone(), amount);
+        adapter::supply_collateral(e, user, asset.clone(), amount);
         
         LendingAdapterEvents::deposit(&e, e.current_contract_address(), asset, amount);
 
@@ -56,22 +56,20 @@ impl LendingAdapter for BlendCapitalAdapter {
         adapter::read_yield(e, e.current_contract_address(), asset)
     }
 
-    fn claim_yield(e: &Env, asset: Address) -> i128 {
-        
-        let yield_controller = storage::get_yield_controller(e);
-        yield_controller.require_auth();
+    fn claim_yield(e: &Env, asset: Address, recipient: Address) -> i128 {
+        storage::require_yield_controller(e);
 
         let yield_amount = adapter::read_yield(e, e.current_contract_address(), asset.clone());
         if yield_amount <= 0 {
             return 0;
         }
 
-        adapter::withdraw_collateral(e, yield_controller.clone(), asset.clone(), yield_amount);
+        adapter::withdraw_collateral(e, recipient.clone(), asset.clone(), yield_amount);
 
         LendingAdapterEvents::claim_yield(
             &e,
             e.current_contract_address(),
-            yield_controller,
+            recipient,
             asset,
             yield_amount,
         );

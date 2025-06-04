@@ -91,11 +91,12 @@ impl CUSDManagerTrait for CUSDManager {
     }
 
     fn burn_cusd(e: &Env, caller: Address, from: Address, amount: i128) {
+        from.require_auth();
         access::default_access_control(e).only_role(e, &caller, YIELD_CONTROLLER);
         check_nonnegative_amount(e, amount);
         token::process_token_burn(
             &e,
-            e.current_contract_address(),
+            from.clone(),
             storage::read_cusd_id(e),
             amount,
         );

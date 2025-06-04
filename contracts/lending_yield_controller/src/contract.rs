@@ -2,9 +2,8 @@ use crate::{
     constants::{
         ADAPTER_REGISTRY_KEY, 
         CUSD_MANAGER_KEY, 
-        INSTANCE_BUMP_AMOUNT, 
+        INSTANCE_BUMP_AMOUNT,
         INSTANCE_LIFETIME_THRESHOLD,
-        MINUTES_IN_LEDGERS, 
         YIELD_CONTROLLER_ADMIN_ROLE, 
         YIELD_DISTRIBUTOR_KEY, 
         YIELD_TYPE
@@ -18,7 +17,7 @@ use access_control::{
     constants::DEFAULT_ADMIN_ROLE,
 };
 use soroban_sdk::panic_with_error;
-use soroban_sdk::{contract, contractimpl, token::TokenClient, Address, Env, Symbol};
+use soroban_sdk::{contract, contractimpl, Address, Env, Symbol};
 use yield_adapter::lending_adapter::LendingAdapterClient;
 
 
@@ -76,11 +75,6 @@ fn read_yield(e: &Env) -> i128 {
     )
 }
 
-fn five_minute_deadline(e: &Env) -> u32 {
-    let ledger_time = e.ledger().sequence();
-    ledger_time + (MINUTES_IN_LEDGERS * 5)
-}
-
 #[contract]
 pub struct LendingYieldController;
 
@@ -120,35 +114,21 @@ impl LendingYieldControllerTrait for LendingYieldController {
         amount: i128,
     ) -> i128 {
         user.require_auth();
-
-        // deps
-        let registry_client = storage::adapter_registry_client(&e);
-        let is_asset_supported =
-        registry_client.is_supported_asset(&YIELD_TYPE.id(), &protocol, &asset);
-        if !is_asset_supported {
-            panic_with_error!(e, LendingYieldControllerError::UnsupportedAsset);
-        };
         
-        let cusd_manager_client = storage::cusd_manager_client(&e);
-        let adapter =
-            LendingAdapterClient::new(e, &registry_client.get_adapter(&YIELD_TYPE.id(), &protocol));
-        let asset_client = TokenClient::new(e, &asset);
-
-        asset_client.transfer(
-            &user,
-            &e.current_contract_address(),
-            &amount.clone(),
-        );
-        asset_client.transfer(
-            &e.current_contract_address(),
-            &adapter.address,
+        let registry_client = storage::adapter_registry_client(&e);
+        let adapter = LendingAdapterClient::new(e, &registry_client.get_adapter(&YIELD_TYPE.id(), &protocol));
+        
+        adapter.deposit(
+            &user, 
+            &asset, 
             &amount
         );
-        adapter.deposit(&asset, &amount);
+        
+        // Issue cUSD to user
+        let cusd_manager_client = storage::cusd_manager_client(&e);
         cusd_manager_client.issue_cusd(&e.current_contract_address(), &user, &amount);
-
+        
         LendingYieldControllerEvents::deposit_collateral(&e, user, asset, amount);
-
         amount
     }
 
@@ -166,29 +146,17 @@ impl LendingYieldControllerTrait for LendingYieldController {
         let cusd_manager_client = storage::cusd_manager_client(&e);
         let adapter =
             LendingAdapterClient::new(e, &registry_client.get_adapter(&YIELD_TYPE.id(), &protocol));
-        let cusd_token_client = TokenClient::new(e, &cusd_manager_client.get_cusd_id());
 
         let is_asset_supported =
             registry_client.is_supported_asset(&YIELD_TYPE.id(), &protocol, &asset);
         if !is_asset_supported {
             panic_with_error!(e, LendingYieldControllerError::UnsupportedAsset);
         };
-        cusd_token_client.transfer_from(
-            &e.current_contract_address(),
-            &user,
-            &e.current_contract_address(),
-            &amount,
-        );
-        cusd_token_client.approve(
-            &e.current_contract_address(),
-            &cusd_manager_client.address,
-            &amount,
-            &five_minute_deadline(e),
-        );
         adapter.withdraw(&user, &asset, &amount);
+        
         cusd_manager_client.burn_cusd(
             &e.current_contract_address(),
-            &cusd_manager_client.address,
+            &user,
             &amount,
         );        
         LendingYieldControllerEvents::withdraw_collateral(&e, user, asset, amount);
@@ -217,18 +185,10 @@ impl LendingYieldControllerTrait for LendingYieldController {
             let adapter_client = LendingAdapterClient::new(e, &adapter_address);
 
             for asset in supported_assets.iter() {
-                
-                let token_client = TokenClient::new(e, &asset);
 
-                let claimed = adapter_client.claim_yield(&asset);
+                let claimed = adapter_client.claim_yield(&asset, &distributor.address);
                 
                 if claimed > 0 {
-                    token_client.approve(
-                        &e.current_contract_address(),
-                        &distributor.address,
-                        &claimed,
-                        &five_minute_deadline(e),
-                    );
                     distributor.distribute_yield(&e.current_contract_address(), &asset, &claimed);
                     LendingYieldControllerEvents::claim_yield(
                         &e,

@@ -74,6 +74,9 @@ help:
 	@printf "\n"
 	@printf "$(YELLOW)Configuration:$(NC)\n"
 	@printf "  $(GREEN)make configure-cusd$(NC)\n"
+	@printf "  $(GREEN)make cusd-set-controller$(NC)\n"
+	@printf "  $(GREEN)make cusd-set-admin-issuer$(NC)\n"
+	@printf "  $(GREEN)make cusd-set-manager-issuer$(NC)\n"
 	@printf "  $(GREEN)make configure-distributor$(NC)\n"
 	@printf "  $(GREEN)make register-blend-adapter$(NC)\n"
 	@printf "\n"
@@ -277,6 +280,39 @@ cusd-set-controller:
 		--new_controller $(LENDING_YIELD_CONTROLLER_ID)
 	@printf "$(GREEN)CUSD Manager configured!$(NC)\n"
 
+.PHONY: cusd-set-admin-issuer
+cusd-set-admin-issuer:
+	@printf "$(YELLOW)Setting Admin as Issuer...$(NC)\n"
+	@if [ -z "$(CUSD_MANAGER_ID)" ]; then \
+		printf "$(RED)Error: Required contract IDs not set.$(NC)\n"; \
+		exit 1; \
+	fi
+	stellar contract invoke \
+		--source owner \
+		--network testnet \
+		--id $(CUSD_MANAGER_ID) \
+		-- \
+		set_cusd_issuer \
+		--caller $(OWNER) \
+		--new_issuer $(ADMIN)
+	@printf "$(GREEN)CUSD Issuer set!$(NC)\n"
+
+.PHONY: cusd-set-manager-issuer
+cusd-set-manager-issuer:
+	@printf "$(YELLOW)Setting Manager as Issuer...$(NC)\n"
+	@if [ -z "$(CUSD_ID)" ]; then \
+		printf "$(RED)Error: Required contract IDs not set.$(NC)\n"; \
+		exit 1; \
+	fi
+	stellar contract invoke \
+		--source admin \
+		--network testnet \
+		--id $(CUSD_ID) \
+		-- \
+		set_admin \
+		--new_admin $(CUSD_MANAGER_ID)
+	@printf "$(GREEN)CUSD Manager set as Issuer!$(NC)\n"
+
 .PHONY: configure-distributor
 configure-distributor:
 	@printf "$(YELLOW)Configuring Yield Distributor...$(NC)\n"
@@ -327,6 +363,64 @@ register-blend-adapter:
 
 .PHONY: test-deposit
 test-deposit:
+	@printf "$(YELLOW)Testing deposit operation...$(NC)\n"
+	@if [ -z "$(LENDING_YIELD_CONTROLLER_ID)" ]; then \
+		printf "$(RED)Error: Lending Yield Controller ID not set.$(NC)\n"; \
+		exit 1; \
+	fi
+	# stellar contract invoke \
+	# 	--source $(ADMIN_KEY) \
+	# 	--network $(NETWORK) \
+	# 	--id $(USDC_ID) \
+	# 	-- \
+	# 	approve \
+	# 	--from $(ADMIN) \
+	# 	--spender $(LENDING_YIELD_CONTROLLER_ID) \
+	# 	--amount 10000000 \
+	# 	--expiration_ledger $(EXPIRATION_LEDGER)
+	stellar contract invoke \
+		--source $(ADMIN_KEY) \
+		--network $(NETWORK) \
+		--id $(LENDING_YIELD_CONTROLLER_ID) \
+		-- \
+		deposit_collateral \
+		--protocol "BC_LA" \
+		--user $(ADMIN) \
+		--asset $(USDC_ID) \
+		--amount 10000000
+	@printf "$(GREEN)Test deposit complete!$(NC)\n"
+
+.PHONY: test-withdraw
+test-withdraw::
+	@printf "$(YELLOW)Testing deposit operation...$(NC)\n"
+	@if [ -z "$(LENDING_YIELD_CONTROLLER_ID)" ]; then \
+		printf "$(RED)Error: Lending Yield Controller ID not set.$(NC)\n"; \
+		exit 1; \
+	fi
+	# stellar contract invoke \
+	# 	--source $(ADMIN_KEY) \
+	# 	--network $(NETWORK) \
+	# 	--id $(USDC_ID) \
+	# 	-- \
+	# 	approve \
+	# 	--from $(ADMIN) \
+	# 	--spender $(LENDING_YIELD_CONTROLLER_ID) \
+	# 	--amount 10000000 \
+	# 	--expiration_ledger $(EXPIRATION_LEDGER)
+	stellar contract invoke \
+		--source $(ADMIN_KEY) \
+		--network $(NETWORK) \
+		--id $(LENDING_YIELD_CONTROLLER_ID) \
+		-- \
+		withdraw_collateral \
+		--protocol "BC_LA" \
+		--user $(ADMIN) \
+		--asset $(USDC_ID) \
+		--amount 10000000
+	@printf "$(GREEN)Test deposit complete!$(NC)\n"
+
+.PHONY: test-get-yield
+test-get-yield::
 	@printf "$(YELLOW)Testing deposit operation...$(NC)\n"
 	@if [ -z "$(LENDING_YIELD_CONTROLLER_ID)" ]; then \
 		printf "$(RED)Error: Lending Yield Controller ID not set.$(NC)\n"; \

@@ -12,5 +12,5 @@ pub fn process_token_burn(
     amount: i128,
 ) {
     let token_client = token::TokenClient::new(&e, &token_address);
-    token_client.burn_from(&e.current_contract_address(), &from, &amount);
+    token_client.burn(&from, &amount);
 }

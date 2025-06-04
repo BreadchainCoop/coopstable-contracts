@@ -2,13 +2,13 @@ use soroban_sdk::{contractclient, Address, Env};
 
 #[contractclient(name = "LendingAdapterClient")]
 pub trait LendingAdapter {
-    fn deposit(env: &Env, asset: Address, amount: i128) -> i128;
+    fn deposit(env: &Env, user: Address, asset: Address, amount: i128) -> i128;
 
     fn withdraw(env: &Env, user: Address, asset: Address, amount: i128) -> i128;
 
     fn get_yield(env: &Env, asset: Address) -> i128;
 
-    fn claim_yield(env: &Env, asset: Address) -> i128;
+    fn claim_yield(env: &Env, asset: Address, recipient: Address) -> i128;
 
     fn claim_emissions(e: &Env, to: Address, asset: Address) -> i128;
 
