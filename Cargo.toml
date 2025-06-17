@@ -13,8 +13,6 @@ soroban-sdk = "22.0.7"
 soroban-token-sdk = "22.0.7"
 test-case = "3.3.1"
 pretty_assertions = "1.4.1"
-stellar-fungible = { workspace=true, git = "https://github.com/OpenZeppelin/stellar-contracts", tag="v0.2.0" }
-stellar-pausable = { git = "https://github.com/OpenZeppelin/stellar-contracts", tag="v0.2.0" }
 blend_capital_adapter = { workspace= true, path = "./packages/blend_capital_adapter" }
 yield_adapter = { workspace= true, path = "./packages/yield_adapter" }
 access_control = { workspace= true, path = "./packages/access_control" }
