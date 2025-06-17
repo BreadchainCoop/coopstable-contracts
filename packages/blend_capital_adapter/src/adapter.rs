@@ -1,4 +1,4 @@
-use soroban_sdk::{auth::{InvokerContractAuthEntry, ContractContext, SubContractInvocation}, token, vec, Address, Env, IntoVal, Symbol, Val, Vec};
+use soroban_sdk::{auth::{InvokerContractAuthEntry, ContractContext, SubContractInvocation}, vec, Address, Env, IntoVal, Symbol, Val, Vec};
 use crate::{
     artifacts::pool::{Client as PoolClient, Request},
     storage,
@@ -16,13 +16,6 @@ fn create_request(
         address: asset,
         amount,
     }
-}
-
-fn approve_asset(e: &Env, spender: Address, asset: Address, amount: i128) {
-    let token_client = token::TokenClient::new(e, &asset);
-    let ledger_sequence = e.ledger().sequence();
-    e.authorize_as_current_contract(vec![&e]);
-    token_client.approve(&e.current_contract_address(), &spender, &amount, &(ledger_sequence+5*12));
 }
 
 pub fn supply_collateral(
