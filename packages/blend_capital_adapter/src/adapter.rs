@@ -29,28 +29,10 @@ pub fn supply_collateral(
     let pool_client = PoolClient::new(e, &pool_id);
     let request = create_request(RequestType::SupplyCollateral, asset.clone(), amount);
     let request_vec: Vec<Request> = vec![e, request];
-    let submit_args: Vec<Val> = vec![
-        e,
-        (&e.current_contract_address()).into_val(e), // from - adapter holds position
-        (&user).into_val(e),                         // spender - user provides tokens
-        (&yield_controller).into_val(e),                  // to - yield controller gets returns!
-        (&request_vec).into_val(e),
-    ];
-    e.authorize_as_current_contract(vec![
-        &e,
-        InvokerContractAuthEntry::Contract(SubContractInvocation {
-            context: ContractContext {
-                contract: pool_id.clone(),
-                fn_name: Symbol::new(e, "submit"),
-                args: submit_args,
-            },
-            sub_invocations: vec![&e],
-        }),
-    ]);
-    pool_client.submit(
-        &e.current_contract_address(),
+    pool_client.submit( 
+        &yield_controller.clone(), // we can user from yield controller cause we have already authenticated as the controller
         &user,
-        &yield_controller,
+        &yield_controller.clone(),
         &request_vec,
     );
     storage::store_deposit(e, &e.current_contract_address(), &asset, amount);
@@ -66,11 +48,12 @@ pub fn withdraw_collateral(
     let pool_id: Address = storage::read_lend_pool_id(e);
     let pool_client = PoolClient::new(e, &pool_id);
     let request = create_request(RequestType::WithdrawCollateral, asset.clone(), amount);
-
+    let yield_controller = storage::get_yield_controller(e);
+    
     let request_vec: Vec<Request> = vec![e, request];
     pool_client.submit(
-        &e.current_contract_address(),
-        &e.current_contract_address(),
+        &yield_controller.clone(), 
+        &yield_controller.clone(),
         &user,
         &request_vec,
     );
@@ -165,9 +148,7 @@ pub fn claim(e: &Env, from: Address, to: Address, asset: Address) -> i128 {
 
 pub fn read_yield(e: &Env, user: Address, asset: Address) -> i128 {
     let current_value = get_balance(e, user.clone(), asset.clone());
-
     let original_deposit = storage::get_deposit_amount(e, &user, &asset);
-
     if original_deposit == 0 || current_value <= original_deposit {
         return 0;
     }

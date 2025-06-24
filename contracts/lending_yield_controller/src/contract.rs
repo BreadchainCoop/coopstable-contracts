@@ -1,10 +1,10 @@
-use soroban_sdk::{panic_with_error, contractmeta};
+use soroban_sdk::{auth, contractmeta, panic_with_error, vec, IntoVal, Val, Vec};
 use crate::{
     storage_types, 
     error::LendingYieldControllerError, 
     events::LendingYieldControllerEvents,
 };
-use crate::storage;
+use crate::{storage, utils};
 use soroban_sdk::{contract, contractimpl, Address, Env, Symbol};
 use yield_adapter::lending_adapter::LendingAdapterClient;
 
@@ -101,16 +101,36 @@ impl LendingYieldControllerTrait for LendingYieldController {
         
         let registry_client = storage::adapter_registry_client(&e);
         let adapter = LendingAdapterClient::new(e, &registry_client.get_adapter(&storage_types::YIELD_TYPE.id(), &protocol));
-        
+        utils::authenticate_contract(
+            &e, 
+            adapter.address.clone(), 
+            Symbol::new(&e, "deposit"), 
+            vec![
+                e,
+                (&user).into_val(e),
+                (&asset).into_val(e),
+                (&amount).into_val(e),
+            ]
+        );
         adapter.deposit(
             &user, 
             &asset, 
             &amount
         );
-        
+
         let cusd_manager_client = storage::cusd_manager_client(&e);
-        // TODO - add require auth for controller
+        utils::authenticate_contract(
+            &e, 
+            cusd_manager_client.address.clone(), 
+            Symbol::new(&e, "issue_cusd"), 
+            vec![
+                e,
+                (&user).into_val(e),
+                (&amount).into_val(e),
+            ]
+        );
         cusd_manager_client.issue_cusd(&user, &amount);
+        
         LendingYieldControllerEvents::deposit_collateral(&e, user, asset, amount);
         amount
     }
@@ -133,6 +153,17 @@ impl LendingYieldControllerTrait for LendingYieldController {
         if !is_asset_supported {
             panic_with_error!(e, LendingYieldControllerError::UnsupportedAsset);
         };
+        utils::authenticate_contract(
+            &e, 
+            adapter.address.clone(), 
+            Symbol::new(&e, "withdraw"), 
+            vec![
+                e,
+                (&user).into_val(e),
+                (&asset).into_val(e),
+                (&amount).into_val(e),
+            ]
+        );
         adapter.withdraw(&user, &asset, &amount);
         cusd_manager_client.burn_cusd(
             &user,
@@ -161,13 +192,19 @@ impl LendingYieldControllerTrait for LendingYieldController {
         let lend_protocols_with_assets = registry_client.get_adapters_with_assets(&storage_types::YIELD_TYPE.id());
         for (adapter_address, supported_assets) in lend_protocols_with_assets.iter() {
             let adapter_client = LendingAdapterClient::new(e, &adapter_address);
-
             for asset in supported_assets.iter() {
-
+                utils::authenticate_contract(
+                    &e, 
+                    adapter_client.address.clone(), 
+                    Symbol::new(&e, "claim_yield"),
+                    vec![
+                        e,
+                        (&asset).into_val(e),
+                        (&distributor.address).into_val(e),
+                    ]
+                );    
                 let claimed = adapter_client.claim_yield(&asset, &distributor.address);
-                
                 if claimed > 0 {
-                    // TODO - add require auth for controller
                     distributor.distribute_yield(&asset, &claimed);
                     LendingYieldControllerEvents::claim_yield(
                         &e,
@@ -175,7 +212,6 @@ impl LendingYieldControllerTrait for LendingYieldController {
                         asset.clone(),
                         claimed,
                     );
-
                     total_claimed += claimed;
                 }
 
@@ -191,10 +227,17 @@ impl LendingYieldControllerTrait for LendingYieldController {
         let emissions = adapter_client.get_emissions(&e.current_contract_address(), &asset);
         if emissions > 0 {
             let distributor = storage::distributor_client(e);
-            
-            // TODO - add require auth for controller
+            utils::authenticate_contract(
+                &e, 
+                adapter_client.address.clone(), 
+                Symbol::new(&e, "claim_emissions"),
+                vec![
+                    e,
+                    (&distributor.get_treasury()).into_val(e),
+                    (&asset).into_val(e),
+                ]
+            );
             let claimed = adapter_client.claim_emissions(&distributor.get_treasury(), &asset);
-            
             LendingYieldControllerEvents::claim_emissions(
                 &e,
                 distributor.get_treasury(),

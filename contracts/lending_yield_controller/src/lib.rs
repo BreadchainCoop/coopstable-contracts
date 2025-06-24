@@ -23,3 +23,4 @@ mod contract;
 mod events;
 mod error;
 mod test;
+mod utils;

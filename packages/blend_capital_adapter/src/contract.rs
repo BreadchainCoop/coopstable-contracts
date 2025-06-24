@@ -19,7 +19,6 @@ pub struct BlendCapitalAdapter;
 
 #[contractimpl]
 impl LendingAdapter for BlendCapitalAdapter {
-    
     fn __constructor(e: Env, yield_controller: Address, blend_pool_id: Address, blend_token_id: Address) {
         e.storage()
             .instance()
@@ -59,14 +58,11 @@ impl LendingAdapter for BlendCapitalAdapter {
 
     fn claim_yield(e: &Env, asset: Address, recipient: Address) -> i128 {
         storage::require_yield_controller(e);
-
         let yield_amount = adapter::read_yield(e, e.current_contract_address(), asset.clone());
         if yield_amount <= 0 {
             return 0;
         }
-
         adapter::withdraw_collateral(e, recipient.clone(), asset.clone(), yield_amount);
-
         LendingAdapterEvents::claim_yield(
             &e,
             e.current_contract_address(),
@@ -74,19 +70,16 @@ impl LendingAdapter for BlendCapitalAdapter {
             asset,
             yield_amount,
         );
-
         yield_amount
     }
 
     fn claim_emissions(e: &Env, to: Address, asset: Address) -> i128 {
-        
         storage::require_yield_controller(e);
+        let yield_controller = storage::get_yield_controller(e);
         
-        let from = e.current_contract_address();
-
-        let emissions = adapter::claim(e, from.clone(), to.clone(), asset.clone());
+        let emissions = adapter::claim(e, yield_controller.clone(), to.clone(), asset.clone());
         
-        LendingAdapterEvents::claim_emissions(e, from, to, asset, emissions);
+        LendingAdapterEvents::claim_emissions(e, yield_controller, to, asset, emissions);
 
         emissions
     }

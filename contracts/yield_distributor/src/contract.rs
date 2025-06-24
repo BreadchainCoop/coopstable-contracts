@@ -1,8 +1,9 @@
 use core::panic;
+use soroban_sdk::{vec, IntoVal, Symbol};
 use soroban_sdk::{contract, contractimpl, contractmeta, token::TokenClient, Address, Env, Vec, panic_with_error};
 use crate::events::YieldDistributorEvents;
 use crate::error::YieldDistributorError;
-use crate::storage;
+use crate::{storage, utils};
 
 contractmeta!(
     key = "Description",
@@ -167,29 +168,44 @@ impl YieldDistributorTrait for YieldDistributor {
         } else {
             0
         };
-
         let token_client = TokenClient::new(e, &token);
-
         if treasury_amount > 0 {
+            utils::authenticate_contract(
+                &e, 
+                token_client.address.clone(), 
+                Symbol::new(&e, "transfer"), 
+                vec![
+                    e,
+                    (&treasury).into_val(e),
+                    (&treasury_amount).into_val(e),
+                ]
+            );
             token_client.transfer(
-                &storage::get_yield_controller(e),
+                &e.current_contract_address(),
                 &treasury,
                 &treasury_amount,
             );
         }
-
         if per_member_amount > 0 {
+            utils::authenticate_contract(
+                &e, 
+                token_client.address.clone(), 
+                Symbol::new(&e, "transfer"), 
+                vec![
+                    e,
+                    (&e.current_contract_address()).into_val(e),
+                    (&per_member_amount).into_val(e),
+                ]
+            );
             for member in members.iter() {
                 token_client.transfer(
-                    &storage::get_yield_controller(e),
+                    &e.current_contract_address(),
                     &member,
                     &per_member_amount,
                 );
             }
         }
-
         storage::record_distribution(e, amount, treasury_amount, members_amount);
-
         YieldDistributorEvents::distribute_yield(
             e,
             token,
