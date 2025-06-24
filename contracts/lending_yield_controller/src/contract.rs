@@ -1,11 +1,10 @@
-use soroban_sdk::{auth, contractmeta, panic_with_error, vec, IntoVal, Val, Vec};
+use soroban_sdk::{ Env, Symbol, contract, contractimpl, contractmeta, panic_with_error, vec, IntoVal, Address};
 use crate::{
     storage_types, 
     error::LendingYieldControllerError, 
     events::LendingYieldControllerEvents,
 };
 use crate::{storage, utils};
-use soroban_sdk::{contract, contractimpl, Address, Env, Symbol};
 use yield_adapter::lending_adapter::LendingAdapterClient;
 
 contractmeta!(
@@ -190,26 +189,67 @@ impl LendingYieldControllerTrait for LendingYieldController {
         let mut total_claimed: i128 = 0;
         let registry_client = storage::adapter_registry_client(e);
         let lend_protocols_with_assets = registry_client.get_adapters_with_assets(&storage_types::YIELD_TYPE.id());
+        let cusd_manager = storage::cusd_manager_client(e);
         for (adapter_address, supported_assets) in lend_protocols_with_assets.iter() {
-            let adapter_client = LendingAdapterClient::new(e, &adapter_address);
+            let adapter = LendingAdapterClient::new(e, &adapter_address);
             for asset in supported_assets.iter() {
                 utils::authenticate_contract(
                     &e, 
-                    adapter_client.address.clone(), 
+                    adapter.address.clone(), 
                     Symbol::new(&e, "claim_yield"),
                     vec![
                         e,
                         (&asset).into_val(e),
-                        (&distributor.address).into_val(e),
+                        (&e.current_contract_address()).into_val(e),
                     ]
                 );    
-                let claimed = adapter_client.claim_yield(&asset, &distributor.address);
+                let claimed = adapter.claim_yield(&asset, &e.current_contract_address()); // transfer asset yield (usdc) to controller
                 if claimed > 0 {
-                    distributor.distribute_yield(&asset, &claimed);
+                    utils::authenticate_contract(
+                        &e, 
+                        adapter.address.clone(), 
+                        Symbol::new(&e, "deposit"), 
+                        vec![
+                            e,
+                            (&e.current_contract_address()).into_val(e),
+                            (&asset).into_val(e),
+                            (&claimed).into_val(e),
+                        ]
+                    );
+                    adapter.deposit(
+                        &e.current_contract_address(), 
+                        &asset, 
+                        &claimed
+                    ); // deposit claimed usdc as collateral 
+                    
+                    utils::authenticate_contract(
+                        &e, 
+                        cusd_manager.address.clone(), 
+                        Symbol::new(&e, "issue_cusd"), 
+                        vec![
+                            e,
+                            (&distributor.address).into_val(e),
+                            (&claimed).into_val(e),
+                        ]
+                    ); // issue claimed cusd to distributor
+                    cusd_manager.issue_cusd(&distributor.address, &claimed);
+
+                    utils::authenticate_contract(
+                        &e, 
+                        distributor.address.clone(), 
+                        Symbol::new(&e, "distribute_yield"), 
+                        vec![
+                            e,
+                            (&cusd_manager.get_cusd_id()).into_val(e),
+                            (&claimed).into_val(e),
+                        ]
+                    );
+                    distributor.distribute_yield(&cusd_manager.get_cusd_id(), &claimed);
+                    
                     LendingYieldControllerEvents::claim_yield(
                         &e,
                         e.current_contract_address(),
-                        asset.clone(),
+                        cusd_manager.get_cusd_id(),
                         claimed,
                     );
                     total_claimed += claimed;
