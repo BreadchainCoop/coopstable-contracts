@@ -1,25 +1,23 @@
 use crate::{
     events::YieldAdapterRegistryEvents,
     error::YieldAdapterRegistryError,
-    storage,
+    storage
 };
 use soroban_sdk::{contract, contractimpl, contractmeta, panic_with_error, Address, Env, Symbol, Vec};
-use access_control::{access::default_access_control, constants::DEFAULT_ADMIN_ROLE};
 
 contractmeta!(
     key = "Description",
     val = "Yield adapter registry for the Coopstable cUSD system"
 );
-fn only_admin(e: &Env, caller: Address) {
-    let access_control = default_access_control(e);
-    access_control.only_role(&e, &caller, DEFAULT_ADMIN_ROLE);
-}
+
+fn require_admin(e: &Env) { storage::read_admin(e).require_auth(); }
+fn require_owner(e: &Env) { storage::read_owner(e).require_auth(); }
+
 pub trait YieldAdapterRegistryTrait {
-    fn __constructor(e: Env, admin: Address);
-    fn set_yield_adapter_admin(e: &Env, caller: Address, new_admin: Address);
+    fn __constructor(e: Env, admin: Address, owner: Address);
+    fn set_yield_adapter_admin(e: &Env, new_admin: Address);
     fn register_adapter(
         e: &Env,
-        caller: Address,
         yield_type: Symbol,
         protocol: Symbol,
         adapter_address: Address,
@@ -27,17 +25,15 @@ pub trait YieldAdapterRegistryTrait {
     fn get_adapter(e: &Env, yield_type: Symbol, protocol: Symbol) -> Address;
     fn get_adapters(e: &Env, yield_type: Symbol) -> Vec<Address>;
     fn get_adapters_with_assets(e: &Env, yield_type: Symbol) -> Vec<(Address, Vec<Address>)>;
-    fn remove_adapter(e: &Env, caller: Address, yield_type: Symbol, protocol: Symbol);
+    fn remove_adapter(e: &Env, yield_type: Symbol, protocol: Symbol);
     fn add_support_for_asset(
         e: &Env,
-        caller: Address,
         yield_type: Symbol,
         protocol: Symbol,
         asset_address: Address,
     );
     fn remove_support_for_asset(
         e: &Env,
-        caller: Address,
         yield_type: Symbol,
         protocol: Symbol,
         asset_address: Address,
@@ -55,28 +51,23 @@ pub struct YieldAdapterRegistry;
 
 #[contractimpl]
 impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
-    fn __constructor(e: Env, admin: Address) {
-        let access_control = default_access_control(&e);
-
-        access_control.initialize(&e, &admin);
-        access_control.set_role_admin(&e, DEFAULT_ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
-        access_control._grant_role(&e, DEFAULT_ADMIN_ROLE, &admin);
+    fn __constructor(e: Env, admin: Address, owner: Address) {
+        storage::write_owner(&e, owner);
+        storage::write_admin(&e, admin);
     }
 
-    fn set_yield_adapter_admin(e: &Env, caller: Address, new_admin: Address) {
-        let access_control = default_access_control(e);
-        access_control.grant_role(&e, caller, DEFAULT_ADMIN_ROLE, &new_admin);
+    fn set_yield_adapter_admin(e: &Env, new_admin: Address) {
+        require_owner(e);
         YieldAdapterRegistryEvents::set_admin(&e, new_admin);
     }
 
     fn register_adapter(
         e: &Env,
-        caller: Address,
         yield_type: Symbol,
         protocol: Symbol,
         adapter_address: Address,
     ) {
-        only_admin(e, caller);
+        require_admin(e);
         storage::register_yield_adapter(
             e,
             yield_type.clone(),
@@ -86,8 +77,8 @@ impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
         YieldAdapterRegistryEvents::register_adapter(&e, yield_type, protocol, adapter_address);
     }
 
-    fn remove_adapter(e: &Env, caller: Address, yield_type: Symbol, protocol: Symbol) {
-        only_admin(e, caller);
+    fn remove_adapter(e: &Env, yield_type: Symbol, protocol: Symbol) {
+        require_admin(e);
         let adapter_address = storage::get_yield_adapter(e, yield_type.clone(), protocol.clone());
         storage::remove_yield_adapter(e, yield_type.clone(), protocol.clone());
         YieldAdapterRegistryEvents::remove_adapter(&e, yield_type, protocol, adapter_address);
@@ -102,12 +93,11 @@ impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
 
     fn add_support_for_asset(
         e: &Env,
-        caller: Address,
         yield_type: Symbol,
         protocol: Symbol,
         asset_address: Address,
     ) {
-        only_admin(e, caller);
+        require_admin(e);
         storage::support_asset(
             e,
             yield_type.clone(),
@@ -119,12 +109,11 @@ impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
 
     fn remove_support_for_asset(
         e: &Env,
-        caller: Address,
         yield_type: Symbol,
         protocol: Symbol,
         asset_address: Address,
     ) {
-        only_admin(e, caller);
+        require_admin(e);
         storage::remove_asset_support(
             &e,
             yield_type.clone(),

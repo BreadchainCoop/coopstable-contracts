@@ -104,3 +104,12 @@ impl YieldAdapterRegistryMap {
         result
     }
 }
+
+
+#[derive(Clone)]
+#[contracttype]
+pub enum DataKey {
+    Owner,
+    Admin,
+}
+

@@ -1,7 +1,7 @@
 #![no_std]
 pub mod cusd_manager {
     soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/cusd_manager.wasm"
+        file = "../../target/wasm32v1-none/release/cusd_manager.wasm",
     );
 }
 
@@ -18,7 +18,7 @@ pub mod yield_distributor {
 }
 
 mod storage;
-mod constants;
+mod storage_types;
 mod contract;
 mod events;
 mod error;

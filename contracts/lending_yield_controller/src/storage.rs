@@ -1,79 +1,56 @@
 use soroban_sdk::{Address, Env};
-use crate::constants::{
-    ADAPTER_REGISTRY_KEY, 
-    CUSD_MANAGER_KEY, 
+use crate::storage_types::{
+    DataKey,
     INSTANCE_BUMP_AMOUNT, 
     INSTANCE_LIFETIME_THRESHOLD,
-    YIELD_DISTRIBUTOR_KEY,
 };
 use crate::cusd_manager::Client as CUSDManagerClient;
 use crate::yield_adapter_registry::Client as YieldAdapterRegistryClient;
 use crate::yield_distributor::Client as YieldDistributorClient;
 
-pub fn get_cusd_manager(e: &Env) -> Address {
-    e.storage()
-        .instance()
-        .extend_ttl(
-            INSTANCE_LIFETIME_THRESHOLD, 
-            INSTANCE_BUMP_AMOUNT);
-    e.storage().instance().get(&CUSD_MANAGER_KEY).unwrap()
+pub fn adapter_registry_client(e: &Env) -> YieldAdapterRegistryClient<'static> {
+    YieldAdapterRegistryClient::new(
+        e, 
+        &get_adapter_registry(&e)
+    )
 }
 
-pub fn get_adapter_registry(e: &Env) -> Address {
+pub fn extend_instance(e: &Env) {
     e.storage()
         .instance()
-        .extend_ttl(
-            INSTANCE_LIFETIME_THRESHOLD, 
-            INSTANCE_BUMP_AMOUNT);
-    e.storage().instance().get(&ADAPTER_REGISTRY_KEY).unwrap()
+        .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+}
+fn read_address(e: &Env, key: &DataKey) -> Address {
+    extend_instance(e);
+    e.storage().instance().get(key).unwrap()  
 }
 
-pub fn get_yield_distributor(e: &Env) -> Address {
-    e.storage()
-        .instance()
-        .extend_ttl(
-            INSTANCE_LIFETIME_THRESHOLD, 
-            INSTANCE_BUMP_AMOUNT
-        );
-    e.storage().instance().get(&YIELD_DISTRIBUTOR_KEY).unwrap()
+fn write_address(e: &Env, key: &DataKey, address: &Address) {
+    extend_instance(e);    
+    e.storage().instance().set(key, address); 
 }
+
+pub fn read_admin(e: &Env) -> Address { read_address(e, &DataKey::Admin)}
+pub fn read_owner(e: &Env) -> Address { read_address(e, &DataKey::Owner)}
+pub fn write_admin(e: &Env, new_admin: Address) { write_address(e, &DataKey::Admin, &new_admin);}
+pub fn write_owner(e: &Env, new_owner: Address) { write_address(e, &DataKey::Owner, &new_owner);}
+
+pub fn get_cusd_manager(e: &Env) -> Address { read_address(e, &DataKey::CUSDManager) }
+
+pub fn get_adapter_registry(e: &Env) -> Address { read_address(e, &DataKey::AdapterRegistry) }
+
+pub fn get_yield_distributor(e: &Env) -> Address { read_address(e, &DataKey::YieldDistributor) }
 
 pub fn set_yield_distributor(e: &Env, yield_distributor: Address) {
-    e.storage()
-        .instance()
-        .extend_ttl(
-            INSTANCE_LIFETIME_THRESHOLD, 
-            INSTANCE_BUMP_AMOUNT);
-    e.storage().instance().set(
-        &YIELD_DISTRIBUTOR_KEY, 
-        &yield_distributor
-    );
+    write_address(e, &DataKey::YieldDistributor, &yield_distributor);
 }
 
 pub fn set_cusd_manager(e: &Env, cusd_manager: Address) {
-    e.storage()
-        .instance()
-        .extend_ttl(
-            INSTANCE_LIFETIME_THRESHOLD, 
-            INSTANCE_BUMP_AMOUNT
-        );
-    e.storage().instance().set(
-        &CUSD_MANAGER_KEY, 
-        &cusd_manager
-    );
+    write_address(e, &DataKey::CUSDManager, &cusd_manager);
 }
 
 pub fn set_adapter_registry(e: &Env, adapter_registry: Address) {
-    e.storage()
-        .instance()
-        .extend_ttl(
-            INSTANCE_LIFETIME_THRESHOLD, 
-            INSTANCE_BUMP_AMOUNT
-        );
-    e.storage().instance().set(
-        &ADAPTER_REGISTRY_KEY, 
-        &adapter_registry
-    );
+    write_address(e, &DataKey::AdapterRegistry, &adapter_registry);
 }
 
 pub fn distributor_client(e: &Env) -> YieldDistributorClient {
@@ -84,12 +61,5 @@ pub fn cusd_manager_client(e: &Env) -> CUSDManagerClient {
     CUSDManagerClient::new(
         e, 
         &get_cusd_manager(&e)
-    )
-}
-
-pub fn adapter_registry_client(e: &Env) -> YieldAdapterRegistryClient<'static> {
-    YieldAdapterRegistryClient::new(
-        e, 
-        &get_adapter_registry(&e)
     )
 }

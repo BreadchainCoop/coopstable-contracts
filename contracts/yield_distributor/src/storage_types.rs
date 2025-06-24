@@ -46,6 +46,10 @@ pub struct Distribution {
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
+    Admin,
+    Owner,
+    YieldController,
+    Treasury,
     Member(Address),   // Map address to Member
     Members,           // Vec of all member addresses
     Distribution(u64), // Map timestamp to Distribution

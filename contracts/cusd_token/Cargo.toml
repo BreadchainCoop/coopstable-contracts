@@ -1,5 +1,5 @@
 [package]
-name = "cust_token"
+name = "cusd_token"
 version = "0.0.0"
 edition = "2021"
 publish = false
@@ -13,7 +13,6 @@ soroban-sdk = { workspace = true }
 stellar-fungible = { git = "https://github.com/OpenZeppelin/stellar-contracts", tag = "v0.2.0" }
 stellar-pausable = { git = "https://github.com/OpenZeppelin/stellar-contracts", tag = "v0.2.0" }
 stellar-default-impl-macro = { git = "https://github.com/OpenZeppelin/stellar-contracts", tag = "v0.2.0" }
-access_control = { workspace= true, path = "./packages/access_control" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

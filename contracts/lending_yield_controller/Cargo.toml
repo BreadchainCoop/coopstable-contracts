@@ -13,7 +13,6 @@ doctest = false
 soroban-sdk = { workspace = true }
 yield_adapter = { workspace = true }
 blend_capital_adapter = { workspace = true }
-access_control = { workspace = true }
 
 [dev-dependencies]
 yield_distributor = { workspace = true }

@@ -19,6 +19,7 @@ pub struct BlendCapitalAdapter;
 
 #[contractimpl]
 impl LendingAdapter for BlendCapitalAdapter {
+    
     fn __constructor(e: Env, yield_controller: Address, blend_pool_id: Address, blend_token_id: Address) {
         e.storage()
             .instance()

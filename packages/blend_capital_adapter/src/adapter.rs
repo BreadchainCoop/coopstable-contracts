@@ -68,8 +68,6 @@ pub fn withdraw_collateral(
     let request = create_request(RequestType::WithdrawCollateral, asset.clone(), amount);
 
     let request_vec: Vec<Request> = vec![e, request];
-    
-    // e.authorize_as_current_contract(vec![&e]);
     pool_client.submit(
         &e.current_contract_address(),
         &e.current_contract_address(),
@@ -130,7 +128,9 @@ fn get_reserve_token_id(e: &Env, asset: Address) -> Option<u32> {
 
 pub fn get_user_emissions(e: &Env, user: Address, asset: Address)
 -> i128 {
+    
     let pool_id: Address = storage::read_lend_pool_id(e);
+
     let pool_client = PoolClient::new(e, &pool_id);
 
     if let Some(reserve_token_id) = get_reserve_token_id(e, asset) {
@@ -148,7 +148,9 @@ pub fn get_user_emissions(e: &Env, user: Address, asset: Address)
 pub fn claim(e: &Env, from: Address, to: Address, asset: Address) -> i128 {
 
     if let Some(reserve_token_id) = get_reserve_token_id(e, asset.clone()) {
+        
         let pool_id: Address = storage::read_lend_pool_id(e);
+
         let pool_client = PoolClient::new(e, &pool_id);
 
         let reserve_token_ids = vec![e, reserve_token_id];

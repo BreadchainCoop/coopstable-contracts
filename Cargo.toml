@@ -15,7 +15,6 @@ test-case = "3.3.1"
 pretty_assertions = "1.4.1"
 blend_capital_adapter = { workspace= true, path = "./packages/blend_capital_adapter" }
 yield_adapter = { workspace= true, path = "./packages/yield_adapter" }
-access_control = { workspace= true, path = "./packages/access_control" }
 yield_adapter_registry = { workspace= true, path = "./contracts/yield_adapter_registry" }
 cusd_manager = { workspace= true, path = "./contracts/cusd_manager" }
 yield_distributor = { workspace = true, path = "./contracts/yield_distributor" }

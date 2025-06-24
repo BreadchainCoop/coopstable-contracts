@@ -15,6 +15,7 @@ use crate::{
 
 use yield_adapter::contract_types::{SupportedAdapter, SupportedYieldType};
 
+#[allow(dead_code)]
 struct TestFixture {
     env: Env,
     registry: YieldAdapterRegistryClient<'static>,
@@ -26,12 +27,13 @@ impl TestFixture {
     fn create() -> Self {
         let env = Env::default();
         let admin = Address::generate(&env);
+        let owner = Address::generate(&env);
         let user = Address::generate(&env);
 
         // Deploy the registry contract
         let registry_id = env.register(
             YieldAdapterRegistry,
-            YieldAdapterRegistryArgs::__constructor(&admin),
+            YieldAdapterRegistryArgs::__constructor(&admin, &owner),
         );
 
         let registry = YieldAdapterRegistryClient::new(&env, &registry_id);
@@ -77,7 +79,6 @@ impl TestFixture {
         })
     }
 
-    // Helper to verify an asset is supported
     fn verify_asset_supported(&self, protocol: SupportedAdapter, asset: &Address) -> bool {
         self.env.as_contract(&self.registry.address, || {
             if let Some(registry_map) = self
@@ -96,14 +97,9 @@ impl TestFixture {
 #[test]
 fn test_constructor() {
     let fixture = TestFixture::create();
-
-    // Verify admin role was granted to the admin address
     fixture.env.mock_all_auths();
-
-    // The admin should be able to call admin-only functions
     let (adapter_address, protocol) = fixture.create_adapter();
     fixture.registry.register_adapter(
-        &fixture.admin,
         &SupportedYieldType::Lending.id(),
         &protocol.id(),
         &adapter_address,
@@ -125,7 +121,7 @@ fn test_set_yield_adapter_admin() {
     // Set new admin
     fixture
         .registry
-        .set_yield_adapter_admin(&fixture.admin, &new_admin);
+        .set_yield_adapter_admin(&new_admin);
 
     // Expected event has topic "set_admin" and data is the new admin address
     let published_event = vec![&fixture.env, fixture.env.events().all().last_unchecked()];
@@ -142,7 +138,6 @@ fn test_set_yield_adapter_admin() {
     // New admin should now be able to register adapters
     let (adapter_address, protocol) = fixture.create_adapter();
     fixture.registry.register_adapter(
-        &new_admin,
         &SupportedYieldType::Lending.id(),
         &protocol.id(),
         &adapter_address,
@@ -166,7 +161,6 @@ fn test_register_adapter() {
 
     // Register adapter
     fixture.registry.register_adapter(
-        &fixture.admin,
         &SupportedYieldType::Lending.id(),
         &protocol.id(),
         &adapter_address,
@@ -209,7 +203,6 @@ fn test_register_adapter_unauthorized() {
     // This should fail with an access control error
     fixture.env.mock_all_auths();
     fixture.registry.register_adapter(
-        &fixture.user,
         &SupportedYieldType::Lending.id(),
         &protocol.id(),
         &adapter_address,
@@ -224,7 +217,6 @@ fn test_remove_adapter() {
     fixture.env.mock_all_auths();
 
     fixture.registry.register_adapter(
-        &fixture.admin,
         &SupportedYieldType::Lending.id(),
         &protocol.id(),
         &adapter_address,
@@ -234,7 +226,6 @@ fn test_remove_adapter() {
     let _ = fixture.env.events().all();
 
     fixture.registry.remove_adapter(
-        &fixture.admin,
         &SupportedYieldType::Lending.id(),
         &protocol.id(),
     );
@@ -265,14 +256,12 @@ fn test_remove_adapter_unauthorized() {
 
     fixture.env.mock_all_auths();
     fixture.registry.register_adapter(
-        &fixture.admin,
         &SupportedYieldType::Lending.id(),
         &protocol.id(),
         &adapter_address,
     );
 
     fixture.registry.remove_adapter(
-        &fixture.user,
         &SupportedYieldType::Lending.id(),
         &protocol.id(),
     );
@@ -301,7 +290,6 @@ fn test_add_support_for_asset() {
 
     // Register adapter first
     fixture.registry.register_adapter(
-        &fixture.admin,
         &SupportedYieldType::Lending.id(),
         &protocol.id(),
         &adapter_address,
@@ -312,7 +300,6 @@ fn test_add_support_for_asset() {
 
     // Add asset support
     fixture.registry.add_support_for_asset(
-        &fixture.admin,
         &SupportedYieldType::Lending.id(),
         &protocol.id(),
         &asset,
@@ -354,7 +341,6 @@ fn test_add_support_for_asset_unauthorized() {
     // Mock authorization for the admin to register adapter
     fixture.env.mock_all_auths();
     fixture.registry.register_adapter(
-        &fixture.admin,
         &SupportedYieldType::Lending.id(),
         &protocol.id(),
         &adapter_address,
@@ -362,7 +348,6 @@ fn test_add_support_for_asset_unauthorized() {
 
     // This should fail with an unauthorized error
     fixture.registry.add_support_for_asset(
-        &fixture.user,
         &SupportedYieldType::Lending.id(),
         &protocol.id(),
         &asset,
@@ -380,13 +365,11 @@ fn test_remove_support_for_asset() {
 
     // Register adapter and add asset support first
     fixture.registry.register_adapter(
-        &fixture.admin,
         &SupportedYieldType::Lending.id(),
         &protocol.id(),
         &adapter_address,
     );
     fixture.registry.add_support_for_asset(
-        &fixture.admin,
         &SupportedYieldType::Lending.id(),
         &protocol.id(),
         &asset,
@@ -398,7 +381,6 @@ fn test_remove_support_for_asset() {
 
     // Remove asset support
     fixture.registry.remove_support_for_asset(
-        &fixture.admin,
         &SupportedYieldType::Lending.id(),
         &protocol.id().clone(),
         &asset,
@@ -439,13 +421,11 @@ fn test_remove_support_for_asset_unauthorized() {
     // Mock authorization for the admin to register adapter and add asset support
     fixture.env.mock_all_auths();
     fixture.registry.register_adapter(
-        &fixture.admin,
         &SupportedYieldType::Lending.id(),
         &protocol.id(),
         &adapter_address,
     );
     fixture.registry.add_support_for_asset(
-        &fixture.admin,
         &SupportedYieldType::Lending.id(),
         &protocol.id(),
         &asset,
@@ -453,7 +433,6 @@ fn test_remove_support_for_asset_unauthorized() {
 
     // This should fail with an unauthorized error
     fixture.registry.remove_support_for_asset(
-        &fixture.user,
         &SupportedYieldType::Lending.id(),
         &protocol.id(),
         &asset,
@@ -473,13 +452,11 @@ fn test_is_supported_asset() {
 
     // Register adapter and add support for asset1 only
     fixture.registry.register_adapter(
-        &fixture.admin,
         &SupportedYieldType::Lending.id(),
         &protocol.id(),
         &adapter_address,
     );
     fixture.registry.add_support_for_asset(
-        &fixture.admin,
         &SupportedYieldType::Lending.id(),
         &protocol.id(),
         &asset1,

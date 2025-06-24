@@ -1,9 +1,10 @@
 use crate::storage_types::{
     DataKey, Distribution, DistributionConfig, Member, DISTRIBUTION_PERIOD_KEY,
-    INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD, LAST_DISTRIBUTION_KEY, TREASURY_KEY,
-    TREASURY_SHARE_KEY, YIELD_CONTROLLER_KEY,
+    INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD, LAST_DISTRIBUTION_KEY,
+    TREASURY_SHARE_KEY
 };
-use soroban_sdk::{Address, Env, Map, Symbol, Vec};
+use soroban_sdk::{Address, Env, Vec};
+
 
 pub fn extend_instance(e: &Env) {
     e.storage()
@@ -11,15 +12,25 @@ pub fn extend_instance(e: &Env) {
         .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
 }
 
-pub fn get_treasury(e: &Env) -> Address {
+pub fn read_admin(e: &Env) -> Address { read_address(e, &DataKey::Admin)}
+pub fn read_owner(e: &Env) -> Address { read_address(e, &DataKey::Owner)}
+
+fn read_address(e: &Env, key: &DataKey) -> Address {
     extend_instance(e);
-    e.storage().instance().get(&TREASURY_KEY).unwrap()
+    e.storage().instance().get(key).unwrap()  
 }
 
-pub fn set_treasury(e: &Env, treasury: &Address) {
+fn write_address(e: &Env, key: &DataKey, address: &Address) {
     extend_instance(e);
-    e.storage().instance().set(&TREASURY_KEY, treasury);
+    e.storage().instance().set(key, address); 
 }
+
+pub fn write_admin(e: &Env, new_admin: Address) { write_address(e, &DataKey::Admin, &new_admin);}
+pub fn write_owner(e: &Env, new_owner: Address) { write_address(e, &DataKey::Owner, &new_owner);}
+
+pub fn get_treasury(e: &Env) -> Address { read_address(e, &DataKey::Treasury) }
+
+pub fn set_treasury(e: &Env, treasury: &Address) { write_address(e, &DataKey::Treasury, treasury); }
 
 pub fn get_treasury_share_bps(e: &Env) -> u32 {
     extend_instance(e);
@@ -35,17 +46,9 @@ pub fn set_treasury_share_bps(e: &Env, share_bps: u32) {
 }
 
 // Yield controller getter/setter
-pub fn get_yield_controller(e: &Env) -> Address {
-    extend_instance(e);
-    e.storage().instance().get(&YIELD_CONTROLLER_KEY).unwrap()
-}
+pub fn get_yield_controller(e: &Env) -> Address { read_address(e, &DataKey::YieldController) }
 
-pub fn set_yield_controller(e: &Env, controller: &Address) {
-    extend_instance(e);
-    e.storage()
-        .instance()
-        .set(&YIELD_CONTROLLER_KEY, controller);
-}
+pub fn set_yield_controller(e: &Env, controller: &Address) { write_address(e, &DataKey::YieldController, controller);}
 
 pub fn get_distribution_period(e: &Env) -> u64 {
     extend_instance(e);
@@ -165,9 +168,7 @@ pub fn get_active_members(e: &Env) -> Vec<Address> {
     Vec::new(e)
 }
 
-pub fn count_active_members(e: &Env) -> u32 {
-    get_active_members(e).len()
-}
+pub fn count_active_members(e: &Env) -> u32 { get_active_members(e).len() }
 
 // Distribution management
 pub fn record_distribution(e: &Env, total: i128, treasury_amount: i128, member_amount: i128) {
@@ -233,3 +234,4 @@ pub fn check_distribution_availability(e: &Env) -> bool {
     let next_time = read_next_distribution(e);
     current_time >= next_time
 }
+

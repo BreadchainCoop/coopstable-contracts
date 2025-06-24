@@ -10,7 +10,6 @@ crate-type = ["lib", "cdylib"]
 [dependencies]
 soroban-sdk = { workspace = true }
 soroban-token-sdk = { workspace = true }
-access_control = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

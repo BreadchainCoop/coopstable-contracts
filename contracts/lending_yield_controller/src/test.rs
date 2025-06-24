@@ -135,6 +135,7 @@ impl TestFixture {
 
         // Create test addresses
         let admin = Address::generate(&env);
+        let owner = Address::generate(&env);
         let user = Address::generate(&env);
         let treasury = Address::generate(&env);
 
@@ -150,7 +151,7 @@ impl TestFixture {
         // Deploy adapter registry contract
         let adapter_registry_id = env.register(
             YieldAdapterRegistry,
-            YieldAdapterRegistryArgs::__constructor(&admin),
+            YieldAdapterRegistryArgs::__constructor(&admin, &owner),
         );
         let adapter_registry = YieldAdapterRegistryClient::new(&env, &adapter_registry_id);
 
@@ -193,11 +194,11 @@ impl TestFixture {
                 &adapter_registry_id,
                 &cusd_manager_id,
                 &admin,
-                &admin,
+                &owner,
             ),
         );
         let controller = LendingYieldControllerClient::new(&env, &controller_id);
-        cusd_manager.set_yield_controller(&admin, &controller_id);
+        cusd_manager.set_yield_controller( &controller_id);
 
         // Update yield distributor to use our controller as the yield controller
         env.mock_all_auths();
@@ -236,7 +237,6 @@ impl TestFixture {
         // Register the adapter in the registry
         self.env.mock_all_auths();
         self.adapter_registry.register_adapter(
-            &self.admin,
             &SupportedYieldType::Lending.id(),
             &protocol.id(),
             &mock_adapter_id,
@@ -244,7 +244,6 @@ impl TestFixture {
 
         // Add support for USDC in this adapter
         self.adapter_registry.add_support_for_asset(
-            &self.admin,
             &SupportedYieldType::Lending.id(),
             &protocol.id(),
             &self.usdc_token,
@@ -459,7 +458,7 @@ fn test_claim_yield() {
     fixture.env.mock_all_auths_allowing_non_root_auth();
     fixture
         .yield_distributor
-        .add_member(&fixture.admin, &fixture.user);
+        .add_member(&fixture.user);
 
     // Jump forward in time to enable distribution
     fixture.jump(86400 + 10); // Distribution period + buffer
@@ -672,7 +671,7 @@ fn test_multiple_adapters() {
 
     fixture
         .yield_distributor
-        .add_member(&fixture.admin, &fixture.user);
+        .add_member(&fixture.user);
 
     // Jump forward to enable distribution
     fixture.jump(86400 + 10);
@@ -771,7 +770,6 @@ fn test_multi_asset_yield() {
     // Add support for USDT in the adapter
     fixture.env.mock_all_auths_allowing_non_root_auth();
     fixture.adapter_registry.add_support_for_asset(
-        &fixture.admin,
         &SupportedYieldType::Lending.id(),
         &protocol.id(),
         &usdt_token_id,
@@ -800,7 +798,7 @@ fn test_multi_asset_yield() {
     fixture.env.mock_all_auths_allowing_non_root_auth();
     fixture
         .yield_distributor
-        .add_member(&fixture.admin, &fixture.user);
+        .add_member(&fixture.user);
 
     // Jump forward to enable distribution
     fixture.jump(86400 + 10);

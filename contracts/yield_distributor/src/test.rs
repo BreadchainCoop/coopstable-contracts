@@ -71,8 +71,8 @@ fn test_member_management() {
     env.mock_all_auths();
 
     // Add members
-    client.add_member(&admin, &member1);
-    client.add_member(&admin, &member2);
+    client.add_member(&member1);
+    client.add_member(&member2);
 
     // Verify members were added
     let members = client.list_members();
@@ -81,7 +81,7 @@ fn test_member_management() {
     assert!(members.iter().any(|m| m == member2));
 
     // Remove a member
-    client.remove_member(&admin, &member1);
+    client.remove_member(&member1);
 
     // Verify member was removed
     let members = client.list_members();
@@ -99,7 +99,7 @@ fn test_configuration_updates() {
 
     // Update treasury
     let new_treasury = Address::generate(&env);
-    client.set_treasury(&admin, &new_treasury);
+    client.set_treasury(&new_treasury);
 
     // Verify treasury was updated
     let stored_treasury = client.get_treasury();
@@ -107,7 +107,7 @@ fn test_configuration_updates() {
 
     // Update treasury share
     let new_share_bps: u32 = 2000; // 20%
-    client.set_treasury_share(&admin, &new_share_bps);
+    client.set_treasury_share(&new_share_bps);
 
     // Verify treasury share was updated
     let stored_share = client.get_treasury_share();
@@ -115,7 +115,7 @@ fn test_configuration_updates() {
 
     // Update distribution period
     let new_period: u64 = 1296000; // 15 days in seconds
-    client.set_distribution_period(&admin, &new_period);
+    client.set_distribution_period(&new_period);
 
     // Verify distribution period was updated
     let stored_period = client.get_distribution_period();
@@ -131,7 +131,7 @@ fn test_distribute_unauthorized() {
     let token = Address::generate(&env);
 
     env.mock_all_auths();
-    client.distribute_yield(&admin, &token, &1000);
+    client.distribute_yield(&token, &1000);
 }
 
 // Token contract for testing
@@ -155,12 +155,12 @@ fn test_distribution_timing() {
     let member2 = Address::generate(&env);
 
     env.mock_all_auths();
-    client.add_member(&admin, &member1);
-    client.add_member(&admin, &member2);
+    client.add_member(&member1);
+    client.add_member(&member2);
 
     // Set distribution period to a shorter interval for testing
     let period: u64 = 600; // 10 minutes in seconds
-    client.set_distribution_period(&admin, &period);
+    client.set_distribution_period(&period);
 
     // Distribution should not be available initially
     assert!(!client.is_distribution_available());
@@ -188,11 +188,11 @@ fn test_yield_distribution() {
     let member2 = Address::generate(&env);
 
     env.mock_all_auths();
-    client.add_member(&admin, &member1);
-    client.add_member(&admin, &member2);
+    client.add_member(&member1);
+    client.add_member(&member2);
 
     let period: u64 = 60;
-    client.set_distribution_period(&admin, &period);
+    client.set_distribution_period(&period);
 
     let current_time = env.ledger().timestamp();
     env.ledger().set_timestamp(current_time + period + 10);
@@ -206,7 +206,7 @@ fn test_yield_distribution() {
 
     env.mock_all_auths();
     let _ = &client.env.events().all().last_unchecked();
-    let result = client.distribute_yield(&yield_controller, &token_address, &amount);
+    let result = client.distribute_yield(&token_address, &amount);
     let treasury_amount = (amount * 1000) / 10000;
     let member_amount = (amount - treasury_amount) / 2;
 
@@ -251,7 +251,7 @@ fn test_distribution_no_members() {
     // Set distribution period to a short interval
     let period: u64 = 60; // 1 minute in seconds
     env.mock_all_auths();
-    client.set_distribution_period(&admin, &period);
+    client.set_distribution_period(&period);
 
     // Advance time past the distribution period
     let current_time = env.ledger().timestamp();
@@ -266,7 +266,7 @@ fn test_distribution_no_members() {
     // Perform the distribution with no members
     env.mock_all_auths();
     token_client.approve(&yield_controller, &client.address, &amount, &100);
-    let result = client.distribute_yield(&yield_controller, &token_address, &amount);
+    let result = client.distribute_yield(&token_address, &amount);
 
     // Distribution should fail (return false) because there are no members
     assert!(!result);
@@ -288,15 +288,15 @@ fn test_distribution_after_member_removal() {
     let member2 = Address::generate(&env);
 
     env.mock_all_auths();
-    client.add_member(&admin, &member1);
-    client.add_member(&admin, &member2);
+    client.add_member(&member1);
+    client.add_member(&member2);
 
     // Remove one member
-    client.remove_member(&admin, &member1);
+    client.remove_member(&member1);
 
     // Set distribution period to a short interval
     let period: u64 = 60; // 1 minute in seconds
-    client.set_distribution_period(&admin, &period);
+    client.set_distribution_period(&period);
 
     // Advance time past the distribution period
     let current_time = env.ledger().timestamp();
@@ -313,7 +313,7 @@ fn test_distribution_after_member_removal() {
 
     // Perform the distribution
     env.mock_all_auths();
-    let result = client.distribute_yield(&yield_controller, &token_address, &amount);
+    let result = client.distribute_yield(&token_address, &amount);
 
     // Distribution should succeed
     assert!(result);
@@ -342,11 +342,11 @@ fn test_sequential_distributions() {
     // Add members
     let member1 = Address::generate(&env);
     env.mock_all_auths();
-    client.add_member(&admin, &member1);
+    client.add_member(&member1);
 
     // Set distribution period to a short interval
     let period: u64 = 600; // 10 minutes
-    client.set_distribution_period(&admin, &period);
+    client.set_distribution_period(&period);
 
     // First distribution
     let current_time = env.ledger().timestamp();
@@ -359,7 +359,7 @@ fn test_sequential_distributions() {
     token_client.approve(&yield_controller, &client.address, &amount1, &100);
 
     env.mock_all_auths();
-    let result1 = client.distribute_yield(&yield_controller, &token_address, &amount1);
+    let result1 = client.distribute_yield(&token_address, &amount1);
     assert!(result1);
 
     // Try to distribute again immediately - should fail
@@ -368,7 +368,7 @@ fn test_sequential_distributions() {
     token_client.approve(&yield_controller, &client.address, &amount2, &100);
 
     env.mock_all_auths();
-    let result2 = client.distribute_yield(&yield_controller, &token_address, &amount2);
+    let result2 = client.distribute_yield(&token_address, &amount2);
     assert!(!result2);
 
     // Advance time past another distribution period
@@ -377,7 +377,7 @@ fn test_sequential_distributions() {
 
     // Now distribution should succeed
     env.mock_all_auths();
-    let result3 = client.distribute_yield(&yield_controller, &token_address, &amount2);
+    let result3 = client.distribute_yield(&token_address, &amount2);
     assert!(result3);
 
     // Check total balances after both distributions
@@ -403,7 +403,7 @@ fn test_set_admin() {
     let new_admin = Address::generate(&env);
 
     // Set new admin
-    client.set_admin(&admin, &new_admin);
+    client.set_admin(&new_admin);
 }
 
 #[test]
@@ -416,5 +416,5 @@ fn test_set_admin_unauthorized() {
     let new_admin = Address::generate(&env);
 
     // Set new admin
-    client.set_admin(&new_admin, &new_admin);
+    client.set_admin(&new_admin);
 }

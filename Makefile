@@ -2,8 +2,8 @@
 # This Makefile handles both building and deployment of the Coopstable protocol
 
 # Build configuration
-ALL_DIRS := packages/blend_capital_adapter packages/yield_adapter packages/access_control contracts/cusd_manager contracts/yield_adapter_registry contracts/yield_distributor contracts/lending_yield_controller
-CONTRACTS := cusd_manager yield_adapter_registry yield_distributor lending_yield_controller blend_capital_adapter
+ALL_DIRS := packages/blend_capital_adapter packages/yield_adapter contracts/cusd_token contracts/cusd_manager contracts/yield_adapter_registry contracts/yield_distributor contracts/lending_yield_controller
+CONTRACTS := cusd_token cusd_manager yield_adapter_registry yield_distributor lending_yield_controller blend_capital_adapter 
 
 BINDINGS_BASE_DIR := ./ts
 BUILD_FLAGS ?=

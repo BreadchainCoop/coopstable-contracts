@@ -2,10 +2,8 @@
 extern crate std;
 
 use crate::{
-    contract::{CUSDManager, CUSDManagerArgs, CUSDManagerClient}, storage_types::CUSD_ADMIN, token::{process_token_burn, process_token_mint}
+    contract::{CUSDManager, CUSDManagerArgs, CUSDManagerClient}, token::{process_token_burn, process_token_mint}
 };
-
-use access_control::access::default_access_control;
 use pretty_assertions::assert_eq;
 use soroban_sdk::{
     testutils::{Address as _, Events}, token::{StellarAssetClient, TokenClient}, vec, Address, Env, IntoVal, Symbol
@@ -45,7 +43,7 @@ fn setup_test_with_yield_controller() -> (Env, Address, Address, Address, Addres
     let yield_controller = Address::generate(&e);
     let cusd_manager_client = CUSDManagerClient::new(&e, &cusd_manager_id);
     // env.mock_all_auths() is already called in setup_test()
-    cusd_manager_client.set_yield_controller(&admin, &yield_controller);
+    cusd_manager_client.set_yield_controller(&yield_controller);
     
     (e, cusd_manager_id, owner, admin, cusd_token_id, yield_controller)
 }
@@ -62,25 +60,9 @@ fn test_constructor() {
     assert_eq!(stored_token_id, cusd_token_id);
 }
 
-
-// Test setting a new default admin
-#[test]
-fn test_set_default_admin() {
-    let (env, cusd_manager_id, owner, _, _cusd_token_id) = setup_test();
-
-    let client = CUSDManagerClient::new(&env, &cusd_manager_id);
-    let new_admin = Address::generate(&env);
-
-    // Mock admin authentication
-    env.mock_all_auths();
-
-    // Set new admin (should succeed)
-    client.set_default_admin(&owner, &new_admin);
-}
-
 // Test setting a new CUSD manager admin
 #[test]
-fn test_set_cusd_manager_admin() {
+fn test_set_admin() {
     let (env, cusd_manager_id, _owner, _, _cusd_token_id) = setup_test();
 
     let client = CUSDManagerClient::new(&env, &cusd_manager_id);
@@ -90,33 +72,9 @@ fn test_set_cusd_manager_admin() {
     env.mock_all_auths();
 
     // Set new admin (should succeed)
-    client.set_cusd_manager_admin(&_owner, &new_admin);
-
-    env.as_contract(&client.address, || {
-        let access_control = default_access_control(&env);
-        assert!(access_control.has_role(&env, CUSD_ADMIN, &new_admin));
-    });
+    client.set_admin(&new_admin);
 }
 
-// Test setting a new CUSD issuer
-#[test]
-fn test_set_cusd_issuer() {
-    let (env, cusd_manager_id, _owner, _, cusd_token_id) = setup_test();
-
-    let client = CUSDManagerClient::new(&env, &cusd_manager_id);
-    let new_issuer = Address::generate(&env);
-
-    // Mock admin authentication
-    env.mock_all_auths();
-
-    // Set new issuer (should succeed)
-    client.set_cusd_issuer(&_owner, &new_issuer);
-
-    // Verify the new issuer is set
-    let token_client = StellarAssetClient::new(&env, &cusd_token_id);
-    let verified_admin = token_client.admin();
-    assert_eq!(verified_admin, new_issuer);
-}
 
 // Test issuing CUSD tokens
 #[test]
@@ -128,7 +86,7 @@ fn test_issue_cusd() {
     let amount: i128 = 1000;
 
     // Issue tokens (auth already mocked in setup)
-    client.issue_cusd(&yield_controller, &recipient, &amount);
+    client.issue_cusd(&recipient, &amount);
 
     // Verify the tokens were issued
     let token_client = TokenClient::new(&env, &cusd_token_id);
@@ -147,7 +105,7 @@ fn test_burn_cusd() {
     let amount: i128 = 1000;
 
     // Issue tokens first (auth already mocked in setup)
-    client.issue_cusd(&yield_controller, &user, &amount);
+    client.issue_cusd(&user, &amount);
 
     // Verify initial balance
     let initial_balance = token_client.balance(&user);
@@ -156,7 +114,7 @@ fn test_burn_cusd() {
     // Burn tokens
     let burn_amount = amount / 2;
     token_client.transfer(&user, &client.address, &burn_amount);
-    client.burn_cusd(&yield_controller, &user, &burn_amount);
+    client.burn_cusd(&user, &burn_amount);
 
     // Verify final balance
     let final_balance = token_client.balance(&user);
@@ -174,7 +132,7 @@ fn test_issue_cusd_negative_amount() {
     let amount: i128 = -100; // Negative amount
 
     // Should panic due to negative amount (auth already mocked in setup)
-    client.issue_cusd(&yield_controller, &recipient, &amount);
+    client.issue_cusd(&recipient, &amount);
 }
 
 // Test burning CUSD tokens with negative amount (should fail)
@@ -191,7 +149,7 @@ fn test_burn_cusd_negative_amount() {
     env.mock_all_auths();
 
     // Should panic due to negative amount
-    client.burn_cusd(&yield_controller, &user, &amount);
+    client.burn_cusd(&user, &amount);
 }
 
 // Test issuing CUSD tokens from non-admin (should fail)
@@ -209,26 +167,9 @@ fn test_issue_cusd_non_admin() {
     env.mock_all_auths();
 
     // Should panic because non_admin doesn't have CUSD_ADMIN role
-    client.issue_cusd(&non_admin, &recipient, &amount);
+    client.issue_cusd(&recipient, &amount);
 }
 
-// Test burning CUSD tokens from non-admin (should fail)
-#[test]
-#[should_panic(expected = "Error(Contract, #1301)")]
-fn test_burn_cusd_non_admin() {
-    let (env, cusd_manager_id, _owner, _admin, _cusd_token_id) = setup_test();
-
-    let client = CUSDManagerClient::new(&env, &cusd_manager_id);
-    let non_admin = Address::generate(&env);
-    let user = Address::generate(&env);
-    let amount: i128 = 100;
-
-    // Mock authentication
-    env.mock_all_auths();
-
-    // Should panic because non_admin doesn't have CUSD_ADMIN role
-    client.burn_cusd(&non_admin, &user, &amount);
-}
 
 #[test]
 fn test_process_token_mint() {
@@ -242,7 +183,7 @@ fn test_process_token_mint() {
 
     // Perform token mint
     env.mock_all_auths();
-    process_token_mint(&env, recipient.clone(), token_id.clone(), amount);
+    process_token_mint(&env, recipient.clone(), amount);
 
     // Verify balance
     let token_client = TokenClient::new(&env, &token_id);
@@ -263,7 +204,7 @@ fn test_process_token_burn() {
 
     // Mint tokens first
     env.mock_all_auths();
-    process_token_mint(&env, user.clone(), token_id.clone(), amount);
+    process_token_mint(&env, user.clone(), amount);
 
     // Verify initial balance
     let token_client = TokenClient::new(&env, &token_id);
@@ -276,7 +217,6 @@ fn test_process_token_burn() {
     process_token_burn(
         &env,
         user.clone(),
-        token_id.clone(),
         amount / 2,
     );
 
@@ -288,7 +228,7 @@ fn test_process_token_burn() {
 // Test that events are published when issuing CUSD
 #[test]
 fn test_issue_cusd_events() {
-    let (env, cusd_manager_id, _owner, _admin, _cusd_token_id, yield_controller) = setup_test_with_yield_controller();
+    let (env, cusd_manager_id, _owner, _admin, _cusd_token_id, _) = setup_test_with_yield_controller();
 
     let client = CUSDManagerClient::new(&env, &cusd_manager_id);
     let recipient = Address::generate(&env);
@@ -296,7 +236,7 @@ fn test_issue_cusd_events() {
 
     // Issue tokens and capture events (auth already mocked in setup)
     env.events().all();
-    client.issue_cusd(&yield_controller, &recipient, &amount);
+    client.issue_cusd(&recipient, &amount);
 
     // Get events published by the contract
     let event_published = vec![&client.env, client.env.events().all().last_unchecked()];
@@ -315,11 +255,11 @@ fn test_burn_cusd_events() {
     let user = Address::generate(&env);
     let amount: i128 = 1000;
 
-    client.issue_cusd(&yield_controller, &user, &amount);
+    client.issue_cusd(&user, &amount);
 
     env.events().all();
     token_client.transfer(&user, &client.address, &amount);
-    client.burn_cusd(&yield_controller, &user, &(amount / 2));
+    client.burn_cusd(&user, &(amount / 2));
 
     // Get events published by the contract
     let event_published = vec![&client.env, client.env.events().all().last_unchecked()];

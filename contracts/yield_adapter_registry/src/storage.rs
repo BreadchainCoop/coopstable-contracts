@@ -1,7 +1,31 @@
 use crate::storage_types::{
-    YieldAdapterRegistryMap, REGISTRY_BUMP_AMOUNT, REGISTRY_LIFETIME_THRESHOLD,
+    YieldAdapterRegistryMap, 
+    REGISTRY_BUMP_AMOUNT, 
+    REGISTRY_LIFETIME_THRESHOLD,
+    DataKey,
 };
 use soroban_sdk::{Address, Env, Symbol, Vec};
+
+fn extend_instance(e: &Env) {
+    e.storage()
+        .instance()
+        .extend_ttl(REGISTRY_LIFETIME_THRESHOLD, REGISTRY_BUMP_AMOUNT);
+}
+
+pub fn read_admin(e: &Env) -> Address { read_address(e, &DataKey::Admin)}
+pub fn read_owner(e: &Env) -> Address { read_address(e, &DataKey::Owner)}
+pub fn write_admin(e: &Env, new_admin: Address) { write_address(e, &DataKey::Admin, &new_admin);}
+pub fn write_owner(e: &Env, new_owner: Address) { write_address(e, &DataKey::Owner, &new_owner);}
+
+fn read_address(e: &Env, key: &DataKey) -> Address {
+    extend_instance(e);
+    e.storage().instance().get(key).unwrap()  
+}
+
+fn write_address(e: &Env, key: &DataKey, address: &Address) {
+    extend_instance(e);
+    e.storage().instance().set(key, address); 
+}
 
 pub fn read_yield_adapter_registry(e: &Env, yield_type: Symbol) -> YieldAdapterRegistryMap {
     if let Some(registry_map) = e
@@ -83,3 +107,4 @@ pub fn get_yield_adapters_with_assets(e: &Env, yield_type: Symbol) -> Vec<(Addre
     let registry_map = read_yield_adapter_registry(e, yield_type.clone());
     registry_map.adapter_with_assets()
 }
+
