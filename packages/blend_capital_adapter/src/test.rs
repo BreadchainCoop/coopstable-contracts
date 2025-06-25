@@ -105,7 +105,7 @@ impl TestFixture {
 
     fn get_contract_deposit(&self, asset: &Address) -> Option<i128> {
         self.env.as_contract(&self.adapter.address, || {
-            let key = (USER_DEPOSITS, self.adapter.address.clone(), asset.clone());
+            let key = (USER_DEPOSITS, self.yield_controller.clone(), asset.clone());
             let amount: i128 = self.env.storage().instance().get(&key).unwrap_or(0);
             if amount > 0 { Some(amount) } else { None }
         })

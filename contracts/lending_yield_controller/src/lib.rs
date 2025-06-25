@@ -22,5 +22,6 @@ mod storage_types;
 mod contract;
 mod events;
 mod error;
+mod controls;
 mod test;
 mod utils;

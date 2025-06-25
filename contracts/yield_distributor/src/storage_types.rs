@@ -1,25 +1,20 @@
-use soroban_sdk::{contracttype, symbol_short, Address, Symbol};
+use soroban_sdk::{contracttype, symbol_short, Address, Symbol, Vec};
 
 pub(crate) const DAY_IN_LEDGERS: u32 = 17280;
 pub(crate) const INSTANCE_BUMP_AMOUNT: u32 = 30 * DAY_IN_LEDGERS;
+pub(crate) const PERSISTENT_BUMP_AMOUNT: u32 = 90 * DAY_IN_LEDGERS;
 pub(crate) const INSTANCE_LIFETIME_THRESHOLD: u32 = INSTANCE_BUMP_AMOUNT - DAY_IN_LEDGERS;
+pub(crate) const PERSISTENT_LIFETIME_THRESHOLD: u32 = PERSISTENT_BUMP_AMOUNT - DAY_IN_LEDGERS;
 
 // Keys for instance storage
-pub (crate) const TREASURY_KEY: Symbol = symbol_short!("TREASURY");
-pub (crate) const TREASURY_SHARE_KEY: Symbol = symbol_short!("TR_SHARE");
-pub (crate) const YIELD_CONTROLLER_KEY: Symbol = symbol_short!("YC");
-pub (crate) const DISTRIBUTION_PERIOD_KEY: Symbol = symbol_short!("DIST_PRD");
-pub (crate) const LAST_DISTRIBUTION_KEY: Symbol = symbol_short!("LAST_DIST");
-pub (crate) const YIELD_DISTRIBUTOR_ADMIN_ROLE: Symbol = symbol_short!("YD_ADMN");
+pub (crate) const CURRENT_EPOCH_KEY: Symbol = symbol_short!("EPOCH");
 
 // Structure to hold distribution configuration
 #[derive(Clone)]
 #[contracttype]
 pub struct DistributionConfig {
-    pub treasury: Address,
     pub treasury_share_bps: u32,  // Basis points (e.g., 1000 = 10%)
     pub distribution_period: u64, // In seconds
-    pub last_distribution: u64,   // Timestamp of last distribution
 }
 
 // Structure for storing member data
@@ -31,18 +26,19 @@ pub struct Member {
     pub joined_at: u64,
 }
 
-// Structure for tracking distributions
 #[derive(Clone)]
 #[contracttype]
 pub struct Distribution {
-    pub timestamp: u64,
-    pub total_amount: i128,
-    pub treasury_amount: i128,
-    pub member_amount: i128,
-    pub member_count: u32,
+    pub distribution_end_timestamp: u64,
+    pub distribution_start_timestamp: u64,
+    pub distribution_total: i128,
+    pub distribution_treasury: i128,
+    pub distribution_member: i128,
+    pub members: Vec<Address>,
+    pub is_processed: bool, // In seconds
+    pub epoch: u64,
 }
 
-// Keys for persistent storage
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
@@ -52,6 +48,9 @@ pub enum DataKey {
     Treasury,
     Member(Address),   // Map address to Member
     Members,           // Vec of all member addresses
-    Distribution(u64), // Map timestamp to Distribution
     Distributions,     // Vec of all distribution timestamps
+    Distribution(u64), // distribution to epoch
+    DistributionConfig,
+    Epoch(u64),
+    EpochStartTimestamp(u64),
 }

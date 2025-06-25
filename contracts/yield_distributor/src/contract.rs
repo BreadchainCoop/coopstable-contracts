@@ -3,7 +3,7 @@ use soroban_sdk::{vec, IntoVal, Symbol};
 use soroban_sdk::{contract, contractimpl, contractmeta, token::TokenClient, Address, Env, Vec, panic_with_error};
 use crate::events::YieldDistributorEvents;
 use crate::error::YieldDistributorError;
-use crate::{storage, utils};
+use crate::{storage, storage_types, utils};
 
 contractmeta!(
     key = "Description",
@@ -42,8 +42,9 @@ pub trait YieldDistributorTrait {
 
     fn get_next_distribution_time(e: &Env) -> u64;
     fn is_distribution_available(e: &Env) -> bool;
+    fn time_before_next_distribution(e: &Env) -> u64;
 
-    fn distribute_yield(e: &Env, token: Address, amount: i128) -> bool;
+    fn distribute_yield(e: &Env, token: Address, amount: i128) -> i128;
 
     fn set_admin(e: &Env, new_admin: Address);
     
@@ -54,6 +55,7 @@ pub struct YieldDistributor;
 
 #[contractimpl]
 impl YieldDistributorTrait for YieldDistributor {
+
     fn __constructor(
         e: Env,
         treasury: Address,
@@ -66,9 +68,41 @@ impl YieldDistributorTrait for YieldDistributor {
         storage::write_admin(&e, admin);
         storage::write_owner(&e, owner);
         storage::set_treasury(&e, &treasury);
-        storage::set_treasury_share_bps(&e, treasury_share_bps);
         storage::set_yield_controller(&e, &yield_controller);
-        storage::set_distribution_period(&e, distribution_period);
+        
+        // Initialize the distribution config directly
+        let config = storage_types::DistributionConfig {
+            treasury_share_bps,
+            distribution_period,
+        };
+        e.storage().instance().set(&storage_types::DataKey::DistributionConfig, &config);
+        
+        // Initialize epoch to 0
+        e.storage().instance().set(&storage_types::CURRENT_EPOCH_KEY, &0u64);
+        
+        // Extend instance storage
+        e.storage().instance().extend_ttl(
+            storage_types::INSTANCE_LIFETIME_THRESHOLD,
+            storage_types::INSTANCE_BUMP_AMOUNT,
+        );
+        
+        // Create the initial distribution for epoch 0
+        let initial_distribution = storage_types::Distribution {
+            distribution_start_timestamp: e.ledger().timestamp(),
+            epoch: 0,
+            distribution_end_timestamp: 0,
+            distribution_total: 0,
+            distribution_treasury: 0,
+            distribution_member: 0,
+            members: Vec::new(&e),
+            is_processed: false,
+        };
+        e.storage().persistent().set(&storage_types::DataKey::Distribution(0), &initial_distribution);
+        e.storage().persistent().extend_ttl(
+            &storage_types::DataKey::Distribution(0),
+            storage_types::PERSISTENT_LIFETIME_THRESHOLD,
+            storage_types::PERSISTENT_BUMP_AMOUNT,
+        );   
     }
 
     fn set_yield_controller(e: &Env, yield_controller: Address) {
@@ -111,9 +145,7 @@ impl YieldDistributorTrait for YieldDistributor {
         YieldDistributorEvents::set_treasury(e, treasury);
     }
 
-    fn get_treasury(e: &Env) -> Address {
-        storage::get_treasury(e)
-    }
+    fn get_treasury(e: &Env) -> Address { storage::get_treasury(e) }
 
     fn set_treasury_share(e: &Env, share_bps: u32) {
         require_admin(e);
@@ -121,9 +153,7 @@ impl YieldDistributorTrait for YieldDistributor {
         YieldDistributorEvents::set_treasury_share(e, share_bps);
     }
 
-    fn get_treasury_share(e: &Env) -> u32 {
-        storage::get_treasury_share_bps(e)
-    }
+    fn get_treasury_share(e: &Env) -> u32 { storage::get_treasury_share_bps(e) }
 
     fn set_distribution_period(e: &Env, period: u64) {
         require_admin(e);
@@ -131,61 +161,42 @@ impl YieldDistributorTrait for YieldDistributor {
         YieldDistributorEvents::set_distribution_period(e, period);
     }
 
-    fn get_distribution_period(e: &Env) -> u64 {
-        storage::get_distribution_period(e)
-    }
+    fn get_distribution_period(e: &Env) -> u64 { storage::get_distribution_config(e).distribution_period }
 
-    fn get_next_distribution_time(e: &Env) -> u64 {
-        storage::read_next_distribution(e)
-    }
+    fn get_next_distribution_time(e: &Env) -> u64 { storage::read_next_distribution(e) }
 
-    fn is_distribution_available(e: &Env) -> bool {
-        storage::check_distribution_availability(e)
-    }
+    fn time_before_next_distribution(e: &Env) -> u64 { 
+        if storage::read_next_distribution(e) - e.ledger().timestamp() < 1 { 
+            return 0 
+        }
+        return storage::read_next_distribution(e) - e.ledger().timestamp()
+     }
 
-    fn distribute_yield(e: &Env, token: Address, amount: i128) -> bool {
+    fn is_distribution_available(e: &Env) -> bool { storage::check_distribution_availability(e) }
+
+    fn distribute_yield(e: &Env, token: Address, amount: i128) -> i128 {
+        
         require_yield_controller(e);
 
         if !storage::check_distribution_availability(e) {
-            return false;
+            return 0;
         }
 
-        let members = storage::get_active_members(e);
-        let member_count = members.len() as u32;
-
-        if member_count == 0 {
-            return false;
-        }
-
+        let distribution = storage::get_distribution_of_current_epoch(e);
         let treasury_share_bps = storage::get_treasury_share_bps(e);
         let treasury = storage::get_treasury(e);
 
-        let treasury_amount = (amount as i128 * treasury_share_bps as i128) / 10000;
+        let mut treasury_amount = (amount as i128 * treasury_share_bps as i128) / 10000;
         let members_amount = amount - treasury_amount;
-
-        let per_member_amount = if member_count > 0 {
-            members_amount / member_count as i128
+        
+        let per_member_amount = if distribution.members.len() > 0 {
+            members_amount / distribution.members.len() as i128
         } else {
+            treasury_amount = amount; // if no members then it all goes to the treasury
             0
         };
+
         let token_client = TokenClient::new(e, &token);
-        if treasury_amount > 0 {
-            utils::authenticate_contract(
-                &e, 
-                token_client.address.clone(), 
-                Symbol::new(&e, "transfer"), 
-                vec![
-                    e,
-                    (&treasury).into_val(e),
-                    (&treasury_amount).into_val(e),
-                ]
-            );
-            token_client.transfer(
-                &e.current_contract_address(),
-                &treasury,
-                &treasury_amount,
-            );
-        }
         if per_member_amount > 0 {
             utils::authenticate_contract(
                 &e, 
@@ -197,7 +208,7 @@ impl YieldDistributorTrait for YieldDistributor {
                     (&per_member_amount).into_val(e),
                 ]
             );
-            for member in members.iter() {
+            for member in distribution.members.iter() {
                 token_client.transfer(
                     &e.current_contract_address(),
                     &member,
@@ -205,25 +216,40 @@ impl YieldDistributorTrait for YieldDistributor {
                 );
             }
         }
+        utils::authenticate_contract(
+            &e, 
+            token_client.address.clone(), 
+            Symbol::new(&e, "transfer"), 
+            vec![
+                e,
+                (&treasury).into_val(e),
+                (&treasury_amount).into_val(e),
+            ]
+        );
+        token_client.transfer(
+            &e.current_contract_address(),
+            &treasury,
+            &treasury_amount,
+        );
         storage::record_distribution(e, amount, treasury_amount, members_amount);
+        
         YieldDistributorEvents::distribute_yield(
             e,
             token,
             amount,
             treasury_amount,
-            members,
+            distribution.members,
             per_member_amount,
         );
 
-        true
+        amount
     }
 
     fn set_admin(e: &Env, new_admin: Address) {
         require_owner(e);
+        storage::write_admin(e, new_admin.clone());
         YieldDistributorEvents::set_admin(&e, new_admin);
     }
 
-    fn get_yield_controller(e: &Env) -> Address {
-        storage::get_yield_controller(e)
-    }
+    fn get_yield_controller(e: &Env) -> Address { storage::get_yield_controller(e) }
 }

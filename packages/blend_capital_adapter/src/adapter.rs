@@ -1,12 +1,9 @@
-use soroban_sdk::{auth::{InvokerContractAuthEntry, ContractContext, SubContractInvocation}, vec, Address, Env, IntoVal, Symbol, Val, Vec};
+use soroban_sdk::{vec, Address, Env, IntoVal, Symbol, Val, Vec};
 use crate::{
-    artifacts::pool::{Client as PoolClient, Request},
-    storage,
-    contract_types::RequestType,
-    constants::SCALAR_12
+    artifacts::pool::{Client as PoolClient, Request}, constants::SCALAR_12, contract_types::RequestType, storage
 };
 
-fn create_request(
+pub fn create_request(
     request_type: RequestType, 
     asset: Address, 
     amount: i128
@@ -29,14 +26,33 @@ pub fn supply_collateral(
     let pool_client = PoolClient::new(e, &pool_id);
     let request = create_request(RequestType::SupplyCollateral, asset.clone(), amount);
     let request_vec: Vec<Request> = vec![e, request];
+
     pool_client.submit( 
-        &yield_controller.clone(), // we can user from yield controller cause we have already authenticated as the controller
+        &yield_controller.clone(), 
         &user,
         &yield_controller.clone(),
         &request_vec,
     );
-    storage::store_deposit(e, &e.current_contract_address(), &asset, amount);
+    storage::store_deposit(e, &yield_controller, &asset, amount);
     amount
+}
+
+pub fn supply_collateral_auth(e: &Env, user: Address, asset: Address, amount: i128) -> (Address, Symbol, Vec<Val>) {
+    let yield_controller = storage::get_yield_controller(e);
+    let pool_id: Address = storage::read_lend_pool_id(e);
+    let request = create_request(RequestType::SupplyCollateral, asset.clone(), amount);
+    let request_vec: Vec<Request> = vec![e, request];
+    (
+        pool_id, 
+        Symbol::new(&e, "submit"), 
+        vec![
+            e,
+            (&yield_controller).into_val(e),
+            (&user).into_val(e),
+            (&yield_controller).into_val(e),
+            (&request_vec).into_val(e),
+        ]
+    )
 }
 
 pub fn withdraw_collateral(
@@ -49,7 +65,6 @@ pub fn withdraw_collateral(
     let pool_client = PoolClient::new(e, &pool_id);
     let request = create_request(RequestType::WithdrawCollateral, asset.clone(), amount);
     let yield_controller = storage::get_yield_controller(e);
-    
     let request_vec: Vec<Request> = vec![e, request];
     pool_client.submit(
         &yield_controller.clone(), 
@@ -57,10 +72,27 @@ pub fn withdraw_collateral(
         &user,
         &request_vec,
     );
-
-    storage::remove_deposit(e, &e.current_contract_address(), &asset, amount);
+    storage::remove_deposit(e, &yield_controller, &asset, amount);
 
     amount
+}
+
+pub fn withdraw_collateral_auth(e: &Env, user: Address, asset: Address, amount: i128) -> (Address, Symbol, Vec<Val>) {
+    let pool_id: Address = storage::read_lend_pool_id(e);
+    let request = create_request(RequestType::WithdrawCollateral, asset.clone(), amount);
+    let yield_controller = storage::get_yield_controller(e);
+    let request_vec: Vec<Request> = vec![e, request];
+    (
+        pool_id, 
+        Symbol::new(&e, "submit"), 
+        vec![
+            e,
+            (&yield_controller).into_val(e),
+            (&yield_controller).into_val(e),
+            (&user).into_val(e),
+            (&request_vec).into_val(e),
+        ]
+    )
 }
 
 pub fn get_balance(e: &Env, user: Address, asset: Address) -> i128 {
@@ -146,12 +178,31 @@ pub fn claim(e: &Env, from: Address, to: Address, asset: Address) -> i128 {
     0
 }
 
+pub fn claim_auth(e: &Env, from: Address, to: Address, asset: Address) -> Option<(Address, Symbol, Vec<Val>)> {
+    let pool_id: Address = storage::read_lend_pool_id(e);
+    
+    if let Some(reserve_token_id) = get_reserve_token_id(e, asset.clone()) {
+        return Some(
+            (
+                pool_id, 
+                Symbol::new(&e, "claim"), 
+                vec![
+                    e,
+                    (&from).into_val(e),
+                    (vec![e, reserve_token_id]).into_val(e), 
+                    (&to).into_val(e),
+                ]
+            )
+        )
+    }
+    None
+}
+
 pub fn read_yield(e: &Env, user: Address, asset: Address) -> i128 {
     let current_value = get_balance(e, user.clone(), asset.clone());
     let original_deposit = storage::get_deposit_amount(e, &user, &asset);
     if original_deposit == 0 || current_value <= original_deposit {
         return 0;
     }
-
     current_value - original_deposit
 }

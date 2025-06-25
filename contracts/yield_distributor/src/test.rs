@@ -440,7 +440,7 @@ fn test_yield_distribution_basic() {
 
     // Perform distribution
     let result = fixture.distributor.distribute_yield(&fixture.token_id, &total_amount);
-    assert!(result);
+    assert_eq!(result, total_amount);
 
     // Verify balances
     let treasury_share = (total_amount * fixture.treasury_share_bps as i128) / 10000;
@@ -478,12 +478,12 @@ fn test_yield_distribution_no_members() {
 
     fixture.env.mock_all_auths_allowing_non_root_auth();
 
-    // Perform distribution - should return false when no members
+    // Perform distribution - should return the full amount even with no members (goes to treasury)
     let result = fixture.distributor.distribute_yield(&fixture.token_id, &total_amount);
-    assert!(!result);
+    assert_eq!(result, total_amount);
 
-    // No tokens should be transferred when no members
-    assert_eq!(fixture.token_client().balance(&fixture.treasury), 0);
+    // All tokens should go to treasury when no members
+    assert_eq!(fixture.token_client().balance(&fixture.treasury), total_amount);
 }
 
 #[test]
@@ -502,7 +502,7 @@ fn test_yield_distribution_zero_treasury_share() {
 
     // Perform distribution
     let result = fixture.distributor.distribute_yield(&fixture.token_id, &total_amount);
-    assert!(result);
+    assert_eq!(result, total_amount);
 
     // All should go to members
     let per_member_amount = total_amount / 3; // 3 members
@@ -528,7 +528,7 @@ fn test_yield_distribution_100_percent_treasury() {
 
     // Perform distribution
     let result = fixture.distributor.distribute_yield(&fixture.token_id, &total_amount);
-    assert!(result);
+    assert_eq!(result, total_amount);
 
     // All should go to treasury
     assert_eq!(fixture.token_client().balance(&fixture.treasury), total_amount);
@@ -551,10 +551,12 @@ fn test_distribution_availability() {
     fixture.env.mock_all_auths_allowing_non_root_auth();
     fixture.distributor.distribute_yield(&fixture.token_id, &1000);
 
-    // Should still be available since we haven't advanced time
-    // (The actual availability logic depends on the storage implementation)
+    // After distribution, the next one won't be available until the period has passed
+    assert!(!fixture.distributor.is_distribution_available());
+    
+    // Check the next distribution time is in the future
     let next_time = fixture.distributor.get_next_distribution_time();
-    assert!(next_time > 0);
+    assert!(next_time > fixture.env.ledger().timestamp());
 }
 
 #[test]
@@ -652,7 +654,7 @@ fn test_small_amount_distribution() {
 
     // Perform distribution
     let result = fixture.distributor.distribute_yield(&fixture.token_id, &small_amount);
-    assert!(result);
+    assert_eq!(result, small_amount);
 
     // Verify total is distributed (even if amounts are very small)
     let total_distributed = fixture.token_client().balance(&fixture.treasury) +
@@ -672,9 +674,9 @@ fn test_large_amount_distribution() {
 
     fixture.env.mock_all_auths_allowing_non_root_auth();
 
-    // Perform distribution
+    
     let result = fixture.distributor.distribute_yield(&fixture.token_id, &large_amount);
-    assert!(result);
+    assert_eq!(result, large_amount);
 
     // Verify treasury gets correct share
     let treasury_share = (large_amount * fixture.treasury_share_bps as i128) / 10000;
