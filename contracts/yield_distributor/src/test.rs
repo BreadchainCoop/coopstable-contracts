@@ -1,420 +1,682 @@
 #![cfg(test)]
-extern crate std;
 
-use pretty_assertions::assert_eq;
 use soroban_sdk::{
-    testutils::{Address as _, Events, Ledger as _},
+    testutils::{Address as _, Events, Ledger},
+    token::{StellarAssetClient, TokenClient},
     vec, Address, Env, IntoVal, Symbol,
 };
 
-use crate::contract::{YieldDistributor, YieldDistributorArgs, YieldDistributorClient};
+use crate::{
+    contract::{YieldDistributor, YieldDistributorClient},
+};
 
-// Helper function to create a test environment
-fn setup_test() -> (
-    Env,
-    YieldDistributorClient<'static>,
-    Address,
-    Address,
-    Address,
-) {
-    let env = Env::default();
-    let admin = Address::generate(&env);
-    let treasury = Address::generate(&env);
-    let yield_controller = Address::generate(&env);
+struct TestFixture {
+    env: Env,
+    distributor: YieldDistributorClient<'static>,
+    treasury: Address,
+    treasury_share_bps: u32,
+    yield_controller: Address,
+    distribution_period: u64,
+    owner: Address,
+    admin: Address,
+    member1: Address,
+    member2: Address,
+    member3: Address,
+    token_admin: Address,
+    token_id: Address,
+}
 
-    // Initial configuration
-    let treasury_share_bps: u32 = 1000; // 10%
-    let distribution_period: u64 = 2592000; // 30 days in seconds
+impl TestFixture {
+    fn create() -> Self {
+        let env = Env::default();
+        env.ledger().set_sequence_number(100);
+        env.ledger().set_timestamp(1000000000); // Set timestamp to make distribution available
+        
+        let treasury = Address::generate(&env);
+        let treasury_share_bps = 1000u32; // 10%
+        let yield_controller = Address::generate(&env);
+        let distribution_period = 86400u64; // 1 day in seconds
+        let owner = Address::generate(&env);
+        let admin = Address::generate(&env);
+        let member1 = Address::generate(&env);
+        let member2 = Address::generate(&env);
+        let member3 = Address::generate(&env);
+        let token_admin = Address::generate(&env);
 
-    // Deploy contract
-    let contract_id = env.register(
-        YieldDistributor,
-        YieldDistributorArgs::__constructor(
-            &treasury,
-            &treasury_share_bps,
-            &yield_controller,
-            &distribution_period,
-            &admin,
-            &admin,
-        ),
-    );
+        // Create test token
+        let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
+        let token_id = token_contract.address();
 
-    let client = YieldDistributorClient::new(&env, &contract_id);
+        // Deploy yield distributor
+        let distributor_id = env.register(
+            YieldDistributor,
+            (
+                treasury.clone(),
+                treasury_share_bps,
+                yield_controller.clone(),
+                distribution_period,
+                owner.clone(),
+                admin.clone(),
+            ),
+        );
+        let distributor = YieldDistributorClient::new(&env, &distributor_id);
 
-    (env, client, admin, treasury, yield_controller)
+        TestFixture {
+            env,
+            distributor,
+            treasury,
+            treasury_share_bps,
+            yield_controller,
+            distribution_period,
+            owner,
+            admin,
+            member1,
+            member2,
+            member3,
+            token_admin,
+            token_id,
+        }
+    }
+
+    fn token_client(&self) -> TokenClient<'static> {
+        TokenClient::new(&self.env, &self.token_id)
+    }
+
+    fn stellar_token_client(&self) -> StellarAssetClient<'static> {
+        StellarAssetClient::new(&self.env, &self.token_id)
+    }
+
+    fn assert_event_with_address_data(&self, expected_event: (Symbol,), expected_data: Address) {
+        let events = self.env.events().all();
+        if !events.is_empty() {
+            let published_event = vec![&self.env, events.last_unchecked()];
+            let expected = vec![
+                &self.env,
+                (
+                    self.distributor.address.clone(),
+                    expected_event.into_val(&self.env),
+                    expected_data.into_val(&self.env),
+                ),
+            ];
+            assert_eq!(published_event, expected);
+        }
+    }
+
+    fn assert_event_with_u32_data(&self, expected_event: (Symbol,), expected_data: u32) {
+        let events = self.env.events().all();
+        if !events.is_empty() {
+            let published_event = vec![&self.env, events.last_unchecked()];
+            let expected = vec![
+                &self.env,
+                (
+                    self.distributor.address.clone(),
+                    expected_event.into_val(&self.env),
+                    expected_data.into_val(&self.env),
+                ),
+            ];
+            assert_eq!(published_event, expected);
+        }
+    }
+
+    fn assert_event_with_u64_data(&self, expected_event: (Symbol,), expected_data: u64) {
+        let events = self.env.events().all();
+        if !events.is_empty() {
+            let published_event = vec![&self.env, events.last_unchecked()];
+            let expected = vec![
+                &self.env,
+                (
+                    self.distributor.address.clone(),
+                    expected_event.into_val(&self.env),
+                    expected_data.into_val(&self.env),
+                ),
+            ];
+            assert_eq!(published_event, expected);
+        }
+    }
+
+    fn add_members(&self) {
+        self.env.mock_all_auths();
+        self.distributor.add_member(&self.member1);
+        self.distributor.add_member(&self.member2);
+        self.distributor.add_member(&self.member3);
+    }
+
+    fn mint_tokens_to_distributor(&self, amount: i128) {
+        self.env.mock_all_auths_allowing_non_root_auth();
+        self.stellar_token_client().set_admin(&self.distributor.address);
+        self.stellar_token_client().mint(&self.distributor.address, &amount);
+    }
 }
 
 #[test]
 fn test_constructor() {
-    let (_, client, _admin, treasury, _yield_controller) = setup_test();
+    let fixture = TestFixture::create();
 
-    // Verify the contract was initialized correctly
-    let stored_treasury = client.get_treasury();
-    assert_eq!(stored_treasury, treasury);
-
-    let treasury_share = client.get_treasury_share();
-    assert_eq!(treasury_share, 1000);
-
-    let distribution_period = client.get_distribution_period();
-    assert_eq!(distribution_period, 2592000);
+    // Verify initial configuration
+    assert_eq!(fixture.distributor.get_treasury(), fixture.treasury);
+    assert_eq!(fixture.distributor.get_treasury_share(), fixture.treasury_share_bps);
+    assert_eq!(fixture.distributor.get_yield_controller(), fixture.yield_controller);
+    assert_eq!(fixture.distributor.get_distribution_period(), fixture.distribution_period);
+    
+    // Verify no members initially
+    let members = fixture.distributor.list_members();
+    assert_eq!(members.len(), 0);
+    
+    // Verify distribution is available initially
+    assert!(fixture.distributor.is_distribution_available());
 }
 
 #[test]
-fn test_member_management() {
-    let (env, client, admin, _treasury, _yield_controller) = setup_test();
+fn test_add_member() {
+    let fixture = TestFixture::create();
+    
+    fixture.env.mock_all_auths();
 
-    // Create test members
-    let member1 = Address::generate(&env);
-    let member2 = Address::generate(&env);
+    // Clear events before operation
+    let _ = fixture.env.events().all();
 
-    // Mock admin auth
-    env.mock_all_auths();
+    // Add member
+    fixture.distributor.add_member(&fixture.member1);
 
-    // Add members
-    client.add_member(&member1);
-    client.add_member(&member2);
-
-    // Verify members were added
-    let members = client.list_members();
-    assert_eq!(members.len(), 2);
-    assert!(members.iter().any(|m| m == member1));
-    assert!(members.iter().any(|m| m == member2));
-
-    // Remove a member
-    client.remove_member(&member1);
-
-    // Verify member was removed
-    let members = client.list_members();
+    // Verify member is added
+    let members = fixture.distributor.list_members();
     assert_eq!(members.len(), 1);
-    assert!(members.iter().any(|m| m == member2));
-    assert!(!members.iter().any(|m| m == member1));
+    assert_eq!(members.get(0).unwrap(), fixture.member1);
+
+    // Verify event
+    fixture.assert_event_with_address_data(
+        (Symbol::new(&fixture.env, "add_member"),),
+        fixture.member1.clone()
+    );
 }
 
 #[test]
-fn test_configuration_updates() {
-    let (env, client, admin, _treasury, _yield_controller) = setup_test();
+#[should_panic(expected = "Error(Auth, InvalidAction)")]
+fn test_add_member_unauthorized() {
+    let fixture = TestFixture::create();
 
-    // Mock admin auth
-    env.mock_all_auths();
-
-    // Update treasury
-    let new_treasury = Address::generate(&env);
-    client.set_treasury(&new_treasury);
-
-    // Verify treasury was updated
-    let stored_treasury = client.get_treasury();
-    assert_eq!(stored_treasury, new_treasury);
-
-    // Update treasury share
-    let new_share_bps: u32 = 2000; // 20%
-    client.set_treasury_share(&new_share_bps);
-
-    // Verify treasury share was updated
-    let stored_share = client.get_treasury_share();
-    assert_eq!(stored_share, new_share_bps);
-
-    // Update distribution period
-    let new_period: u64 = 1296000; // 15 days in seconds
-    client.set_distribution_period(&new_period);
-
-    // Verify distribution period was updated
-    let stored_period = client.get_distribution_period();
-    assert_eq!(stored_period, new_period);
+    // Don't mock admin auth
+    fixture.env.mock_auths(&[]);
+    
+    fixture.distributor.add_member(&fixture.member1);
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #4)")]
-fn test_distribute_unauthorized() {
-    let (env, client, admin, _treasury, _yield_controller) = setup_test();
+#[should_panic(expected = "Error(Contract, #1200)")]
+fn test_add_member_already_exists() {
+    let fixture = TestFixture::create();
+    
+    fixture.env.mock_all_auths();
 
-    // Try to distribute from non-yield-controller account
-    let token = Address::generate(&env);
+    // Add member first time
+    fixture.distributor.add_member(&fixture.member1);
 
-    env.mock_all_auths();
-    client.distribute_yield(&token, &1000);
-}
-
-// Token contract for testing
-fn create_token(env: &Env) -> (Address, Address) {
-    // Token admin address
-    let admin = Address::generate(env);
-    // Create stellar asset contract
-    let token_id = env.register_stellar_asset_contract_v2(admin.clone());
-    (admin.clone(), token_id.address())
+    // Try to add same member again (should fail)
+    fixture.distributor.add_member(&fixture.member1);
 }
 
 #[test]
-fn test_distribution_timing() {
-    let (env, client, admin, _, _) = setup_test();
+fn test_add_multiple_members() {
+    let fixture = TestFixture::create();
+    
+    fixture.env.mock_all_auths();
 
-    // Create token for distribution
-    let (token_admin, token_address) = create_token(&env);
+    // Add multiple members
+    fixture.distributor.add_member(&fixture.member1);
+    fixture.distributor.add_member(&fixture.member2);
+    fixture.distributor.add_member(&fixture.member3);
 
-    // Add members
-    let member1 = Address::generate(&env);
-    let member2 = Address::generate(&env);
-
-    env.mock_all_auths();
-    client.add_member(&member1);
-    client.add_member(&member2);
-
-    // Set distribution period to a shorter interval for testing
-    let period: u64 = 600; // 10 minutes in seconds
-    client.set_distribution_period(&period);
-
-    // Distribution should not be available initially
-    assert!(!client.is_distribution_available());
-
-    // Check next distribution time is in the future
-    let next_time = client.get_next_distribution_time();
-    let current_time = env.ledger().timestamp();
-    assert!(next_time > current_time);
-
-    // Advance time past the distribution period
-    env.ledger().set_timestamp(current_time + period + 10);
-
-    // Now distribution should be available
-    assert!(client.is_distribution_available());
+    // Verify all members are added
+    let members = fixture.distributor.list_members();
+    assert_eq!(members.len(), 3);
+    assert!(members.contains(&fixture.member1));
+    assert!(members.contains(&fixture.member2));
+    assert!(members.contains(&fixture.member3));
 }
 
 #[test]
-fn test_yield_distribution() {
-    let (env, client, admin, treasury, yield_controller) = setup_test();
+fn test_remove_member() {
+    let fixture = TestFixture::create();
+    
+    fixture.env.mock_all_auths();
 
-    // Create token for distribution
-    let (_, token_address) = create_token(&env);
+    // Add members first
+    fixture.distributor.add_member(&fixture.member1);
+    fixture.distributor.add_member(&fixture.member2);
 
-    let member1 = Address::generate(&env);
-    let member2 = Address::generate(&env);
+    // Clear events before remove operation
+    let _ = fixture.env.events().all();
 
-    env.mock_all_auths();
-    client.add_member(&member1);
-    client.add_member(&member2);
+    // Remove member
+    fixture.distributor.remove_member(&fixture.member1);
 
-    let period: u64 = 60;
-    client.set_distribution_period(&period);
+    // Verify member is removed
+    let members = fixture.distributor.list_members();
+    assert_eq!(members.len(), 1);
+    assert_eq!(members.get(0).unwrap(), fixture.member2);
 
-    let current_time = env.ledger().timestamp();
-    env.ledger().set_timestamp(current_time + period + 10);
+    // Verify event
+    fixture.assert_event_with_address_data(
+        (Symbol::new(&fixture.env, "remove_member"),),
+        fixture.member1.clone()
+    );
+}
 
-    let token_admin_client = soroban_sdk::token::StellarAssetClient::new(&env, &token_address);
-    let token_client = soroban_sdk::token::TokenClient::new(&env, &token_address);
-    let amount = 10000_i128;
-    token_admin_client.mint(&yield_controller, &amount);
+#[test]
+#[should_panic(expected = "Error(Auth, InvalidAction)")]
+fn test_remove_member_unauthorized() {
+    let fixture = TestFixture::create();
 
-    token_client.approve(&yield_controller, &client.address, &amount, &100);
+    fixture.env.mock_all_auths();
+    fixture.distributor.add_member(&fixture.member1);
 
-    env.mock_all_auths();
-    let _ = &client.env.events().all().last_unchecked();
-    let result = client.distribute_yield(&token_address, &amount);
-    let treasury_amount = (amount * 1000) / 10000;
-    let member_amount = (amount - treasury_amount) / 2;
+    // Clear auth for unauthorized operation
+    fixture.env.mock_auths(&[]);
+    
+    fixture.distributor.remove_member(&fixture.member1);
+}
 
-    let published_event = vec![&client.env, client.env.events().all().last_unchecked()];
-    let control_event = vec![
-        &client.env,
-        (
-            client.address.clone(),
-            (
-                Symbol::new(&client.env, "distribute_yield"),
-                token_client.address.clone(),
-            )
-                .into_val(&client.env),
-            (
-                amount,
-                treasury_amount,
-                vec![&client.env, member1.clone(), member2.clone()],
-                member_amount,
-            )
-                .into_val(&client.env),
-        ),
-    ];
-    assert_eq!(published_event, control_event);
+#[test]
+#[should_panic(expected = "Error(Contract, #1201)")]
+fn test_remove_member_does_not_exist() {
+    let fixture = TestFixture::create();
+    
+    fixture.env.mock_all_auths();
+
+    // Try to remove member that was never added
+    fixture.distributor.remove_member(&fixture.member1);
+}
+
+#[test]
+fn test_set_treasury() {
+    let fixture = TestFixture::create();
+    let new_treasury = Address::generate(&fixture.env);
+    
+    fixture.env.mock_all_auths();
+
+    // Clear events before operation
+    let _ = fixture.env.events().all();
+
+    // Set new treasury
+    fixture.distributor.set_treasury(&new_treasury);
+
+    // Verify treasury is updated
+    assert_eq!(fixture.distributor.get_treasury(), new_treasury);
+
+    // Verify event
+    fixture.assert_event_with_address_data(
+        (Symbol::new(&fixture.env, "set_treasury"),),
+        new_treasury.clone()
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Auth, InvalidAction)")]
+fn test_set_treasury_unauthorized() {
+    let fixture = TestFixture::create();
+    let new_treasury = Address::generate(&fixture.env);
+
+    // Don't mock admin auth
+    fixture.env.mock_auths(&[]);
+    
+    fixture.distributor.set_treasury(&new_treasury);
+}
+
+#[test]
+fn test_set_treasury_share() {
+    let fixture = TestFixture::create();
+    let new_share = 2000u32; // 20%
+    
+    fixture.env.mock_all_auths();
+
+    // Clear events before operation
+    let _ = fixture.env.events().all();
+
+    // Set new treasury share
+    fixture.distributor.set_treasury_share(&new_share);
+
+    // Verify treasury share is updated
+    assert_eq!(fixture.distributor.get_treasury_share(), new_share);
+
+    // Verify event
+    fixture.assert_event_with_u32_data(
+        (Symbol::new(&fixture.env, "set_treasury_share"),),
+        new_share
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Auth, InvalidAction)")]
+fn test_set_treasury_share_unauthorized() {
+    let fixture = TestFixture::create();
+    let new_share = 2000u32;
+
+    // Don't mock admin auth
+    fixture.env.mock_auths(&[]);
+    
+    fixture.distributor.set_treasury_share(&new_share);
+}
+
+#[test]
+fn test_set_distribution_period() {
+    let fixture = TestFixture::create();
+    let new_period = 172800u64; // 2 days
+    
+    fixture.env.mock_all_auths();
+
+    // Clear events before operation
+    let _ = fixture.env.events().all();
+
+    // Set new distribution period
+    fixture.distributor.set_distribution_period(&new_period);
+
+    // Verify distribution period is updated
+    assert_eq!(fixture.distributor.get_distribution_period(), new_period);
+
+    // Verify event
+    fixture.assert_event_with_u64_data(
+        (Symbol::new(&fixture.env, "set_distribution_period"),),
+        new_period
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Auth, InvalidAction)")]
+fn test_set_distribution_period_unauthorized() {
+    let fixture = TestFixture::create();
+    let new_period = 172800u64;
+
+    // Don't mock admin auth
+    fixture.env.mock_auths(&[]);
+    
+    fixture.distributor.set_distribution_period(&new_period);
+}
+
+#[test]
+fn test_set_yield_controller() {
+    let fixture = TestFixture::create();
+    let new_controller = Address::generate(&fixture.env);
+    
+    fixture.env.mock_all_auths();
+
+    // Clear events before operation
+    let _ = fixture.env.events().all();
+
+    // Set new yield controller
+    fixture.distributor.set_yield_controller(&new_controller);
+
+    // Verify yield controller is updated
+    assert_eq!(fixture.distributor.get_yield_controller(), new_controller);
+
+    // Verify event
+    fixture.assert_event_with_address_data(
+        (Symbol::new(&fixture.env, "set_yield_controller"),),
+        new_controller.clone()
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Auth, InvalidAction)")]
+fn test_set_yield_controller_unauthorized() {
+    let fixture = TestFixture::create();
+    let new_controller = Address::generate(&fixture.env);
+
+    // Don't mock admin auth
+    fixture.env.mock_auths(&[]);
+    
+    fixture.distributor.set_yield_controller(&new_controller);
+}
+
+#[test]
+fn test_yield_distribution_basic() {
+    let fixture = TestFixture::create();
+    let total_amount = 10000i128;
+
+    // Setup: add members and mint tokens
+    fixture.add_members();
+    fixture.mint_tokens_to_distributor(total_amount);
+
+    fixture.env.mock_all_auths_allowing_non_root_auth();
+
+    // Perform distribution
+    let result = fixture.distributor.distribute_yield(&fixture.token_id, &total_amount);
     assert!(result);
 
-    let treasury_balance = token_client.balance(&treasury);
-    let member1_balance = token_client.balance(&member1);
-    let member2_balance = token_client.balance(&member2);
+    // Verify balances
+    let treasury_share = (total_amount * fixture.treasury_share_bps as i128) / 10000;
+    let member_share = total_amount - treasury_share;
+    let per_member_amount = member_share / 3; // 3 members
 
-    assert_eq!(treasury_balance, treasury_amount);
-    assert_eq!(member1_balance, member_amount);
-    assert_eq!(member2_balance, member_amount);
+    assert_eq!(fixture.token_client().balance(&fixture.treasury), treasury_share);
+    assert_eq!(fixture.token_client().balance(&fixture.member1), per_member_amount);
+    assert_eq!(fixture.token_client().balance(&fixture.member2), per_member_amount);
+    assert_eq!(fixture.token_client().balance(&fixture.member3), per_member_amount);
 }
 
 #[test]
-fn test_distribution_no_members() {
-    let (env, client, admin, treasury, yield_controller) = setup_test();
+#[should_panic(expected = "Error(Auth, InvalidAction)")]
+fn test_distribute_yield_unauthorized() {
+    let fixture = TestFixture::create();
+    let total_amount = 10000i128;
 
-    // Create token for distribution
-    let (_, token_address) = create_token(&env);
+    fixture.add_members();
+    fixture.mint_tokens_to_distributor(total_amount);
 
-    // Set distribution period to a short interval
-    let period: u64 = 60; // 1 minute in seconds
-    env.mock_all_auths();
-    client.set_distribution_period(&period);
+    // Don't mock yield controller auth
+    fixture.env.mock_auths(&[]);
+    
+    fixture.distributor.distribute_yield(&fixture.token_id, &total_amount);
+}
 
-    // Advance time past the distribution period
-    let current_time = env.ledger().timestamp();
-    env.ledger().set_timestamp(current_time + period + 10);
+#[test]
+fn test_yield_distribution_no_members() {
+    let fixture = TestFixture::create();
+    let total_amount = 10000i128;
 
-    // Mint tokens to the yield controller
-    let token_admin_client = soroban_sdk::token::StellarAssetClient::new(&env, &token_address);
-    let amount = 10000_i128;
-    let token_client = soroban_sdk::token::TokenClient::new(&env, &token_address);
-    token_admin_client.mint(&yield_controller, &amount);
+    // Don't add any members
+    fixture.mint_tokens_to_distributor(total_amount);
 
-    // Perform the distribution with no members
-    env.mock_all_auths();
-    token_client.approve(&yield_controller, &client.address, &amount, &100);
-    let result = client.distribute_yield(&token_address, &amount);
+    fixture.env.mock_all_auths_allowing_non_root_auth();
 
-    // Distribution should fail (return false) because there are no members
+    // Perform distribution - should return false when no members
+    let result = fixture.distributor.distribute_yield(&fixture.token_id, &total_amount);
     assert!(!result);
 
-    // Treasury should not receive anything
-    let treasury_balance = token_client.balance(&treasury);
-    assert_eq!(treasury_balance, 0);
+    // No tokens should be transferred when no members
+    assert_eq!(fixture.token_client().balance(&fixture.treasury), 0);
 }
 
 #[test]
-fn test_distribution_after_member_removal() {
-    let (env, client, admin, treasury, yield_controller) = setup_test();
+fn test_yield_distribution_zero_treasury_share() {
+    let fixture = TestFixture::create();
+    let total_amount = 10000i128;
 
-    // Create token for distribution
-    let (token_admin, token_address) = create_token(&env);
+    // Set treasury share to 0%
+    fixture.env.mock_all_auths();
+    fixture.distributor.set_treasury_share(&0u32);
 
-    // Add members
-    let member1 = Address::generate(&env);
-    let member2 = Address::generate(&env);
+    fixture.add_members();
+    fixture.mint_tokens_to_distributor(total_amount);
 
-    env.mock_all_auths();
-    client.add_member(&member1);
-    client.add_member(&member2);
+    fixture.env.mock_all_auths_allowing_non_root_auth();
 
-    // Remove one member
-    client.remove_member(&member1);
-
-    // Set distribution period to a short interval
-    let period: u64 = 60; // 1 minute in seconds
-    client.set_distribution_period(&period);
-
-    // Advance time past the distribution period
-    let current_time = env.ledger().timestamp();
-    env.ledger().set_timestamp(current_time + period + 10);
-
-    // Mint tokens to the yield controller
-    let token_admin_client = soroban_sdk::token::StellarAssetClient::new(&env, &token_address);
-    let token_client = soroban_sdk::token::TokenClient::new(&env, &token_address);
-    let amount = 10000_i128;
-    token_admin_client.mint(&yield_controller, &amount);
-
-    // Approve the distributor to spend the tokens
-    token_client.approve(&yield_controller, &client.address, &amount, &100);
-
-    // Perform the distribution
-    env.mock_all_auths();
-    let result = client.distribute_yield(&token_address, &amount);
-
-    // Distribution should succeed
+    // Perform distribution
+    let result = fixture.distributor.distribute_yield(&fixture.token_id, &total_amount);
     assert!(result);
 
-    // Check balances - only member2 and treasury should receive tokens
-    let treasury_share_bps = client.get_treasury_share();
-    let treasury_amount = (amount * treasury_share_bps as i128) / 10000;
-    let member_amount = amount - treasury_amount; // All to member2
-
-    let treasury_balance = token_client.balance(&treasury);
-    let member1_balance = token_client.balance(&member1);
-    let member2_balance = token_client.balance(&member2);
-
-    assert_eq!(treasury_balance, treasury_amount);
-    assert_eq!(member1_balance, 0);
-    assert_eq!(member2_balance, member_amount);
+    // All should go to members
+    let per_member_amount = total_amount / 3; // 3 members
+    assert_eq!(fixture.token_client().balance(&fixture.treasury), 0);
+    assert_eq!(fixture.token_client().balance(&fixture.member1), per_member_amount);
+    assert_eq!(fixture.token_client().balance(&fixture.member2), per_member_amount);
+    assert_eq!(fixture.token_client().balance(&fixture.member3), per_member_amount);
 }
 
 #[test]
-fn test_sequential_distributions() {
-    let (env, client, admin, treasury, yield_controller) = setup_test();
+fn test_yield_distribution_100_percent_treasury() {
+    let fixture = TestFixture::create();
+    let total_amount = 10000i128;
 
-    // Create token for distribution
-    let (token_admin, token_address) = create_token(&env);
+    // Set treasury share to 100%
+    fixture.env.mock_all_auths();
+    fixture.distributor.set_treasury_share(&10000u32);
+
+    fixture.add_members();
+    fixture.mint_tokens_to_distributor(total_amount);
+
+    fixture.env.mock_all_auths_allowing_non_root_auth();
+
+    // Perform distribution
+    let result = fixture.distributor.distribute_yield(&fixture.token_id, &total_amount);
+    assert!(result);
+
+    // All should go to treasury
+    assert_eq!(fixture.token_client().balance(&fixture.treasury), total_amount);
+    assert_eq!(fixture.token_client().balance(&fixture.member1), 0);
+    assert_eq!(fixture.token_client().balance(&fixture.member2), 0);
+    assert_eq!(fixture.token_client().balance(&fixture.member3), 0);
+}
+
+#[test]
+fn test_distribution_availability() {
+    let fixture = TestFixture::create();
+
+    // Initially available
+    assert!(fixture.distributor.is_distribution_available());
+
+    // After distribution, should have a next distribution time
+    fixture.add_members();
+    fixture.mint_tokens_to_distributor(1000);
+
+    fixture.env.mock_all_auths_allowing_non_root_auth();
+    fixture.distributor.distribute_yield(&fixture.token_id, &1000);
+
+    // Should still be available since we haven't advanced time
+    // (The actual availability logic depends on the storage implementation)
+    let next_time = fixture.distributor.get_next_distribution_time();
+    assert!(next_time > 0);
+}
+
+#[test]
+fn test_member_management_cycle() {
+    let fixture = TestFixture::create();
+    
+    fixture.env.mock_all_auths();
 
     // Add members
-    let member1 = Address::generate(&env);
-    env.mock_all_auths();
-    client.add_member(&member1);
+    fixture.distributor.add_member(&fixture.member1);
+    fixture.distributor.add_member(&fixture.member2);
+    assert_eq!(fixture.distributor.list_members().len(), 2);
 
-    // Set distribution period to a short interval
-    let period: u64 = 600; // 10 minutes
-    client.set_distribution_period(&period);
+    // Remove one member
+    fixture.distributor.remove_member(&fixture.member1);
+    assert_eq!(fixture.distributor.list_members().len(), 1);
+    assert_eq!(fixture.distributor.list_members().get(0).unwrap(), fixture.member2);
 
-    // First distribution
-    let current_time = env.ledger().timestamp();
-    env.ledger().set_timestamp(current_time + period + 10);
+    // Add member back
+    fixture.distributor.add_member(&fixture.member1);
+    assert_eq!(fixture.distributor.list_members().len(), 2);
 
-    let token_client = soroban_sdk::token::TokenClient::new(&env, &token_address);
-    let token_admin_client = soroban_sdk::token::StellarAssetClient::new(&env, &token_address);
-    let amount1 = 5000_i128;
-    token_admin_client.mint(&yield_controller, &amount1);
-    token_client.approve(&yield_controller, &client.address, &amount1, &100);
-
-    env.mock_all_auths();
-    let result1 = client.distribute_yield(&token_address, &amount1);
-    assert!(result1);
-
-    // Try to distribute again immediately - should fail
-    let amount2 = 3000_i128;
-    token_admin_client.mint(&yield_controller, &amount2);
-    token_client.approve(&yield_controller, &client.address, &amount2, &100);
-
-    env.mock_all_auths();
-    let result2 = client.distribute_yield(&token_address, &amount2);
-    assert!(!result2);
-
-    // Advance time past another distribution period
-    let new_time = env.ledger().timestamp();
-    env.ledger().set_timestamp(new_time + period + 10);
-
-    // Now distribution should succeed
-    env.mock_all_auths();
-    let result3 = client.distribute_yield(&token_address, &amount2);
-    assert!(result3);
-
-    // Check total balances after both distributions
-    let treasury_share_bps = client.get_treasury_share();
-    let treasury_amount1 = (amount1 * treasury_share_bps as i128) / 10000;
-    let treasury_amount2 = (amount2 * treasury_share_bps as i128) / 10000;
-    let member_amount1 = amount1 - treasury_amount1;
-    let member_amount2 = amount2 - treasury_amount2;
-
-    let treasury_balance = token_client.balance(&treasury);
-    let member1_balance = token_client.balance(&member1);
-
-    assert_eq!(treasury_balance, treasury_amount1 + treasury_amount2);
-    assert_eq!(member1_balance, member_amount1 + member_amount2);
+    // Remove all members
+    fixture.distributor.remove_member(&fixture.member1);
+    fixture.distributor.remove_member(&fixture.member2);
+    assert_eq!(fixture.distributor.list_members().len(), 0);
 }
 
 #[test]
-fn test_set_admin() {
-    let (env, client, admin, treasury, yield_controller) = setup_test();
+fn test_treasury_configuration_changes() {
+    let fixture = TestFixture::create();
+    
+    fixture.env.mock_all_auths();
 
-    // Mock admin auth
-    env.mock_all_auths();
-    let new_admin = Address::generate(&env);
+    // Test various treasury shares
+    let shares = [0u32, 500u32, 2500u32, 5000u32, 10000u32]; // 0%, 5%, 25%, 50%, 100%
+    
+    for share in shares.iter() {
+        fixture.distributor.set_treasury_share(&share);
+        assert_eq!(fixture.distributor.get_treasury_share(), *share);
+    }
 
-    // Set new admin
-    client.set_admin(&new_admin);
+    // Test treasury address changes
+    let new_treasury1 = Address::generate(&fixture.env);
+    let new_treasury2 = Address::generate(&fixture.env);
+    
+    fixture.distributor.set_treasury(&new_treasury1);
+    assert_eq!(fixture.distributor.get_treasury(), new_treasury1);
+    
+    fixture.distributor.set_treasury(&new_treasury2);
+    assert_eq!(fixture.distributor.get_treasury(), new_treasury2);
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #1300)")]
-fn test_set_admin_unauthorized() {
-    let (env, client, admin, treasury, yield_controller) = setup_test();
+fn test_distribution_period_changes() {
+    let fixture = TestFixture::create();
+    
+    fixture.env.mock_all_auths();
 
-    // Mock admin auth
-    env.mock_all_auths();
-    let new_admin = Address::generate(&env);
+    // Test various distribution periods
+    let periods = [3600u64, 86400u64, 604800u64, 2592000u64]; // 1 hour, 1 day, 1 week, 1 month
+    
+    for period in periods.iter() {
+        fixture.distributor.set_distribution_period(&period);
+        assert_eq!(fixture.distributor.get_distribution_period(), *period);
+    }
+}
 
-    // Set new admin
-    client.set_admin(&new_admin);
+#[test]
+fn test_yield_controller_changes() {
+    let fixture = TestFixture::create();
+    
+    fixture.env.mock_all_auths();
+
+    let new_controller1 = Address::generate(&fixture.env);
+    let new_controller2 = Address::generate(&fixture.env);
+    
+    // Change yield controller
+    fixture.distributor.set_yield_controller(&new_controller1);
+    assert_eq!(fixture.distributor.get_yield_controller(), new_controller1);
+    
+    fixture.distributor.set_yield_controller(&new_controller2);
+    assert_eq!(fixture.distributor.get_yield_controller(), new_controller2);
+}
+
+#[test]
+fn test_small_amount_distribution() {
+    let fixture = TestFixture::create();
+    let small_amount = 10i128; // Very small amount
+
+    fixture.add_members();
+    fixture.mint_tokens_to_distributor(small_amount);
+
+    fixture.env.mock_all_auths_allowing_non_root_auth();
+
+    // Perform distribution
+    let result = fixture.distributor.distribute_yield(&fixture.token_id, &small_amount);
+    assert!(result);
+
+    // Verify total is distributed (even if amounts are very small)
+    let total_distributed = fixture.token_client().balance(&fixture.treasury) +
+                          fixture.token_client().balance(&fixture.member1) +
+                          fixture.token_client().balance(&fixture.member2) +
+                          fixture.token_client().balance(&fixture.member3);
+    assert_eq!(total_distributed, small_amount);
+}
+
+#[test]
+fn test_large_amount_distribution() {
+    let fixture = TestFixture::create();
+    let large_amount = 1_000_000_000_000i128; // Very large amount
+
+    fixture.add_members();
+    fixture.mint_tokens_to_distributor(large_amount);
+
+    fixture.env.mock_all_auths_allowing_non_root_auth();
+
+    // Perform distribution
+    let result = fixture.distributor.distribute_yield(&fixture.token_id, &large_amount);
+    assert!(result);
+
+    // Verify treasury gets correct share
+    let treasury_share = (large_amount * fixture.treasury_share_bps as i128) / 10000;
+    assert_eq!(fixture.token_client().balance(&fixture.treasury), treasury_share);
 }

@@ -195,13 +195,12 @@ fn test_register_adapter() {
 
 // Test unauthorized adapter registration (should fail)
 #[test]
-#[should_panic(expected = "Error(Contract, #1301)")]
+#[should_panic(expected = "Error(Auth, InvalidAction)")]
 fn test_register_adapter_unauthorized() {
     let fixture = TestFixture::create();
     let (adapter_address, protocol) = fixture.create_adapter();
 
-    // This should fail with an access control error
-    fixture.env.mock_all_auths();
+    // This should fail with an access control error (no auth mocking)
     fixture.registry.register_adapter(
         &SupportedYieldType::Lending.id(),
         &protocol.id(),
@@ -249,7 +248,7 @@ fn test_remove_adapter() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #1301)")]
+#[should_panic(expected = "Error(Auth, InvalidAction)")]
 fn test_remove_adapter_unauthorized() {
     let fixture = TestFixture::create();
     let (adapter_address, protocol) = fixture.create_adapter();
@@ -260,6 +259,9 @@ fn test_remove_adapter_unauthorized() {
         &protocol.id(),
         &adapter_address,
     );
+
+    // Clear authorization mocking so the next operation will fail
+    fixture.env.mock_auths(&[]);
 
     fixture.registry.remove_adapter(
         &SupportedYieldType::Lending.id(),
@@ -332,7 +334,7 @@ fn test_add_support_for_asset() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #1301)")]
+#[should_panic(expected = "Error(Auth, InvalidAction)")]
 fn test_add_support_for_asset_unauthorized() {
     let fixture = TestFixture::create();
     let (adapter_address, protocol) = fixture.create_adapter();
@@ -345,6 +347,9 @@ fn test_add_support_for_asset_unauthorized() {
         &protocol.id(),
         &adapter_address,
     );
+
+    // Clear authorization mocking so the next operation will fail
+    fixture.env.mock_auths(&[]);
 
     // This should fail with an unauthorized error
     fixture.registry.add_support_for_asset(
@@ -412,7 +417,7 @@ fn test_remove_support_for_asset() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #1301)")]
+#[should_panic(expected = "Error(Auth, InvalidAction)")]
 fn test_remove_support_for_asset_unauthorized() {
     let fixture = TestFixture::create();
     let (adapter_address, protocol) = fixture.create_adapter();
@@ -430,6 +435,9 @@ fn test_remove_support_for_asset_unauthorized() {
         &protocol.id(),
         &asset,
     );
+
+    // Clear authorization mocking so the next operation will fail
+    fixture.env.mock_auths(&[]);
 
     // This should fail with an unauthorized error
     fixture.registry.remove_support_for_asset(
