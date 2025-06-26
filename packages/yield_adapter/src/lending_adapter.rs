@@ -12,9 +12,9 @@ pub trait LendingAdapter {
 
     fn get_yield(env: &Env, asset: Address) -> i128;
 
-    fn claim_yield(env: &Env, asset: Address, recipient: Address) -> i128;
+    fn claim_yield(env: &Env, asset: Address, amount: i128) -> i128;
 
-    fn claim_yield_auth(env: &Env, asset: Address, recipient: Address) -> Option<(Address, Symbol, Vec<Val>)>;
+    fn claim_yield_auth(env: &Env, asset: Address, amount: i128) -> Option<(Address, Symbol, Vec<Val>)>;
 
     fn claim_emissions(e: &Env, to: Address, asset: Address) -> i128;
 

@@ -170,7 +170,7 @@ pub fn record_distribution(e: &Env, total: i128, treasury_amount: i128, member_a
     
     let epoch = read_epoch_current(e);
     
-    let mut distribution: Distribution = get_distribution_of_current_epoch(e);
+    let mut distribution: Distribution = read_distribution_of_current_epoch(e);
     
     distribution.distribution_end_timestamp = e.ledger().timestamp();
     distribution.distribution_total = total;
@@ -220,7 +220,7 @@ fn write_distribution_config(e: &Env, config: DistributionConfig) {
         .set(&DataKey::DistributionConfig, &config);
 }
 
-pub fn get_distribution_of_current_epoch(e: &Env) -> Distribution {
+pub fn read_distribution_of_current_epoch(e: &Env) -> Distribution {
     extend_instance(e);
     let epoch = read_epoch_current(e);
     // Check if distribution exists for current epoch
@@ -300,7 +300,17 @@ pub fn check_distribution_availability(e: &Env) -> bool {
     current_time >= (current_distribution.distribution_start_timestamp + config.distribution_period)
 }
 
-pub fn read_all_epoch_distributions(e: &Env) -> Vec<u64> {
+pub fn read_distribution_history(e: &Env) -> Vec<Distribution> {
+    extend_instance(e);
+    let distributions = read_all_epoch_distributions(e);
+    let mut distributions_vec = Vec::new(e);
+    for epoch in distributions.iter() {
+        distributions_vec.push_back(read_distribution(e, epoch));
+    }
+    distributions_vec
+}
+
+fn read_all_epoch_distributions(e: &Env) -> Vec<u64> {
     match e.storage().persistent().get(&DataKey::Distributions) {
         Some(existing) => {
             extend_persistent(e, &DataKey::Distributions);
@@ -331,10 +341,3 @@ fn read_epoch_current(e: &Env) -> u64 {
         .get(&CURRENT_EPOCH_KEY)
         .unwrap_or(0)
 }
-
-// ------> epoch 1 <------
-// epoch start_timestamp - timestamp of epoch start
-// epoch epoch_period - 5 minuts (300 seconds)
-// how many seconds are left in epoch
- // epoch (start_timestamp + epoch_period) - current_timestamp  
-// is_distribution_available = epoch current_timestamp <= (start_timestamp + epoch_period) 

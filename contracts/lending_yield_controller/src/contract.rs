@@ -1,4 +1,5 @@
-use soroban_sdk::{ Env, Symbol, contract, contractimpl, contractmeta, Address};
+use soroban_sdk::{ contract, contractimpl, contractmeta, panic_with_error, Address, Env, Symbol};
+use crate::error::LendingYieldControllerError;
 use crate::events::LendingYieldControllerEvents;
 use crate::{storage, controls};
 
@@ -44,6 +45,7 @@ pub trait LendingYieldControllerTrait {
     fn get_yield(e: &Env) -> i128;
     fn claim_yield(e: &Env) -> i128;
     fn claim_emissions(e: &Env, protocol: Symbol, asset: Address) -> i128;
+    fn get_emissions(e: &Env, protocol: Symbol, asset: Address) -> i128;
 }
 
 
@@ -103,9 +105,18 @@ impl LendingYieldControllerTrait for LendingYieldController {
 
     fn claim_yield(e: &Env) -> i128 {
         
-        let cusd_manager = storage::cusd_manager_client(e);
+        if controls::read_yield(e) <= 0 {
+            return 0;
+        }
+        
+        let distributor = storage::distributor_client(e);
+        if !distributor.is_distribution_available() {
+            panic_with_error!(e, LendingYieldControllerError::YieldUnavailable);
+        }
 
         let claimed_total = controls::process_claim_and_distribute_yield(e);
+        
+        let cusd_manager = storage::cusd_manager_client(e);
 
         LendingYieldControllerEvents::claim_yield(
             &e,
@@ -115,6 +126,10 @@ impl LendingYieldControllerTrait for LendingYieldController {
         );
 
         claimed_total
+    }
+
+    fn get_emissions(e: &Env, protocol: Symbol, asset: Address) -> i128 {
+        controls::read_emissions(e, &protocol, asset.clone())
     }
 
     fn claim_emissions(e: &Env, protocol: Symbol, asset: Address) -> i128 {

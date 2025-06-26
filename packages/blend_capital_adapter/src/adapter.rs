@@ -66,12 +66,14 @@ pub fn withdraw_collateral(
     let request = create_request(RequestType::WithdrawCollateral, asset.clone(), amount);
     let yield_controller = storage::get_yield_controller(e);
     let request_vec: Vec<Request> = vec![e, request];
+    
     pool_client.submit(
         &yield_controller.clone(), 
         &yield_controller.clone(),
         &user,
         &request_vec,
     );
+
     storage::remove_deposit(e, &yield_controller, &asset, amount);
 
     amount

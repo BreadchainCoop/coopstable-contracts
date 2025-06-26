@@ -54,36 +54,26 @@ impl LendingAdapter for BlendCapitalAdapter {
 
     fn get_yield(e: &Env, asset: Address) -> i128 { adapter::read_yield(e, storage::get_yield_controller(e), asset) }    
 
-    fn claim_yield(e: &Env, asset: Address, recipient: Address) -> i128 {
+    fn claim_yield(e: &Env, asset: Address, yield_amount: i128) -> i128 {
         
         storage::require_yield_controller(e);
         
-        let yield_amount = adapter::read_yield(e, storage::get_yield_controller(e), asset.clone());
-        
-        if yield_amount <= 0 {
-            return 0;
-        }
-        
-        adapter::withdraw_collateral(e, recipient.clone(), asset.clone(), yield_amount);
+        let claimed = adapter::withdraw_collateral(e, storage::get_yield_controller(e), asset.clone(), yield_amount);
         
         LendingAdapterEvents::claim_yield(
             &e,
             storage::get_yield_controller(e),
-            recipient,
+            storage::get_yield_controller(e),
             asset,
-            yield_amount,
+            claimed,
         );
         
-        yield_amount
+        claimed
     }
 
-    fn claim_yield_auth(e: &Env, asset: Address, recipient: Address) -> Option<(Address, Symbol, Vec<Val>)> {
-        
-        let yield_amount = adapter::read_yield(e, storage::get_yield_controller(e), asset.clone());
-        if yield_amount <= 0 {
-            return None;
-        }
-        Some( adapter::withdraw_collateral_auth(e, recipient.clone(), asset.clone(), yield_amount) )
+    fn claim_yield_auth(e: &Env, asset: Address, amount: i128) -> Option<(Address, Symbol, Vec<Val>)> {
+
+        Some( adapter::withdraw_collateral_auth(e, storage::get_yield_controller(e), asset.clone(), amount) )
     }
     
     fn claim_emissions(e: &Env, to: Address, asset: Address) -> i128 {
@@ -103,12 +93,7 @@ impl LendingAdapter for BlendCapitalAdapter {
         None
     }
 
-    fn get_emissions(e: &Env, asset: Address) -> i128 {
-        
-        storage::require_yield_controller(e);
-        
-        adapter::get_user_emissions(e, storage::get_yield_controller(e), asset.clone())
-    }
+    fn get_emissions(e: &Env, asset: Address) -> i128 { adapter::get_user_emissions(e, storage::get_yield_controller(e), asset.clone()) }
 
     fn protocol_token(e: &Env) -> Address {
 

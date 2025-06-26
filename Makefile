@@ -605,6 +605,27 @@ test-withdraw:
 		--amount $(TEST_AMOUNT)
 	@printf "$(GREEN)Withdrawal test complete! User should have received USDC and burned cUSD.$(NC)\n"
 
+# Test collateral withdrawal operation  
+.PHONY: withdraw
+withdraw:
+	@printf "$(YELLOW)Testing collateral withdrawal ($(TEST_AMOUNT) USDC)...$(NC)\n"
+	@if [ -z "$(LENDING_YIELD_CONTROLLER_ID)" ]; then \
+		printf "$(RED)Error: Lending Yield Controller ID not set.$(NC)\n"; \
+		exit 1; \
+	fi
+	@printf "$(YELLOW)Withdrawing $(TEST_AMOUNT) USDC from Blend Capital via protocol:$(NC)\n"
+	stellar contract invoke \
+		--source $(ACCOUNT_KEY) \
+		--network $(NETWORK) \
+		--id $(LENDING_YIELD_CONTROLLER_ID) \
+		-- \
+		withdraw_collateral \
+		--protocol "BC_LA" \
+		--user $(ACCOUNT) \
+		--asset $(USDC_ID) \
+		--amount $(AMOUNT)
+	@printf "$(GREEN)Withdrawal test complete! User should have received USDC and burned cUSD.$(NC)\n"
+
 # Test yield claiming and distribution
 .PHONY: test-claim-yield
 test-claim-yield:
@@ -626,8 +647,7 @@ test-claim-yield:
 		--network $(NETWORK) \
 		--id $(LENDING_YIELD_CONTROLLER_ID) \
 		-- \
-		claim_yield \
-		--caller $(ADMIN)
+		claim_yield
 	@printf "$(YELLOW)Step 3: Checking if distribution occurred:$(NC)\n"
 	@if [ ! -z "$(YIELD_DISTRIBUTOR_ID)" ]; then \
 		stellar contract invoke \
@@ -638,6 +658,40 @@ test-claim-yield:
 			is_distribution_available; \
 	fi
 	@printf "$(GREEN)Yield claiming test complete!$(NC)\n"
+
+# Test yield claiming and distribution
+.PHONY: test-claim-emissions
+test-claim-emissions:
+	@printf "$(YELLOW)Testing emissions claiming and distribution...$(NC)\n"
+	@if [ -z "$(LENDING_YIELD_CONTROLLER_ID)" ]; then \
+		printf "$(RED)Error: Lending Yield Controller ID not set.$(NC)\n"; \
+		exit 1; \
+	fi
+	stellar contract invoke \
+		--source $(ADMIN_KEY) \
+		--network $(NETWORK) \
+		--id $(LENDING_YIELD_CONTROLLER_ID) \
+		-- \
+		claim_emissions \
+		--protocol "BC_LA" \
+		--asset $(USDC_ID) 
+	@printf "$(GREEN)Emissions claiming test complete!$(NC)\n"
+
+.PHONY: test-read-emissions
+test-read-emissions:
+	@printf "$(YELLOW)Testing emissions querying...$(NC)\n"
+	@if [ -z "$(BLEND_CAPITAL_ADAPTER_ID)" ]; then \
+		printf "$(RED)Error: Blend Capital Adapter ID not set.$(NC)\n"; \
+		exit 1; \
+	fi
+	stellar contract invoke \
+		--source $(ADMIN_KEY) \
+		--network $(NETWORK) \
+		--id $(BLEND_CAPITAL_ADAPTER_ID) \
+		-- \
+		get_emissions \
+		--asset $(USDC_ID) 
+	@printf "$(GREEN)Emissions claiming test complete!$(NC)\n"
 
 # Test complete cycle: deposit -> wait -> claim yield -> withdraw
 .PHONY: test-full-cycle
@@ -869,6 +923,36 @@ next-distribution:
 		--id $(YIELD_DISTRIBUTOR_ID) \
 		-- \
 		get_next_distribution_time 
+	@printf "$(GREEN)Next distribution time queried!$(NC)\n"
+
+.PHONY: current-distribution
+current-distribution:
+	@printf "$(YELLOW)Query current distribution info...$(NC)\n"
+	@if [ -z "$(YIELD_DISTRIBUTOR_ID)" ]; then \
+		printf "$(RED)Error: Yield Distributor ID not set.$(NC)\n"; \
+		exit 1; \
+	fi
+	stellar contract invoke \
+		--source $(ADMIN_KEY) \
+		--network $(NETWORK) \
+		--id $(YIELD_DISTRIBUTOR_ID) \
+		-- \
+		get_distribution_info 
+	@printf "$(GREEN)Next distribution time queried!$(NC)\n"
+
+.PHONY: distribution-history
+distribution-history:
+	@printf "$(YELLOW)Query distribution history...$(NC)\n"
+	@if [ -z "$(YIELD_DISTRIBUTOR_ID)" ]; then \
+		printf "$(RED)Error: Yield Distributor ID not set.$(NC)\n"; \
+		exit 1; \
+	fi
+	stellar contract invoke \
+		--source $(ADMIN_KEY) \
+		--network $(NETWORK) \
+		--id $(YIELD_DISTRIBUTOR_ID) \
+		-- \
+		get_distribution_history 
 	@printf "$(GREEN)Next distribution time queried!$(NC)\n"
 
 .PHONY: check-distribution-status

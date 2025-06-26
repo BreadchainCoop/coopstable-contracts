@@ -273,7 +273,8 @@ fn test_claim_yield_no_yield() {
     client.deposit(&fixture.user1, &fixture.usdc_token_id, &amount);
 
     // Try to claim yield (should be 0)
-    let claimed_yield = client.claim_yield(&fixture.usdc_token_id, &fixture.user1);
+    let yield_amount = client.get_yield(&fixture.usdc_token_id);
+    let claimed_yield = client.claim_yield(&fixture.usdc_token_id, &yield_amount);
     assert_eq!(claimed_yield, 0);
 }
 
@@ -285,8 +286,8 @@ fn test_claim_yield_unauthorized() {
 
     // Clear authorization
     fixture.env.mock_auths(&[]);
-
-    client.claim_yield(&fixture.usdc_token_id, &fixture.user1);
+    let yield_amount = client.get_yield(&fixture.usdc_token_id);
+    client.claim_yield(&fixture.usdc_token_id, &yield_amount);
 }
 
 #[test]
@@ -415,7 +416,7 @@ fn test_negative_yield_handling() {
     assert_eq!(yield_amount, 0, "Negative yield should be reported as 0");
 
     // Try to claim yield - should also return 0
-    let claimed_yield = client.claim_yield(&fixture.usdc_token_id, &fixture.user1);
+    let claimed_yield = client.claim_yield(&fixture.usdc_token_id, &yield_amount);
     assert_eq!(claimed_yield, 0, "Claiming negative yield should return 0");
 }
 
@@ -476,7 +477,7 @@ fn test_edge_case_operations() {
     let yield_amount = client.get_yield(&fixture.usdc_token_id);
     assert_eq!(yield_amount, 0);
 
-    let claimed_yield = client.claim_yield(&fixture.usdc_token_id, &fixture.user1);
+    let claimed_yield = client.claim_yield(&fixture.usdc_token_id, &yield_amount);
     assert_eq!(claimed_yield, 0);
 
     // Test withdraw with no deposit

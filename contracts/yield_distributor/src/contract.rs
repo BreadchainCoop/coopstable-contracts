@@ -3,6 +3,7 @@ use soroban_sdk::{vec, IntoVal, Symbol};
 use soroban_sdk::{contract, contractimpl, contractmeta, token::TokenClient, Address, Env, Vec, panic_with_error};
 use crate::events::YieldDistributorEvents;
 use crate::error::YieldDistributorError;
+use crate::storage_types::Distribution;
 use crate::{storage, storage_types, utils};
 
 contractmeta!(
@@ -40,6 +41,8 @@ pub trait YieldDistributorTrait {
     fn set_distribution_period(e: &Env, period: u64);
     fn get_distribution_period(e: &Env) -> u64;
 
+    fn get_distribution_info(e: &Env) -> Distribution;
+    fn get_distribution_history(e: &Env) -> Vec<Distribution>;
     fn get_next_distribution_time(e: &Env) -> u64;
     fn is_distribution_available(e: &Env) -> bool;
     fn time_before_next_distribution(e: &Env) -> u64;
@@ -166,10 +169,14 @@ impl YieldDistributorTrait for YieldDistributor {
     fn get_next_distribution_time(e: &Env) -> u64 { storage::read_next_distribution(e) }
 
     fn time_before_next_distribution(e: &Env) -> u64 { 
-        if storage::read_next_distribution(e) - e.ledger().timestamp() < 1 { 
-            return 0 
+        let next_distribution = storage::read_next_distribution(e);
+        let current_time = e.ledger().timestamp();
+        
+        if next_distribution <= current_time {
+            return 0;
         }
-        return storage::read_next_distribution(e) - e.ledger().timestamp()
+        
+        next_distribution - current_time
      }
 
     fn is_distribution_available(e: &Env) -> bool { storage::check_distribution_availability(e) }
@@ -182,7 +189,7 @@ impl YieldDistributorTrait for YieldDistributor {
             return 0;
         }
 
-        let distribution = storage::get_distribution_of_current_epoch(e);
+        let distribution = storage::read_distribution_of_current_epoch(e);
         let treasury_share_bps = storage::get_treasury_share_bps(e);
         let treasury = storage::get_treasury(e);
 
@@ -198,17 +205,18 @@ impl YieldDistributorTrait for YieldDistributor {
 
         let token_client = TokenClient::new(e, &token);
         if per_member_amount > 0 {
-            utils::authenticate_contract(
-                &e, 
-                token_client.address.clone(), 
-                Symbol::new(&e, "transfer"), 
-                vec![
-                    e,
-                    (&e.current_contract_address()).into_val(e),
-                    (&per_member_amount).into_val(e),
-                ]
-            );
             for member in distribution.members.iter() {
+                utils::authenticate_contract(
+                    &e, 
+                    token_client.address.clone(), 
+                    Symbol::new(&e, "transfer"), 
+                    vec![
+                        e,
+                        (&e.current_contract_address()).into_val(e),
+                        (&member).into_val(e),
+                        (&per_member_amount).into_val(e),
+                    ]
+                );
                 token_client.transfer(
                     &e.current_contract_address(),
                     &member,
@@ -222,6 +230,7 @@ impl YieldDistributorTrait for YieldDistributor {
             Symbol::new(&e, "transfer"), 
             vec![
                 e,
+                (&e.current_contract_address()).into_val(e),
                 (&treasury).into_val(e),
                 (&treasury_amount).into_val(e),
             ]
@@ -231,6 +240,7 @@ impl YieldDistributorTrait for YieldDistributor {
             &treasury,
             &treasury_amount,
         );
+        
         storage::record_distribution(e, amount, treasury_amount, members_amount);
         
         YieldDistributorEvents::distribute_yield(
@@ -244,6 +254,10 @@ impl YieldDistributorTrait for YieldDistributor {
 
         amount
     }
+
+    fn get_distribution_info(e: &Env) -> Distribution {  storage::read_distribution_of_current_epoch(e) }
+
+    fn get_distribution_history(e: &Env) -> Vec<Distribution> { storage::read_distribution_history(e) }
 
     fn set_admin(e: &Env, new_admin: Address) {
         require_owner(e);
