@@ -353,16 +353,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cusd_token"
-version = "0.0.0"
-dependencies = [
- "soroban-sdk",
- "stellar-default-impl-macro",
- "stellar-fungible",
- "stellar-pausable",
-]
-
-[[package]]
 name = "darling"
 version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1337,41 +1327,6 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
-name = "stellar-constants"
-version = "0.2.0"
-source = "git+https://github.com/OpenZeppelin/stellar-contracts?tag=v0.2.0#aa585815451b48445796d87c82d006d2a08c6ef8"
-dependencies = [
- "soroban-sdk",
-]
-
-[[package]]
-name = "stellar-default-impl-macro"
-version = "0.2.0"
-source = "git+https://github.com/OpenZeppelin/stellar-contracts?tag=v0.2.0#aa585815451b48445796d87c82d006d2a08c6ef8"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.101",
-]
-
-[[package]]
-name = "stellar-fungible"
-version = "0.2.0"
-source = "git+https://github.com/OpenZeppelin/stellar-contracts?tag=v0.2.0#aa585815451b48445796d87c82d006d2a08c6ef8"
-dependencies = [
- "soroban-sdk",
- "stellar-constants",
-]
-
-[[package]]
-name = "stellar-pausable"
-version = "0.2.0"
-source = "git+https://github.com/OpenZeppelin/stellar-contracts?tag=v0.2.0#aa585815451b48445796d87c82d006d2a08c6ef8"
-dependencies = [
- "soroban-sdk",
-]
 
 [[package]]
 name = "stellar-strkey"

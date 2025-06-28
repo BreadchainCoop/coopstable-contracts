@@ -2,8 +2,8 @@
 # This Makefile handles both building and deployment of the Coopstable protocol
 
 # Build configuration
-ALL_DIRS := packages/blend_capital_adapter packages/yield_adapter contracts/cusd_token contracts/cusd_manager contracts/yield_adapter_registry contracts/yield_distributor contracts/lending_yield_controller
-CONTRACTS := cusd_token cusd_manager yield_adapter_registry yield_distributor lending_yield_controller blend_capital_adapter 
+ALL_DIRS := packages/blend_capital_adapter packages/yield_adapter contracts/cusd_manager contracts/yield_adapter_registry contracts/yield_distributor contracts/lending_yield_controller
+CONTRACTS := cusd_manager yield_adapter_registry yield_distributor lending_yield_controller blend_capital_adapter 
 
 BINDINGS_BASE_DIR := ./ts
 BUILD_FLAGS ?=
@@ -16,6 +16,7 @@ WASM_DIR = ./target/wasm32v1-none/release
 OWNER_KEY ?= owner
 ADMIN_KEY ?= admin
 TREASURY_KEY ?= treasury
+CUSD_CODE ?= CUSD
 
 # Get public keys from stellar keys
 OWNER := $(shell stellar keys public-key $(OWNER_KEY))
@@ -26,6 +27,7 @@ TREASURY := $(shell stellar keys public-key $(TREASURY_KEY))
 BLEND_POOL_ID = CCLBPEYS3XFK65MYYXSBMOGKUI4ODN5S7SUZBGD7NALUQF64QILLX5B5
 BLEND_TOKEN_ID = CB22KRA3YZVCNCQI64JQ5WE7UY2VAV7WFLK6A2JN3HEX56T2EDAFO7QF
 USDC_ID = CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU
+CUSD_ADDRESS = $(CUSD_CODE):$(OWNER)
 
 # Contract addresses (will be set after deployment or loaded from file)
 -include deployed_addresses.mk
@@ -63,7 +65,7 @@ help:
 	@printf "  $(GREEN)make redeploy-protocol$(NC)  - Redeploy and reconfigure entire protocol\n"
 	@printf "\n"
 	@printf "$(YELLOW)Individual Contract Deployment:$(NC)\n"
-	@printf "  $(GREEN)make deploy-cusd-token-full$(NC)      - Deploy CUSD Token with deps\n"
+	@printf "  $(GREEN)make deploy-cusd-full$(NC)      - Deploy CUSD Token with deps\n"
 	@printf "  $(GREEN)make deploy-cusd-manager-full$(NC)     - Deploy CUSD Manager with deps\n"
 	@printf "  $(GREEN)make deploy-registry-full$(NC)        - Deploy Registry with deps\n"
 	@printf "  $(GREEN)make deploy-distributor-full$(NC)     - Deploy Distributor with deps\n"
@@ -142,7 +144,7 @@ check-build:
 .PHONY: deploy-protocol
 deploy-protocol: check-build
 	@printf "$(YELLOW)Starting full protocol deployment with dependency management...$(NC)\n"
-	@$(MAKE) deploy-cusd-token-full
+	@$(MAKE) deploy-cusd-full
 	@$(MAKE) deploy-cusd-manager-full
 	@$(MAKE) deploy-registry-full
 	@$(MAKE) deploy-distributor-full
@@ -154,7 +156,25 @@ deploy-protocol: check-build
 
 # Redeploy entire protocol (clean deployment)
 .PHONY: redeploy-protocol
-redeploy-protocol: clean build deploy-protocol
+redeploy-protocol:
+	@printf "$(YELLOW)Starting protocol redeployment...$(NC)\n"
+	@# Transfer CUSD issuer back to owner before clean if CUSD Manager exists
+	@if [ -f deployed_addresses.mk ] && grep -q "CUSD_MANAGER_ID" deployed_addresses.mk; then \
+		CUSD_MANAGER_ID=$$(grep '^CUSD_MANAGER_ID' deployed_addresses.mk | cut -d'=' -f2 | tr -d ' '); \
+		if [ ! -z "$$CUSD_MANAGER_ID" ]; then \
+			printf "$(YELLOW)Transferring CUSD issuer role back to owner...$(NC)\n"; \
+			stellar contract invoke \
+				--source $(ADMIN_KEY) \
+				--network $(NETWORK) \
+				--id $$CUSD_MANAGER_ID \
+				-- \
+				set_cusd_issuer \
+				--new_issuer $(OWNER) || printf "$(RED)Warning: Failed to transfer issuer role$(NC)\n"; \
+		fi \
+	fi
+	@$(MAKE) clean
+	@$(MAKE) build
+	@$(MAKE) deploy-protocol
 	@printf "$(GREEN)Protocol redeployment complete!$(NC)\n"
 
 # Quick deployment with build
@@ -168,36 +188,19 @@ quick-deploy:
 # ========== INDIVIDUAL CONTRACT DEPLOYMENT WITH DEPENDENCIES ==========
 
 # Deploy CUSD Token with all dependencies and setup
-.PHONY: deploy-cusd-token-full
-deploy-cusd-token-full: check-build
-	@printf "$(YELLOW)Deploying CUSD Token with full setup...$(NC)\n"
-	@$(MAKE) deploy-cusd-token
-	@printf "$(GREEN)CUSD Token deployed and ready!$(NC)\n"
+.PHONY: deploy-cusd-full
+deploy-cusd-full: check-build
+	@printf "$(YELLOW)Deploying CUSD Asset with full setup...$(NC)\n"
+	@$(MAKE) deploy-cusd
+	@printf "$(GREEN)CUSD Asset deployed and ready!$(NC)\n"
 
 # Deploy CUSD Manager with all dependencies and setup
 .PHONY: deploy-cusd-manager-full
 deploy-cusd-manager-full: check-build
 	@printf "$(YELLOW)Deploying CUSD Manager with full setup...$(NC)\n"
 	@$(MAKE) deploy-cusd-manager
-	@printf "$(YELLOW)Configuring CUSD Token with new manager...$(NC)\n"
-	@CUSD_TOKEN_ID=$$(grep '^CUSD_ID' deployed_addresses.mk | cut -d'=' -f2 | tr -d ' '); \
-	CUSD_MGR_ID=$$(grep '^CUSD_MANAGER_ID' deployed_addresses.mk | cut -d'=' -f2 | tr -d ' '); \
-	printf "$(YELLOW)Setting CUSD Manager ($$CUSD_MGR_ID) as cusd_manager in CUSD Token ($$CUSD_TOKEN_ID)...$(NC)\n"; \
-	stellar contract invoke \
-		--source $(ADMIN_KEY) \
-		--network $(NETWORK) \
-		--id $$CUSD_TOKEN_ID \
-		-- \
-		set_cusd_manager \
-		--new_manager $$CUSD_MGR_ID; \
-	printf "$(YELLOW)Setting admin as as admin in CUSD Token...$(NC)\n"; \
-	stellar contract invoke \
-		--source $(OWNER_KEY) \
-		--network $(NETWORK) \
-		--id $$CUSD_TOKEN_ID \
-		-- \
-		set_admin \
-		--new_admin $(ADMIN)
+	@printf "$(YELLOW)Configuring CUSD Asset with new manager...$(NC)\n"
+	@$(MAKE) configure-cusd
 	@printf "$(GREEN)CUSD Manager deployed and configured!$(NC)\n"
 
 # Deploy Registry with all dependencies and setup
@@ -227,6 +230,7 @@ deploy-controller-full: check-build
 	fi; \
 	$(MAKE) -e YIELD_DISTRIBUTOR_ID="$$DISTRIBUTOR_ID" YIELD_ADAPTER_REGISTRY_ID="$$REGISTRY_ID" CUSD_MANAGER_ID="$$MANAGER_ID" deploy-controller
 	@$(MAKE) configure-cusd
+	@$(MAKE) cusd-manager-set-controller
 	@$(MAKE) configure-distributor
 	@printf "$(GREEN)Controller deployed and configured!$(NC)\n"
 
@@ -254,7 +258,7 @@ deploy-all: check-build deploy-core deploy-adapters configure-all
 
 # Deploy core contracts
 .PHONY: deploy-core
-deploy-core: deploy-cusd-token deploy-cusd-manager deploy-registry deploy-distributor deploy-controller
+deploy-core: deploy-cusd deploy-cusd-manager deploy-registry deploy-distributor deploy-controller
 	@printf "$(GREEN)Core contracts deployed!$(NC)\n"
 
 # Deploy adapter contracts
@@ -264,44 +268,69 @@ deploy-adapters: deploy-blend-adapter
 
 # Configure all contracts
 .PHONY: configure-all
-configure-all: configure-cusd-token configure-cusd configure-distributor register-blend-adapter
+configure-all: configure-cusd configure-distributor register-blend-adapter
 	@printf "$(GREEN)Protocol configuration complete!$(NC)\n"
 
 # ========== INDIVIDUAL CONTRACT DEPLOYMENT ==========
 
-.PHONY: deploy-cusd-token
-deploy-cusd-token: check-build
+.PHONY: deploy-cusd
+deploy-cusd: check-build
 	@printf "$(YELLOW)Deploying CUSD Token...$(NC)\n"
-	$(eval CUSD_ID := $(shell stellar contract deploy \
-		--wasm $(WASM_DIR)/cusd_token.wasm \
-		--source $(OWNER_KEY) \
-		--network $(NETWORK) \
-		-- \
-		--owner $(OWNER) \
-		--cusd_manager $(OWNER) \
-		--admin $(ADMIN)))
-	@printf "$(GREEN)CUSD Token deployed: $(CUSD_ID)$(NC)\n"
-	@echo "# Deployed contract addresses - $$(date)" > deployed_addresses.mk.tmp
-	@echo "CUSD_ID = $(CUSD_ID)" >> deployed_addresses.mk.tmp
-	@if [ -f deployed_addresses.mk ]; then grep -v "^CUSD_ID" deployed_addresses.mk | grep -v "^#" >> deployed_addresses.mk.tmp || true; fi
-	@mv deployed_addresses.mk.tmp deployed_addresses.mk
+	# creates the stellar asset ensures it exists
+	stellar tx new payment \
+		--source-account owner \
+		--destination $$(stellar keys public-key owner) \
+		--asset CUSD:$$(stellar keys public-key owner) \
+		--amount 1000 \
+		--fee 1000 \
+		--network $(NETWORK)
+	@CUSD_ID=$$(stellar contract asset deploy \
+		--source-account owner \
+		--alias cusd_token \
+		--fee 1000 \
+		--network testnet \
+		--asset CUSD:$$(stellar keys public-key owner) 2>/dev/null || \
+		stellar contract id asset --asset CUSD:$$(stellar keys public-key owner)); \
+	for account in admin treasury member_1 member_2 member_3; do \
+		echo "Setting trustline for $$account..."; \
+		stellar tx new change-trust \
+			--source-account $$account \
+			--line CUSD:$$(stellar keys public-key owner) \
+			--fee 1000 \
+			--network testnet; \
+	done; \
+	printf "$(GREEN)CUSD Token deployed: $$CUSD_ID$(NC)\n"; \
+	echo "# Deployed contract addresses - $$(date)" > deployed_addresses.mk.tmp; \
+	echo "CUSD_ID = $$CUSD_ID" >> deployed_addresses.mk.tmp; \
+	if [ -f deployed_addresses.mk ]; then grep -v "^CUSD_ID" deployed_addresses.mk | grep -v "^#" >> deployed_addresses.mk.tmp || true; fi; \
+	mv deployed_addresses.mk.tmp deployed_addresses.mk
 
 .PHONY: deploy-cusd-manager
 deploy-cusd-manager: check-build
 	@printf "$(YELLOW)Deploying CUSD Manager...$(NC)\n"
-	$(eval CUSD_MANAGER_ID := $(shell stellar contract deploy \
-		--wasm $(WASM_DIR)/cusd_manager.wasm \
-		--source $(OWNER_KEY) \
-		--network $(NETWORK) \
-		-- \
-		--cusd_id $(CUSD_ID) \
-		--owner $(OWNER) \
-		--admin $(ADMIN)))
-	@printf "$(GREEN)CUSD Manager deployed: $(CUSD_MANAGER_ID)$(NC)\n"
-	@echo "# Deployed contract addresses - $$(date)" > deployed_addresses.mk.tmp
-	@echo "CUSD_MANAGER_ID = $(CUSD_MANAGER_ID)" >> deployed_addresses.mk.tmp
-	@if [ -f deployed_addresses.mk ]; then grep -v "^CUSD_MANAGER_ID" deployed_addresses.mk | grep -v "^#" >> deployed_addresses.mk.tmp || true; fi
-	@mv deployed_addresses.mk.tmp deployed_addresses.mk
+	@if [ -f deployed_addresses.mk ]; then \
+		CUSD_ID=$$(grep '^CUSD_ID' deployed_addresses.mk | cut -d'=' -f2 | tr -d ' '); \
+		if [ -z "$$CUSD_ID" ]; then \
+			printf "$(RED)Error: CUSD_ID not found in deployed_addresses.mk. Please deploy CUSD first.$(NC)\n"; \
+			exit 1; \
+		fi; \
+		CUSD_MANAGER_ID=$$(stellar contract deploy \
+			--wasm $(WASM_DIR)/cusd_manager.wasm \
+			--source $(OWNER_KEY) \
+			--network $(NETWORK) \
+			-- \
+			--cusd_id $$CUSD_ID \
+			--owner $(OWNER) \
+			--admin $(ADMIN)); \
+		printf "$(GREEN)CUSD Manager deployed: $$CUSD_MANAGER_ID$(NC)\n"; \
+		echo "# Deployed contract addresses - $$(date)" > deployed_addresses.mk.tmp; \
+		echo "CUSD_MANAGER_ID = $$CUSD_MANAGER_ID" >> deployed_addresses.mk.tmp; \
+		grep -v "^CUSD_MANAGER_ID" deployed_addresses.mk | grep -v "^#" >> deployed_addresses.mk.tmp || true; \
+		mv deployed_addresses.mk.tmp deployed_addresses.mk; \
+	else \
+		printf "$(RED)Error: deployed_addresses.mk not found. Please deploy CUSD first.$(NC)\n"; \
+		exit 1; \
+	fi
 
 .PHONY: deploy-registry
 deploy-registry: check-build
@@ -384,87 +413,81 @@ deploy-blend-adapter: check-build
 	@mv deployed_addresses.mk.tmp deployed_addresses.mk
 
 # ========== CONFIGURATION TARGETS ==========
-
-.PHONY: configure-cusd-token
-configure-cusd-token:
-	@printf "$(YELLOW)Configuring CUSD Token...$(NC)\n"
-	@if [ -z "$(CUSD_ID)" ] || [ -z "$(CUSD_MANAGER_ID)" ]; then \
-		printf "$(RED)Error: CUSD Token and Manager IDs must be set.$(NC)\n"; \
-		exit 1; \
-	fi
-	@printf "$(YELLOW)Setting CUSD Manager as cusd_manager in CUSD Token...$(NC)\n"
-	stellar contract invoke \
-		--source $(ADMIN_KEY) \
-		--network $(NETWORK) \
-		--id $(CUSD_ID) \
-		-- \
-		set_cusd_manager \
-		--new_manager $(CUSD_MANAGER_ID)
-	@printf "$(YELLOW)Setting CUSD Manager as admin in CUSD Token...$(NC)\n"
-	stellar contract invoke \
-		--source $(OWNER_KEY) \
-		--network $(NETWORK) \
-		--id $(CUSD_ID) \
-		-- \
-		set_admin \
-		--new_admin $(CUSD_MANAGER_ID)
-	@printf "$(GREEN)CUSD Token configured!$(NC)\n"
-
 .PHONY: configure-cusd
 configure-cusd:
-	@printf "$(YELLOW)Configuring CUSD Manager...$(NC)\n"
-	@MANAGER_ID=$$(grep '^CUSD_MANAGER_ID' deployed_addresses.mk | cut -d'=' -f2 | tr -d ' '); \
-	CONTROLLER_ID=$$(grep '^LENDING_YIELD_CONTROLLER_ID' deployed_addresses.mk | cut -d'=' -f2 | tr -d ' '); \
-	if [ -z "$$MANAGER_ID" ] || [ -z "$$CONTROLLER_ID" ]; then \
+	@printf "$(YELLOW)Configuring CUSD Asset...$(NC)\n"
+	@CUSD_ID=$$(grep '^CUSD_ID' deployed_addresses.mk | cut -d'=' -f2 | tr -d ' '); \
+	CUSD_MANAGER_ID=$$(grep '^CUSD_MANAGER_ID' deployed_addresses.mk | cut -d'=' -f2 | tr -d ' '); \
+	if [ -z "$$CUSD_ID" ] || [ -z "$$CUSD_MANAGER_ID" ]; then \
 		printf "$(RED)Error: Required contract IDs not set.$(NC)\n"; \
 		exit 1; \
 	fi; \
-	printf "$(YELLOW)Setting Yield Controller ($$CONTROLLER_ID) in CUSD Manager ($$MANAGER_ID)...$(NC)\n"; \
+	printf "$(YELLOW)Setting CUSD Manager ($$CUSD_MANAGER_ID) as CUSD Issuer...$(NC)\n"; \
 	stellar contract invoke \
-		--source $(ADMIN_KEY) \
+		--source $(OWNER_KEY) \
 		--network $(NETWORK) \
-		--id $$MANAGER_ID \
+		--id $$CUSD_ID \
 		-- \
-		set_yield_controller \
-		--new_controller $$CONTROLLER_ID
-	@printf "$(GREEN)CUSD Manager configured!$(NC)\n"
+		set_admin \
+		--new_admin $$CUSD_MANAGER_ID; \
+	printf "$(YELLOW)Checking Owner CUSD balance...$(NC)\n"; \
+	OWNER_BALANCE=$$(stellar contract invoke \
+		--id $$CUSD_ID \
+		--source-account $(OWNER_KEY) \
+		--network $(NETWORK) \
+		-- \
+		balance \
+		--id $$(stellar keys public-key $(OWNER_KEY)) 2>/dev/null || echo "0"); \
+	if [ "$$OWNER_BALANCE" != "0" ] && [ "$$OWNER_BALANCE" != "" ]; then \
+		printf "$(YELLOW)Transferring Owner CUSD balance ($$OWNER_BALANCE) to Admin...$(NC)\n"; \
+		stellar contract invoke \
+			--id $$CUSD_ID \
+			--source-account $(OWNER_KEY) \
+			--network $(NETWORK) \
+			-- \
+			transfer \
+			--from $$(stellar keys public-key $(OWNER_KEY)) \
+			--to $(ADMIN) \
+			--amount $$OWNER_BALANCE; \
+	fi
+	@printf "$(GREEN)CUSD configured!$(NC)\n"
 
-.PHONY: cusd-set-controller
-cusd-set-controller:
+.PHONY: cusd-manager-set-controller
+cusd-manager-set-controller:
 	@printf "$(YELLOW)Setting Yield Controller...$(NC)\n"
-	@if [ -z "$(CUSD_MANAGER_ID)" ] || [ -z "$(LENDING_YIELD_CONTROLLER_ID)" ]; then \
+	@CUSD_MANAGER_ID=$$(grep '^CUSD_MANAGER_ID' deployed_addresses.mk | cut -d'=' -f2 | tr -d ' '); \
+	LENDING_YIELD_CONTROLLER_ID=$$(grep '^LENDING_YIELD_CONTROLLER_ID' deployed_addresses.mk | cut -d'=' -f2 | tr -d ' '); \
+	if [ -z "$$CUSD_MANAGER_ID" ] || [ -z "$$LENDING_YIELD_CONTROLLER_ID" ]; then \
 		printf "$(RED)Error: Required contract IDs not set.$(NC)\n"; \
 		exit 1; \
-	fi
+	fi; \
 	stellar contract invoke \
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
-		--id $(CUSD_MANAGER_ID) \
+		--id $$CUSD_MANAGER_ID \
 		-- \
 		set_yield_controller \
-		--caller $(ADMIN) \
-		--new_controller $(LENDING_YIELD_CONTROLLER_ID)
-	@printf "$(GREEN)CUSD Manager configured!$(NC)\n"
+		--new_controller $$LENDING_YIELD_CONTROLLER_ID
+	@printf "$(GREEN)CUSD Manager configured with yield controller!$(NC)\n"
 
-.PHONY: cusd-set-admin-issuer
-cusd-set-admin-issuer:
+.PHONY: cusd-manager-set-issuer
+cusd-manager-set-issuer:
 	@printf "$(YELLOW)Setting Admin as Issuer...$(NC)\n"
 	@if [ -z "$(CUSD_MANAGER_ID)" ]; then \
 		printf "$(RED)Error: Required contract IDs not set.$(NC)\n"; \
 		exit 1; \
 	fi
 	stellar contract invoke \
-		--source owner \
-		--network testnet \
+		--source $(ADMIN_KEY) \
+		--network $(NETWORK) \
 		--id $(CUSD_MANAGER_ID) \
 		-- \
 		set_cusd_issuer \
-		--caller $(OWNER) \
-		--new_issuer $(ADMIN)
+		--new_issuer $(CUSD_MANAGER_ID)
 	@printf "$(GREEN)CUSD Issuer set!$(NC)\n"
 
-.PHONY: cusd-set-manager-issuer
-cusd-set-manager-issuer:
+.PHONY: cusd-manager-set-admin
+cusd-manager-set-admin:
 	@printf "$(YELLOW)Setting Manager as Issuer...$(NC)\n"
 	@if [ -z "$(CUSD_ID)" ]; then \
 		printf "$(RED)Error: Required contract IDs not set.$(NC)\n"; \
@@ -478,6 +501,17 @@ cusd-set-manager-issuer:
 		set_admin \
 		--new_admin $(CUSD_MANAGER_ID)
 	@printf "$(GREEN)CUSD Manager set as Issuer!$(NC)\n"
+
+.PHONY: configure-cusd-manager
+configure-cusd-manager:
+	@printf "$(YELLOW)Configuring CUSD Manager...$(NC)\n"
+	@CUSD_MANAGER_ID=$$(grep '^CUSD_MANAGER_ID' deployed_addresses.mk | cut -d'=' -f2 | tr -d ' '); \
+	if [ -z "$$CUSD_MANAGER_ID" ]; then \
+		printf "$(RED)Error: Required contract ID not set.$(NC)\n"; \
+		exit 1; \
+	fi
+	@$(MAKE) configure-cusd
+	@$(MAKE) cusd-manager-set-issuer
 
 .PHONY: configure-distributor
 configure-distributor:
@@ -497,6 +531,7 @@ configure-distributor:
 		set_yield_controller \
 		--yield_controller $$CONTROLLER_ID
 	@printf "$(GREEN)Yield Distributor configured!$(NC)\n"
+
 
 .PHONY: register-blend-adapter
 register-blend-adapter:
@@ -909,21 +944,6 @@ next-distribution-time-left:
 		-- \
 		time_before_next_distribution
 	@printf "$(GREEN)Next distribution time left queried!$(NC)\n"
-
-.PHONY: next-distribution
-next-distribution:
-	@printf "$(YELLOW)Query next distribution time...$(NC)\n"
-	@if [ -z "$(YIELD_DISTRIBUTOR_ID)" ]; then \
-		printf "$(RED)Error: Yield Distributor ID not set.$(NC)\n"; \
-		exit 1; \
-	fi
-	stellar contract invoke \
-		--source $(ADMIN_KEY) \
-		--network $(NETWORK) \
-		--id $(YIELD_DISTRIBUTOR_ID) \
-		-- \
-		get_next_distribution_time 
-	@printf "$(GREEN)Next distribution time queried!$(NC)\n"
 
 .PHONY: current-distribution
 current-distribution:

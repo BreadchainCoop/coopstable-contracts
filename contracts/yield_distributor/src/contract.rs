@@ -1,6 +1,4 @@
-use core::panic;
-use soroban_sdk::{vec, IntoVal, Symbol};
-use soroban_sdk::{contract, contractimpl, contractmeta, token::TokenClient, Address, Env, Vec, panic_with_error};
+use soroban_sdk::{vec, IntoVal, Symbol, contract, contractimpl, contractmeta, token::TokenClient, Address, Env, Vec, panic_with_error};
 use crate::events::YieldDistributorEvents;
 use crate::error::YieldDistributorError;
 use crate::storage_types::Distribution;

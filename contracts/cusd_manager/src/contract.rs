@@ -30,6 +30,7 @@ pub trait CUSDManagerTrait {
     fn set_admin(e: &Env, new_admin: Address); 
     fn set_yield_controller(e: &Env, new_controller: Address);
     fn set_cusd_id(e: &Env, new_cusd_id: Address);
+    fn set_cusd_issuer(e: &Env, new_issuer: Address);
 }
 
 #[contractimpl]
@@ -73,5 +74,11 @@ impl CUSDManagerTrait for CUSDManager {
         check_nonnegative_amount(e, amount);
         token::process_token_burn(&e, from.clone(), amount);
         CUSDManagerEvents::burn_cusd(&e, from, amount);
+    }
+
+    fn set_cusd_issuer(e: &Env, new_issuer: Address) {
+        require_admin(e);
+        token::set_issuer(&e, &storage::read_cusd_id(&e), &new_issuer);
+        CUSDManagerEvents::set_cusd_issuer(&e, new_issuer);
     }
 }

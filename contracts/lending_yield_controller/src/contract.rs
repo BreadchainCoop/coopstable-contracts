@@ -27,7 +27,6 @@ pub trait LendingYieldControllerTrait {
     fn set_cusd_manager(e: &Env, cusd_manager: Address);
     fn get_cusd_manager(e: &Env) -> Address;
     fn set_admin(e: &Env, new_admin: Address);
-
     fn deposit_collateral(
         e: &Env,
         protocol: Symbol,

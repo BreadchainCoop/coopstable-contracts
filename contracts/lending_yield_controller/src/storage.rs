@@ -14,7 +14,6 @@ pub fn adapter_registry_client(e: &Env) -> YieldAdapterRegistryClient<'static> {
         &get_adapter_registry(&e)
     )
 }
-
 pub fn extend_instance(e: &Env) {
     e.storage()
         .instance()
@@ -24,39 +23,27 @@ fn read_address(e: &Env, key: &DataKey) -> Address {
     extend_instance(e);
     e.storage().instance().get(key).unwrap()  
 }
-
 fn write_address(e: &Env, key: &DataKey, address: &Address) {
     extend_instance(e);    
     e.storage().instance().set(key, address); 
 }
-
 pub fn read_admin(e: &Env) -> Address { read_address(e, &DataKey::Admin)}
 pub fn read_owner(e: &Env) -> Address { read_address(e, &DataKey::Owner)}
 pub fn write_admin(e: &Env, new_admin: Address) { write_address(e, &DataKey::Admin, &new_admin);}
 pub fn write_owner(e: &Env, new_owner: Address) { write_address(e, &DataKey::Owner, &new_owner);}
-
 pub fn get_cusd_manager(e: &Env) -> Address { read_address(e, &DataKey::CUSDManager) }
-
 pub fn get_adapter_registry(e: &Env) -> Address { read_address(e, &DataKey::AdapterRegistry) }
-
 pub fn get_yield_distributor(e: &Env) -> Address { read_address(e, &DataKey::YieldDistributor) }
-
 pub fn set_yield_distributor(e: &Env, yield_distributor: Address) {
     write_address(e, &DataKey::YieldDistributor, &yield_distributor);
 }
-
 pub fn set_cusd_manager(e: &Env, cusd_manager: Address) {
     write_address(e, &DataKey::CUSDManager, &cusd_manager);
 }
-
-pub fn set_adapter_registry(e: &Env, adapter_registry: Address) {
-    write_address(e, &DataKey::AdapterRegistry, &adapter_registry);
-}
-
+pub fn set_adapter_registry(e: &Env, adapter_registry: Address) { write_address(e, &DataKey::AdapterRegistry, &adapter_registry); }
 pub fn distributor_client(e: &Env) -> YieldDistributorClient {
     YieldDistributorClient::new(e, &get_yield_distributor(&e))
 }
-
 pub fn cusd_manager_client(e: &Env) -> CUSDManagerClient {
     CUSDManagerClient::new(
         e, 
