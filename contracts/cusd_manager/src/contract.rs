@@ -1,5 +1,6 @@
 use crate::events::CUSDManagerEvents;
 use crate::error::CUSDManagerError;
+use crate::storage_types::DataKey;
 use crate::token;
 use crate::storage;
 use soroban_sdk::{ contract, contractimpl, contractmeta, Address, Env, panic_with_error };
@@ -26,7 +27,7 @@ pub trait CUSDManagerTrait {
     fn issue_cusd(e: &Env, to: Address, amount: i128);
     fn burn_cusd(e: &Env, from: Address, amount: i128);
     fn get_cusd_id(e: &Env) -> Address;
-    
+    fn cusd_total_supply(e: &Env) -> i128;
     fn set_admin(e: &Env, new_admin: Address); 
     fn set_yield_controller(e: &Env, new_controller: Address);
     fn set_cusd_id(e: &Env, new_cusd_id: Address);
@@ -39,6 +40,8 @@ impl CUSDManagerTrait for CUSDManager {
         storage::write_owner(&e, owner);
         storage::write_admin(&e, admin);
         storage::write_cusd(&e, cusd_id); 
+
+        e.storage().persistent().set(&DataKey::CusdSupply, &0i128);
     }
     
     fn set_admin(e: &Env, new_admin: Address) {
@@ -81,4 +84,6 @@ impl CUSDManagerTrait for CUSDManager {
         token::set_issuer(&e, &storage::read_cusd_id(&e), &new_issuer);
         CUSDManagerEvents::set_cusd_issuer(&e, new_issuer);
     }
+
+    fn cusd_total_supply(e: &Env) -> i128 { storage::read_cusd_total_supply(&e) }
 }

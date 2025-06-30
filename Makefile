@@ -119,13 +119,19 @@ clean:
 	done
 	@rm -f deployed_addresses.mk deployed_addresses.sh
 
-# Generate contract bindings
-# loop through all the contracts and call the contract bindings typescript command
-# export CONTRACT_NAME='lending_yield_controller' && \
-# stellar contract bindings typescript \
-# --wasm ./target/wasm32v1-none/release/${CONTRACT_NAME}.wasm \
-# --output-dir ./ts/${CONTRACT_NAME} \
-# --overwrite
+# Generate all bindings
+.PHONY: bindings
+bindings: check-build
+	@printf "$(YELLOW)Generating TypeScript bindings for all contracts...$(NC)\n"
+	@for contract in $(CONTRACTS); do \
+		printf "$(GREEN)Generating bindings for $$contract...$(NC)\n"; \
+		CONTRACT_NAME=$$(echo $$contract | tr '_' '-'); \
+		stellar contract bindings typescript \
+			--wasm $(WASM_DIR)/$$contract.wasm \
+			--output-dir $(BINDINGS_BASE_DIR)/$$contract \
+			--overwrite || exit 1; \
+	done
+	@printf "$(GREEN)✓ All bindings generated successfully!$(NC)\n"
 
 # ========== DEPLOYMENT TARGETS ==========
 
@@ -229,7 +235,6 @@ deploy-controller-full: check-build
 		exit 1; \
 	fi; \
 	$(MAKE) -e YIELD_DISTRIBUTOR_ID="$$DISTRIBUTOR_ID" YIELD_ADAPTER_REGISTRY_ID="$$REGISTRY_ID" CUSD_MANAGER_ID="$$MANAGER_ID" deploy-controller
-	@$(MAKE) configure-cusd
 	@$(MAKE) cusd-manager-set-controller
 	@$(MAKE) configure-distributor
 	@printf "$(GREEN)Controller deployed and configured!$(NC)\n"
@@ -429,27 +434,7 @@ configure-cusd:
 		--id $$CUSD_ID \
 		-- \
 		set_admin \
-		--new_admin $$CUSD_MANAGER_ID; \
-	printf "$(YELLOW)Checking Owner CUSD balance...$(NC)\n"; \
-	OWNER_BALANCE=$$(stellar contract invoke \
-		--id $$CUSD_ID \
-		--source-account $(OWNER_KEY) \
-		--network $(NETWORK) \
-		-- \
-		balance \
-		--id $$(stellar keys public-key $(OWNER_KEY)) 2>/dev/null || echo "0"); \
-	if [ "$$OWNER_BALANCE" != "0" ] && [ "$$OWNER_BALANCE" != "" ]; then \
-		printf "$(YELLOW)Transferring Owner CUSD balance ($$OWNER_BALANCE) to Admin...$(NC)\n"; \
-		stellar contract invoke \
-			--id $$CUSD_ID \
-			--source-account $(OWNER_KEY) \
-			--network $(NETWORK) \
-			-- \
-			transfer \
-			--from $$(stellar keys public-key $(OWNER_KEY)) \
-			--to $(ADMIN) \
-			--amount $$OWNER_BALANCE; \
-	fi
+		--new_admin $$CUSD_MANAGER_ID;
 	@printf "$(GREEN)CUSD configured!$(NC)\n"
 
 .PHONY: cusd-manager-set-controller
@@ -802,7 +787,7 @@ show-addresses:
 	@printf "  Blend Token                  = $(BLEND_TOKEN_ID)\n"
 	@printf "\n"
 	@printf "$(GREEN)CoopStable Core Contracts:$(NC)\n"
-	@printf "  CUSD Token                   = $(if $(CUSD_ID),$(CUSD_ID),$(RED)Not deployed$(NC))\n"
+	@printf "  CUSD Asset                   = $(if $(CUSD_ID),$(CUSD_ID),$(RED)Not deployed$(NC))\n"
 	@printf "  CUSD Manager                 = $(if $(CUSD_MANAGER_ID),$(CUSD_MANAGER_ID),$(RED)Not deployed$(NC))\n"
 	@printf "  Yield Adapter Registry       = $(if $(YIELD_ADAPTER_REGISTRY_ID),$(YIELD_ADAPTER_REGISTRY_ID),$(RED)Not deployed$(NC))\n"
 	@printf "  Yield Distributor            = $(if $(YIELD_DISTRIBUTOR_ID),$(YIELD_DISTRIBUTOR_ID),$(RED)Not deployed$(NC))\n"
