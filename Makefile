@@ -643,7 +643,13 @@ withdraw:
 		--protocol "BC_LA" \
 		--user $(ACCOUNT) \
 		--asset $(USDC_ID) \
-		--amount $(AMOUNT)
+		--amount $$(stellar contract invoke \
+		--id $(CUSD_ID) \
+		--source-account $(ACCOUNT_KEY) \
+		--network testnet \
+		-- \
+		balance \
+		--id $(ACCOUNT))
 	@printf "$(GREEN)Withdrawal test complete! User should have received USDC and burned cUSD.$(NC)\n"
 
 # Test yield claiming and distribution

@@ -1,6 +1,6 @@
 use soroban_sdk::{vec, Address, Env, IntoVal, Symbol, Val, Vec};
 use crate::{
-    artifacts::pool::{Client as PoolClient, Request}, constants::SCALAR_12, contract_types::RequestType, storage
+    artifacts::pool::{Client as PoolClient, ReserveData, ReserveConfig, Request, Reserve, PoolConfig}, constants::SCALAR_12, contract_types::RequestType, storage
 };
 
 pub fn create_request(
@@ -207,4 +207,111 @@ pub fn read_yield(e: &Env, user: Address, asset: Address) -> i128 {
         return 0;
     }
     current_value - original_deposit
+}
+
+pub fn get_apy(e: &Env, asset: Address) -> u32 {
+    let pool_id = storage::read_lend_pool_id(e);
+    let pool_client = PoolClient::new(e, &pool_id);
+    
+    let reserve = pool_client.get_reserve(&asset);
+    
+    // Calculate utilization rate
+    let utilization = calculate_utilization(&reserve);
+    
+    // Calculate borrow rate using Blend's kinked rate model
+    let borrow_rate = calculate_borrow_rate(&reserve, utilization);
+    
+    // Calculate supply rate (what lenders earn)
+    let supply_rate = calculate_supply_rate(borrow_rate, utilization);
+    
+    // Convert annual rate to APY (basis points)
+    rate_to_apy(supply_rate)
+}
+
+fn calculate_utilization(reserve: &Reserve) -> i128 {
+    if reserve.data.b_supply == 0 {
+        return 0;
+    }
+    
+    // Calculate actual supplied amount using b_rate
+    let total_supplied = (reserve.data.b_supply * reserve.data.b_rate) / SCALAR_12;
+    
+    if total_supplied == 0 {
+        return 0;
+    }
+    
+    // Calculate actual borrowed amount using d_rate
+    let total_borrowed = (reserve.data.d_supply * reserve.data.d_rate) / SCALAR_12;
+    
+    // Utilization as a fraction with 12 decimal places
+    (total_borrowed * SCALAR_12) / total_supplied
+}
+
+fn calculate_borrow_rate(reserve: &Reserve, utilization: i128) -> i128 {
+    // Blend's kinked rate model with 4 segments
+    let util_threshold = (reserve.config.util as i128) * SCALAR_12 / 10_000_000; // Convert 7 decimals to 12
+    let max_util_threshold = (reserve.config.max_util as i128) * SCALAR_12 / 10_000_000;
+    
+    // Apply interest rate modifier
+    let ir_mod = reserve.data.ir_mod as i128;
+    
+    let base_rate = if utilization <= util_threshold {
+        // Segment 1: 0 to target utilization
+        let r_base = (reserve.config.r_base as i128) * SCALAR_12 / 10_000_000;
+        let r_one = (reserve.config.r_one as i128) * SCALAR_12 / 10_000_000;
+        
+        if util_threshold > 0 {
+            r_base + ((utilization * (r_one - r_base)) / util_threshold)
+        } else {
+            r_base
+        }
+        
+    } else if utilization <= max_util_threshold {
+        // Segment 2: target to max utilization
+        let r_one = (reserve.config.r_one as i128) * SCALAR_12 / 10_000_000;
+        let r_two = (reserve.config.r_two as i128) * SCALAR_12 / 10_000_000;
+        
+        if max_util_threshold > util_threshold {
+            r_one + (((utilization - util_threshold) * (r_two - r_one)) / (max_util_threshold - util_threshold))
+        } else {
+            r_one
+        }
+        
+    } else if utilization < SCALAR_12 {
+        // Segment 3: above max utilization - steep increase
+        let r_two = (reserve.config.r_two as i128) * SCALAR_12 / 10_000_000;
+        let r_three = (reserve.config.r_three as i128) * SCALAR_12 / 10_000_000;
+        
+        r_two + (((utilization - max_util_threshold) * (r_three - r_two)) / (SCALAR_12 - max_util_threshold))
+        
+    } else {
+        // Segment 4: 100% utilization
+        (reserve.config.r_three as i128) * SCALAR_12 / 10_000_000
+    };
+    
+    // Apply interest rate modifier
+    (base_rate * ir_mod) / (10_000_000i128) // ir_mod is in 7 decimals
+}
+
+fn calculate_supply_rate(borrow_rate: i128, utilization: i128) -> i128 {
+    // Supply rate = borrow_rate * utilization * (1 - reserve_factor)
+    // For Blend, we assume no reserve factor (100% goes to suppliers)
+    (borrow_rate * utilization) / SCALAR_12
+}
+
+fn rate_to_apy(annual_rate: i128) -> u32 {
+    // Convert from 12-decimal rate to basis points (0.01%)
+    // annual_rate is already annualized, so we just need to convert units
+    
+    // Convert to percentage (multiply by 100) then to basis points (multiply by 100 again)
+    let apy_bps = (annual_rate * 10000) / SCALAR_12;
+    
+    // Cap at reasonable maximum (10000 basis points = 100%)
+    if apy_bps > 10000 {
+        10000
+    } else if apy_bps < 0 {
+        0
+    } else {
+        apy_bps as u32
+    }
 }

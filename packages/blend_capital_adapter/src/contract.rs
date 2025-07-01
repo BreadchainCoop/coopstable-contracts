@@ -99,4 +99,10 @@ impl LendingAdapter for BlendCapitalAdapter {
 
         storage::read_blend_token_id(e)
     }
+
+    fn get_total_deposited(e: &Env, asset: Address) -> i128 { storage::read_deposit(e, &storage::get_yield_controller(e), &asset) }
+    
+    fn get_apy(env: &Env, asset: Address) -> u32 {
+        adapter::get_apy(env, asset)
+    }
 }

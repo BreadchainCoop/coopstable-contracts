@@ -31,6 +31,11 @@ pub fn store_deposit(e: &Env, user: &Address, asset: &Address, amount: i128) {
     e.storage().instance().set(&key, &(current_amount + amount));
 }
 
+pub fn read_deposit(e: &Env, user: &Address, asset: &Address) -> i128 {
+    let key = (USER_DEPOSITS, user.clone(), asset.clone());
+    e.storage().instance().get(&key).unwrap_or(0_i128)
+}
+
 pub fn remove_deposit(e: &Env, user: &Address, asset: &Address, amount: i128) {
     e.storage().instance().extend_ttl(
         ADAPTER_INSTANCE_LIFETIME_THRESHOLD,

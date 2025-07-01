@@ -45,6 +45,8 @@ pub trait LendingYieldControllerTrait {
     fn claim_yield(e: &Env) -> i128;
     fn claim_emissions(e: &Env, protocol: Symbol, asset: Address) -> i128;
     fn get_emissions(e: &Env, protocol: Symbol, asset: Address) -> i128;
+    fn get_total_apy(e: &Env, asset: Address) -> u32;
+    fn get_weighted_total_apy(e: &Env) -> u32;
 }
 
 
@@ -179,5 +181,13 @@ impl LendingYieldControllerTrait for LendingYieldController {
         require_owner(e);
         storage::write_admin(e, new_admin.clone());
         LendingYieldControllerEvents::set_admin(e, new_admin);
+    }
+    
+    fn get_total_apy(e: &Env, asset: Address) -> u32 {
+        controls::calculate_asset_weighted_apy(e, asset)
+    }
+    
+    fn get_weighted_total_apy(e: &Env) -> u32 {
+        controls::calculate_portfolio_weighted_apy(e)
     }
 }

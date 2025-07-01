@@ -280,10 +280,71 @@ fn process_deposit_for_claim(e: &Env, protocol_id: Address, asset: Address, yiel
     );
 
     let deposited = adapter.deposit(
-        &e.current_contract_address(), 
+        &e.current_contract_address(),
         &asset, 
         &yield_amount
     );
 
     deposited
+}
+
+pub fn calculate_asset_weighted_apy(e: &Env, asset: Address) -> u32 {
+    let registry_client = storage::adapter_registry_client(e);
+    let lend_protocols_with_assets = registry_client.get_adapters_with_assets(&storage_types::YIELD_TYPE.id());
+    let mut total_weighted_apy: i128 = 0;
+    let mut total_deposits: i128 = 0;
+    
+    for (adapter_address, supported_assets) in lend_protocols_with_assets.iter() {
+        // Check if this adapter supports the asset
+        if supported_assets.contains(&asset) {
+            let adapter_client = LendingAdapterClient::new(e, &adapter_address);
+            
+            // Get APY for this asset from this adapter
+            let adapter_apy = adapter_client.get_apy(&asset) as i128;
+            
+            // Get deposit amount for this asset from this adapter
+            let adapter_deposit = adapter_client.get_total_deposited(&asset) as i128;
+            
+            if adapter_deposit > 0 {
+                total_weighted_apy += adapter_apy * adapter_deposit;
+                total_deposits += adapter_deposit;
+            }
+        }
+    }
+    
+    if total_deposits == 0 {
+        return 0;
+    }
+    
+    (total_weighted_apy / total_deposits) as u32
+}
+
+pub fn calculate_portfolio_weighted_apy(e: &Env) -> u32 {
+    let registry_client = storage::adapter_registry_client(e);
+    let lend_protocols_with_assets = registry_client.get_adapters_with_assets(&storage_types::YIELD_TYPE.id());
+    let mut total_weighted_apy: i128 = 0;
+    let mut total_portfolio_value: i128 = 0;
+    
+    for (adapter_address, supported_assets) in lend_protocols_with_assets.iter() {
+        let adapter_client = LendingAdapterClient::new(e, &adapter_address);
+        
+        for asset in supported_assets.iter() {
+            // Get APY for this asset from this adapter
+            let asset_apy = adapter_client.get_apy(&asset) as i128;
+            
+            // Get deposit value for this asset from this adapter
+            let asset_value = adapter_client.get_yield(&asset); // Using get_yield as proxy for asset value
+            
+            if asset_value > 0 {
+                total_weighted_apy += asset_apy * asset_value;
+                total_portfolio_value += asset_value;
+            }
+        }
+    }
+    
+    if total_portfolio_value == 0 {
+        return 0;
+    }
+    
+    (total_weighted_apy / total_portfolio_value) as u32
 }
