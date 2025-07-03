@@ -295,15 +295,12 @@ pub fn calculate_asset_weighted_apy(e: &Env, asset: Address) -> u32 {
     let mut total_deposits: i128 = 0;
     
     for (adapter_address, supported_assets) in lend_protocols_with_assets.iter() {
-        // Check if this adapter supports the asset
         if supported_assets.contains(&asset) {
             let adapter_client = LendingAdapterClient::new(e, &adapter_address);
             
-            // Get APY for this asset from this adapter
             let adapter_apy = adapter_client.get_apy(&asset) as i128;
             
-            // Get deposit amount for this asset from this adapter
-            let adapter_deposit = adapter_client.get_total_deposited(&asset) as i128;
+            let adapter_deposit = adapter_client.get_total_deposited(&asset);
             
             if adapter_deposit > 0 {
                 total_weighted_apy += adapter_apy * adapter_deposit;
@@ -329,11 +326,9 @@ pub fn calculate_portfolio_weighted_apy(e: &Env) -> u32 {
         let adapter_client = LendingAdapterClient::new(e, &adapter_address);
         
         for asset in supported_assets.iter() {
-            // Get APY for this asset from this adapter
             let asset_apy = adapter_client.get_apy(&asset) as i128;
             
-            // Get deposit value for this asset from this adapter
-            let asset_value = adapter_client.get_yield(&asset); // Using get_yield as proxy for asset value
+            let asset_value = adapter_client.get_total_deposited(&asset);
             
             if asset_value > 0 {
                 total_weighted_apy += asset_apy * asset_value;

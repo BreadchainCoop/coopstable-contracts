@@ -53,4 +53,5 @@ pub enum DataKey {
     DistributionConfig,
     Epoch(u64),
     EpochStartTimestamp(u64),
+    TotalDistributed,
 }

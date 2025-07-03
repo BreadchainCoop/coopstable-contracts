@@ -46,7 +46,7 @@ pub trait YieldDistributorTrait {
     fn time_before_next_distribution(e: &Env) -> u64;
 
     fn distribute_yield(e: &Env, token: Address, amount: i128) -> i128;
-
+    fn get_total_distributed(e: &Env) -> i128;
     fn set_admin(e: &Env, new_admin: Address);
     
 }
@@ -71,23 +71,19 @@ impl YieldDistributorTrait for YieldDistributor {
         storage::set_treasury(&e, &treasury);
         storage::set_yield_controller(&e, &yield_controller);
         
-        // Initialize the distribution config directly
         let config = storage_types::DistributionConfig {
             treasury_share_bps,
             distribution_period,
         };
         e.storage().instance().set(&storage_types::DataKey::DistributionConfig, &config);
         
-        // Initialize epoch to 0
         e.storage().instance().set(&storage_types::CURRENT_EPOCH_KEY, &0u64);
         
-        // Extend instance storage
         e.storage().instance().extend_ttl(
             storage_types::INSTANCE_LIFETIME_THRESHOLD,
             storage_types::INSTANCE_BUMP_AMOUNT,
         );
         
-        // Create the initial distribution for epoch 0
         let initial_distribution = storage_types::Distribution {
             distribution_start_timestamp: e.ledger().timestamp(),
             epoch: 0,
@@ -104,6 +100,8 @@ impl YieldDistributorTrait for YieldDistributor {
             storage_types::PERSISTENT_LIFETIME_THRESHOLD,
             storage_types::PERSISTENT_BUMP_AMOUNT,
         );   
+
+        e.storage().persistent().set(&storage_types::DataKey::TotalDistributed, &0i128);
     }
 
     fn set_yield_controller(e: &Env, yield_controller: Address) {
@@ -264,4 +262,6 @@ impl YieldDistributorTrait for YieldDistributor {
     }
 
     fn get_yield_controller(e: &Env) -> Address { storage::get_yield_controller(e) }
+
+    fn get_total_distributed(e: &Env) -> i128 { storage::read_total_distributed(e) }
 }

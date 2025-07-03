@@ -179,7 +179,8 @@ pub fn record_distribution(e: &Env, total: i128, treasury_amount: i128, member_a
     distribution.is_processed = true;
 
     write_distribution(e, epoch, distribution);
-    
+    write_total_distributed(e, total);
+
     let mut distributions: Vec<u64> = read_all_epoch_distributions(e);
     
     distributions.push_back(epoch);
@@ -202,6 +203,23 @@ pub fn record_distribution(e: &Env, total: i128, treasury_amount: i128, member_a
         is_processed: false,
     };
     write_distribution(e, next_epoch, next_distribution);
+}
+
+
+
+pub fn read_total_distributed(e: &Env) -> i128 {
+    extend_persistent(e, &DataKey::TotalDistributed);
+    e.storage()
+        .persistent()
+        .get(&DataKey::TotalDistributed)
+        .unwrap_or(0i128)
+}
+
+fn write_total_distributed(e: &Env, total: i128) {
+    let total_distributed  = read_total_distributed(e);
+    e.storage()
+        .persistent()
+        .set(&DataKey::TotalDistributed, &(total + total_distributed));
 }
 
 pub fn get_distribution_config(e: &Env) -> DistributionConfig { read_distribution_config(e) }
