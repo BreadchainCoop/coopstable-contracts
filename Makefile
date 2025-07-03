@@ -249,8 +249,8 @@ deploy-blend-adapter-full: check-build
 		exit 1; \
 	fi; \
 	$(MAKE) -e LENDING_YIELD_CONTROLLER_ID="$$CONTROLLER_ID" deploy-blend-adapter
+	@$(MAKE) register-blend-adapter
 	@printf "$(GREEN)Blend Adapter deployed and registered!$(NC)\n"
-# @$(MAKE) register-blend-adapter
 
 # ========== BASIC DEPLOYMENT TARGETS ==========
 
