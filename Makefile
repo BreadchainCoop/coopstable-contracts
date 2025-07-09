@@ -95,6 +95,7 @@ help:
 	@printf "  $(GREEN)make save-addresses$(NC)     - Save addresses to file\n"
 	@printf "  $(GREEN)make verify-deployment$(NC)  - Verify deployment status\n"
 	@printf "  $(GREEN)make get-balances$(NC)       - Show token balances\n"
+	@printf "  $(GREEN)make add-all-members$(NC)    - Add all three members to yield distribution\n"
 
 # ========== BUILD TARGETS ==========
 
@@ -156,6 +157,7 @@ deploy-protocol: check-build
 	@$(MAKE) deploy-distributor-full
 	@$(MAKE) deploy-controller-full
 	@$(MAKE) deploy-blend-adapter-full
+	@$(MAKE) add-all-members
 	@printf "$(GREEN)Full protocol deployment complete!$(NC)\n"
 	@$(MAKE) show-addresses
 	@$(MAKE) save-addresses
@@ -877,7 +879,7 @@ verify-deployment:
 # distributor
 .PHONY: add-member
 add-member:
-	@printf "$(YELLOW)Adding admin as community member for yield distribution...$(NC)\n"
+	@printf "$(YELLOW)Adding $(MEMBER) as community member for yield distribution...$(NC)\n"
 	@if [ -z "$(YIELD_DISTRIBUTOR_ID)" ]; then \
 		printf "$(RED)Error: Yield Distributor ID not set.$(NC)\n"; \
 		exit 1; \
@@ -889,7 +891,15 @@ add-member:
 		-- \
 		add_member \
 		--member $(MEMBER)
-	@printf "$(GREEN)Admin added as community member!$(NC)\n"
+	@printf "$(GREEN)$(MEMBER) added as community member!$(NC)\n"
+
+.PHONY: add-all-members
+add-all-members:
+	@printf "$(YELLOW)Adding all three members to yield distribution...$(NC)\n"
+	@$(MAKE) add-member MEMBER=$$(stellar keys public-key member_1)
+	@$(MAKE) add-member MEMBER=$$(stellar keys public-key member_2)
+	@$(MAKE) add-member MEMBER=$$(stellar keys public-key member_3)
+	@printf "$(GREEN)All members added to yield distribution!$(NC)\n"
 
 .PHONY: list-members
 list-members:
