@@ -352,7 +352,7 @@ fn write_distribution(e: &Env, epoch: u64, distribution: Distribution) {
     extend_persistent(e, &DataKey::Distribution(epoch));
 }
 
-fn read_epoch_current(e: &Env) -> u64 {
+pub fn read_epoch_current(e: &Env) -> u64 {
     extend_instance(e);
     e.storage()
         .instance()

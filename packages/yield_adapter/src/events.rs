@@ -22,4 +22,9 @@ impl LendingAdapterEvents {
         let topics = (Symbol::new(e, "emissions_claimed"), from);
         e.events().publish(topics, (to, asset, amount));
     }
+    
+    pub fn update_epoch_principal(e: &Env, asset: Address, epoch: u64, principal: i128) {
+        let topics = (Symbol::new(e, "epoch_principal_updated"), asset);
+        e.events().publish(topics, (epoch, principal));
+    }
 }

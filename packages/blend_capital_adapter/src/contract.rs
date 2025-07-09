@@ -102,7 +102,18 @@ impl LendingAdapter for BlendCapitalAdapter {
 
     fn get_total_deposited(e: &Env, asset: Address) -> i128 { storage::read_deposit(e, &storage::get_yield_controller(e), &asset) }
     
+    fn get_balance(e: &Env, user: Address, asset: Address) -> i128 {
+        adapter::get_balance(e, user, asset)
+    }
+    
     fn get_apy(env: &Env, asset: Address) -> u32 {
         adapter::get_apy(env, asset)
+    }
+    
+    fn update_epoch_principal(env: &Env, asset: Address, epoch: u64, principal: i128) {
+        storage::require_yield_controller(env);
+        storage::set_asset_epoch_principal(env, &asset, epoch, principal);
+        
+        LendingAdapterEvents::update_epoch_principal(env, asset, epoch, principal);
     }
 }

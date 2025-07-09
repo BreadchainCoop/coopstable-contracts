@@ -484,3 +484,111 @@ fn test_edge_case_operations() {
     let result = client.withdraw(&fixture.user1, &fixture.usdc_token_id, &0);
     assert_eq!(result, 0);
 }
+
+#[test]
+fn test_epoch_based_yield_tracking() {
+    let fixture = TestFixture::create();
+    let client = fixture.lending_adapter_client();
+
+    fixture.env.mock_all_auths();
+
+    // Initial deposit
+    let deposit_amount = 1000_0000000;
+    client.deposit(&fixture.user1, &fixture.usdc_token_id, &deposit_amount);
+
+    // Simulate yield accrual (pool increases balance)
+    let yield_amount = 50_0000000;
+    fixture.pool.add_yield(&fixture.usdc_token_id, &yield_amount);
+
+    // Verify yield shows as 50
+    let current_yield = client.get_yield(&fixture.usdc_token_id);
+    assert_eq!(current_yield, yield_amount);
+
+    // Set epoch principal for epoch 1 (simulating distribution)
+    let epoch_1 = 1u64;
+    let principal_after_dist = deposit_amount + yield_amount; // 1050
+    client.update_epoch_principal(&fixture.usdc_token_id, &epoch_1, &principal_after_dist);
+
+    // Verify yield shows as 0 after epoch principal is set
+    let yield_after_epoch = client.get_yield(&fixture.usdc_token_id);
+    assert_eq!(yield_after_epoch, 0);
+
+    // Simulate more yield accrual for epoch 1
+    let additional_yield = 25_0000000;
+    fixture.pool.add_yield(&fixture.usdc_token_id, &additional_yield);
+
+    // Verify yield shows as 25 (only the new yield)
+    let current_yield = client.get_yield(&fixture.usdc_token_id);
+    assert_eq!(current_yield, additional_yield);
+
+    // Test withdrawal during epoch
+    let withdrawal_amount = 100_0000000;
+    client.withdraw(&fixture.user1, &fixture.usdc_token_id, &withdrawal_amount);
+
+    // Verify yield calculation accounts for withdrawals
+    // Current balance: 1050 + 25 - 100 = 975
+    // Adjusted principal: 1050 - 100 = 950
+    // Expected yield: 975 - 950 = 25
+    let yield_after_withdrawal = client.get_yield(&fixture.usdc_token_id);
+    assert_eq!(yield_after_withdrawal, additional_yield);
+
+    // Test edge case: withdrawal larger than withdrawals tracked
+    let large_withdrawal = 200_0000000;
+    client.withdraw(&fixture.user1, &fixture.usdc_token_id, &large_withdrawal);
+
+    // Verify yield calculation still works
+    // Current balance: 975 - 200 = 775
+    // Adjusted principal: 1050 - 300 = 750
+    // Expected yield: 775 - 750 = 25
+    let yield_after_large_withdrawal = client.get_yield(&fixture.usdc_token_id);
+    assert_eq!(yield_after_large_withdrawal, additional_yield);
+}
+
+#[test]
+fn test_epoch_transition_compound_effect() {
+    let fixture = TestFixture::create();
+    let client = fixture.lending_adapter_client();
+
+    fixture.env.mock_all_auths();
+
+    // Initial deposit in epoch 0
+    let initial_deposit = 1000_0000000;
+    client.deposit(&fixture.user1, &fixture.usdc_token_id, &initial_deposit);
+
+    // Simulate yield accrual in epoch 0
+    let epoch_0_yield = 50_0000000;
+    fixture.pool.add_yield(&fixture.usdc_token_id, &epoch_0_yield);
+
+    // Verify epoch 0 yield
+    let current_yield = client.get_yield(&fixture.usdc_token_id);
+    assert_eq!(current_yield, epoch_0_yield);
+
+    // Move to epoch 1 - principal includes previous yield
+    let epoch_1 = 1u64;
+    let epoch_1_principal = initial_deposit + epoch_0_yield; // 1050
+    client.update_epoch_principal(&fixture.usdc_token_id, &epoch_1, &epoch_1_principal);
+
+    // Verify yield resets to 0 after epoch transition
+    let yield_after_epoch_1 = client.get_yield(&fixture.usdc_token_id);
+    assert_eq!(yield_after_epoch_1, 0);
+
+    // Simulate yield accrual in epoch 1
+    let epoch_1_yield = 52_5000000; // 5% of 1050
+    fixture.pool.add_yield(&fixture.usdc_token_id, &epoch_1_yield);
+
+    // Verify epoch 1 yield
+    let current_yield = client.get_yield(&fixture.usdc_token_id);
+    assert_eq!(current_yield, epoch_1_yield);
+
+    // Move to epoch 2 - principal includes all previous yields
+    let epoch_2 = 2u64;
+    let epoch_2_principal = epoch_1_principal + epoch_1_yield; // 1102.5
+    client.update_epoch_principal(&fixture.usdc_token_id, &epoch_2, &epoch_2_principal);
+
+    // Verify yield resets to 0 after epoch transition
+    let yield_after_epoch_2 = client.get_yield(&fixture.usdc_token_id);
+    assert_eq!(yield_after_epoch_2, 0);
+
+    // Verify compound effect: each epoch's principal includes all previous yields
+    assert_eq!(epoch_2_principal, initial_deposit + epoch_0_yield + epoch_1_yield);
+}

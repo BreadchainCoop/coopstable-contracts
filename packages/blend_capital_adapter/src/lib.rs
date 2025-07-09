@@ -4,6 +4,7 @@ mod contract;
 mod adapter;
 pub mod contract_types;
 mod storage;
+mod storage_types;
 pub mod artifacts {
     pub mod pool {
         soroban_sdk::contractimport!(file = "./artifacts/pool.wasm");

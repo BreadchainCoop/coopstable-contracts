@@ -75,6 +75,9 @@ pub fn withdraw_collateral(
     );
 
     storage::remove_deposit(e, &yield_controller, &asset, amount);
+    
+    // Track withdrawal within the current epoch
+    storage::add_epoch_withdrawal(e, &asset, amount);
 
     amount
 }
@@ -201,12 +204,26 @@ pub fn claim_auth(e: &Env, from: Address, to: Address, asset: Address) -> Option
 }
 
 pub fn read_yield(e: &Env, user: Address, asset: Address) -> i128 {
+    // Note: user parameter is kept for interface compatibility but will always be yield_controller
     let current_value = get_balance(e, user.clone(), asset.clone());
-    let original_deposit = storage::get_deposit_amount(e, &user, &asset);
-    if original_deposit == 0 || current_value <= original_deposit {
-        return 0;
+    
+    if let Some(epoch_data) = storage::get_asset_epoch_principal(e, &asset) {
+        // Adjusted principal accounts for withdrawals
+        let adjusted_principal = epoch_data.principal - epoch_data.withdrawals;
+        
+        if adjusted_principal <= 0 || current_value <= adjusted_principal {
+            return 0;
+        }
+        
+        current_value - adjusted_principal
+    } else {
+        // Fallback to original deposit method for first epoch
+        let original_deposit = storage::get_deposit_amount(e, &user, &asset);
+        if original_deposit == 0 || current_value <= original_deposit {
+            return 0;
+        }
+        current_value - original_deposit
     }
-    current_value - original_deposit
 }
 
 pub fn get_apy(e: &Env, asset: Address) -> u32 {

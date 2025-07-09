@@ -26,7 +26,11 @@ pub trait LendingAdapter {
 
     fn get_total_deposited(e: &Env, asset: Address) -> i128;
     
+    fn get_balance(e: &Env, user: Address, asset: Address) -> i128;
+    
     fn protocol_token(e: &Env) -> Address;
+
+    fn update_epoch_principal(env: &Env, asset: Address, epoch: u64, principal: i128);
 
     fn __constructor(e: Env, yield_controller: Address, lending_pool_id: Address, protocol_token_id: Address); 
 }

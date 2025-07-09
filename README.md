@@ -385,3 +385,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Stellar Development Foundation](https://stellar.org/)
 - [Blend Capital](https://www.blend.capital/) for yield protocol integration
 - The Breadchain Cooperative community
+

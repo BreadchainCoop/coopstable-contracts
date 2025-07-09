@@ -44,6 +44,7 @@ pub trait YieldDistributorTrait {
     fn get_next_distribution_time(e: &Env) -> u64;
     fn is_distribution_available(e: &Env) -> bool;
     fn time_before_next_distribution(e: &Env) -> u64;
+    fn get_current_epoch(e: &Env) -> u64;
 
     fn distribute_yield(e: &Env, token: Address, amount: i128) -> i128;
     fn get_total_distributed(e: &Env) -> i128;
@@ -254,6 +255,8 @@ impl YieldDistributorTrait for YieldDistributor {
     fn get_distribution_info(e: &Env) -> Distribution {  storage::read_distribution_of_current_epoch(e) }
 
     fn get_distribution_history(e: &Env) -> Vec<Distribution> { storage::read_distribution_history(e) }
+    
+    fn get_current_epoch(e: &Env) -> u64 { storage::read_epoch_current(e) }
 
     fn set_admin(e: &Env, new_admin: Address) {
         require_owner(e);
