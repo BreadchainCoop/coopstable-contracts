@@ -721,6 +721,21 @@ test-read-emissions:
 		--asset $(USDC_ID) 
 	@printf "$(GREEN)Emissions claiming test complete!$(NC)\n"
 
+.PHONY: test-total-supply
+test-total-supply:
+	@printf "$(YELLOW)Testing total supply querying...$(NC)\n"
+	@if [ -z "$(CUSD_MANAGER_ID)" ]; then \
+		printf "$(RED)Error: Blend Capital Adapter ID not set.$(NC)\n"; \
+		exit 1; \
+	fi
+	stellar contract invoke \
+		--source $(ADMIN_KEY) \
+		--network $(NETWORK) \
+		--id $(CUSD_MANAGER_ID) \
+		-- \
+		cusd_total_supply
+	@printf "$(GREEN)Emissions claiming test complete!$(NC)\n"
+
 # Test complete cycle: deposit -> wait -> claim yield -> withdraw
 .PHONY: test-full-cycle
 test-full-cycle:
