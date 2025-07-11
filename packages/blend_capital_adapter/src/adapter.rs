@@ -34,6 +34,10 @@ pub fn supply_collateral(
         &request_vec,
     );
     storage::store_deposit(e, &yield_controller, &asset, amount);
+    
+    // Update epoch principal when new deposits are made
+    storage::add_epoch_deposit(e, &asset, amount);
+    
     amount
 }
 
@@ -208,14 +212,15 @@ pub fn read_yield(e: &Env, user: Address, asset: Address) -> i128 {
     let current_value = get_balance(e, user.clone(), asset.clone());
     
     if let Some(epoch_data) = storage::get_asset_epoch_principal(e, &asset) {
-        // Adjusted principal accounts for withdrawals
-        let adjusted_principal = epoch_data.principal - epoch_data.withdrawals;
+        // Calculate effective principal including withdrawals and deposits within epoch
+        // Principal + deposits_in_epoch - withdrawals = total amount that should not count as yield
+        let effective_principal = epoch_data.principal + epoch_data.deposits_in_epoch - epoch_data.withdrawals;
         
-        if adjusted_principal <= 0 || current_value <= adjusted_principal {
+        if effective_principal <= 0 || current_value <= effective_principal {
             return 0;
         }
         
-        current_value - adjusted_principal
+        current_value - effective_principal
     } else {
         // Fallback to original deposit method for first epoch
         let original_deposit = storage::get_deposit_amount(e, &user, &asset);

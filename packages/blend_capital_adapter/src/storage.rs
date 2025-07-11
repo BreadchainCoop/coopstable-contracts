@@ -87,6 +87,7 @@ pub fn set_asset_epoch_principal(e: &Env, asset: &Address, epoch: u64, principal
         epoch,
         principal,
         withdrawals: 0,
+        deposits_in_epoch: 0, // Reset deposits_in_epoch for new epoch
         last_updated: e.ledger().timestamp(),
     };
     
@@ -103,6 +104,32 @@ pub fn add_epoch_withdrawal(e: &Env, asset: &Address, amount: i128) {
     if let Some(mut epoch_data) = get_asset_epoch_principal(e, asset) {
         epoch_data.withdrawals += amount;
         epoch_data.last_updated = e.ledger().timestamp();
+        e.storage().instance().set(&key, &epoch_data);
+    }
+}
+
+pub fn add_epoch_deposit(e: &Env, asset: &Address, amount: i128) {
+    e.storage().instance().extend_ttl(
+        ADAPTER_INSTANCE_LIFETIME_THRESHOLD,
+        ADAPTER_INSTANCE_BUMP_AMOUNT,
+    );
+
+    let key = (ASSET_EPOCH_PRINCIPAL, asset.clone());
+    if let Some(mut epoch_data) = get_asset_epoch_principal(e, asset) {
+        // Track deposits made within the current epoch
+        // Principal should only be updated during yield claims to include compounded yield
+        epoch_data.deposits_in_epoch += amount;
+        epoch_data.last_updated = e.ledger().timestamp();
+        e.storage().instance().set(&key, &epoch_data);
+    } else {
+        // If no epoch data exists, create it with the deposit amount as initial principal
+        let epoch_data = AssetEpochPrincipal {
+            epoch: 0,
+            principal: amount,
+            withdrawals: 0,
+            deposits_in_epoch: 0, // First deposit becomes the principal, not a within-epoch deposit
+            last_updated: e.ledger().timestamp(),
+        };
         e.storage().instance().set(&key, &epoch_data);
     }
 }

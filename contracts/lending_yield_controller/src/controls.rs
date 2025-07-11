@@ -206,14 +206,14 @@ fn process_claim_yield(e: &Env, adapter_address: &Address, supported_assets: Vec
             
             process_distribute_cusd_yield(e, cusd_manager.get_cusd_id(), deposited);
             
+            // Get the current balance AFTER re-depositing yield
+            // This should be the principal for the next epoch
+            let new_principal = adapter.get_balance(&e.current_contract_address(), &asset);
+            
             // Update epoch principal for the next epoch after successful distribution
             let distributor = storage::distributor_client(e);
             let current_epoch = distributor.get_current_epoch();
             let next_epoch = current_epoch + 1;
-            
-            // Get the current balance (which now includes the claimed yield)
-            let yield_controller = e.current_contract_address();
-            let new_principal = get_balance_from_adapter(e, &adapter_address, &yield_controller, &asset);
             
             // Update the epoch principal for the next epoch
             utils::authenticate_contract(
@@ -367,10 +367,3 @@ pub fn calculate_portfolio_weighted_apy(e: &Env) -> u32 {
     (total_weighted_apy / total_portfolio_value) as u32
 }
 
-fn get_balance_from_adapter(e: &Env, adapter_address: &Address, user: &Address, asset: &Address) -> i128 {
-    let adapter = LendingAdapterClient::new(e, adapter_address);
-    
-    // Get the actual current balance directly from the blend pool
-    // This avoids circular dependency with yield calculation
-    adapter.get_balance(user, asset)
-}

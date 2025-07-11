@@ -96,6 +96,7 @@ help:
 	@printf "  $(GREEN)make verify-deployment$(NC)  - Verify deployment status\n"
 	@printf "  $(GREEN)make get-balances$(NC)       - Show token balances\n"
 	@printf "  $(GREEN)make add-all-members$(NC)    - Add all three members to yield distribution\n"
+	@printf "  $(GREEN)make burn-cusd ACC=member_1$(NC) - Burn all cUSD balance for a user\n"
 
 # ========== BUILD TARGETS ==========
 
@@ -554,7 +555,7 @@ register-blend-adapter:
 # ========== PROTOCOL TESTING TARGETS ==========
 
 # Test amount for operations (1 USDC = 10000000 stroops)
-TEST_AMOUNT ?= 9000000000
+TEST_AMOUNT ?= 5000000000
 
 # Read current yield from all protocols
 .PHONY: test-read-yield
@@ -1017,6 +1018,41 @@ cusd-check-balance:
 		-- \
 		balance \
 		--account $(ACCOUNT) || printf "$(RED)Error reading CUSD balance$(NC)\n"
+
+# Burn all cUSD balance for a user
+.PHONY: burn-cusd
+burn-cusd:
+	@if [ -z "$(ACC)" ]; then \
+		printf "$(RED)Error: ACC parameter required. Usage: make burn-cusd ACC=member_1$(NC)\n"; \
+		exit 1; \
+	fi
+	@if [ -z "$(CUSD_MANAGER_ID)" ]; then \
+		printf "$(RED)Error: CUSD Manager ID not set.$(NC)\n"; \
+		exit 1; \
+	fi
+	@printf "$(YELLOW)Getting cUSD balance for $(ACC)...$(NC)\n"
+	@ACCOUNT_KEY=$$(stellar keys public-key $(ACC)); \
+	BALANCE=$$(stellar contract invoke \
+		--source $(ACC) \
+		--network $(NETWORK) \
+		--id $(CUSD_ID) \
+		-- \
+		balance \
+		--id $$ACCOUNT_KEY 2>/dev/null || echo "0"); \
+	if [ "$$BALANCE" = "0" ] || [ -z "$$BALANCE" ]; then \
+		printf "$(RED)No cUSD balance to burn for $(ACC)$(NC)\n"; \
+		exit 0; \
+	fi; \
+	printf "$(YELLOW)Burning $$BALANCE cUSD from $(ACC)...$(NC)\n"; \
+	stellar contract invoke \
+		--source $(ACC) \
+		--network $(NETWORK) \
+		--id $(CUSD_MANAGER_ID) \
+		-- \
+		burn_cusd \
+		--from $$ACCOUNT_KEY \
+		--amount $$BALANCE; \
+	printf "$(GREEN)Successfully burned $$BALANCE cUSD from $(ACC)!$(NC)\n"
 
 # Check protocol configuration status
 .PHONY: check-config

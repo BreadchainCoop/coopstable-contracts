@@ -26,6 +26,11 @@ impl LendingAdapter for BlendCapitalAdapter {
         
         storage::require_yield_controller(e);
 
+        // Initialize epoch principal if this is the first deposit
+        if storage::get_asset_epoch_principal(e, &asset).is_none() {
+            storage::set_asset_epoch_principal(e, &asset, 0, 0);
+        }
+
         adapter::supply_collateral(e, user, asset.clone(), amount);
         
         LendingAdapterEvents::deposit(&e, e.current_contract_address(), asset, amount);
