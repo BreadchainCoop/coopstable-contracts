@@ -12,6 +12,14 @@ fn require_admin(e: &Env) { storage::read_admin(e).require_auth(); }
 fn require_owner(e: &Env) { storage::read_owner(e).require_auth(); }
 
 pub trait LendingYieldControllerTrait {
+    /// Initialize the Lending Yield Controller contract
+    ///
+    /// ### Arguments
+    /// * `yield_distributor` - The address of the yield distributor contract
+    /// * `adapter_registry` - The address of the adapter registry contract
+    /// * `cusd_manager` - The address of the cUSD manager contract
+    /// * `admin` - The address of the admin (manages operational settings)
+    /// * `owner` - The address of the contract owner (can set admin)
     fn __constructor(
         e: Env,
         yield_distributor: Address,
@@ -20,13 +28,65 @@ pub trait LendingYieldControllerTrait {
         admin: Address,
         owner: Address,
     );
+    
+    /// (Admin only) Set a new yield distributor contract address
+    ///
+    /// ### Arguments
+    /// * `yield_distributor` - The new yield distributor contract address
+    ///
+    /// ### Panics
+    /// If the caller is not the admin
     fn set_yield_distributor(e: &Env, yield_distributor: Address);
+    
+    /// Fetch the address of the yield distributor contract
     fn get_yield_distributor(e: &Env) -> Address;
+    
+    /// (Admin only) Set a new adapter registry contract address
+    ///
+    /// ### Arguments
+    /// * `adapter_registry` - The new adapter registry contract address
+    ///
+    /// ### Panics
+    /// If the caller is not the admin
     fn set_adapter_registry(e: &Env, adapter_registry: Address);
+    
+    /// Fetch the address of the adapter registry contract
     fn get_adapter_registry(e: &Env) -> Address;
+    
+    /// (Admin only) Set a new cUSD manager contract address
+    ///
+    /// ### Arguments
+    /// * `cusd_manager` - The new cUSD manager contract address
+    ///
+    /// ### Panics
+    /// If the caller is not the admin
     fn set_cusd_manager(e: &Env, cusd_manager: Address);
+    
+    /// Fetch the address of the cUSD manager contract
     fn get_cusd_manager(e: &Env) -> Address;
+    
+    /// (Owner only) Set a new admin address
+    ///
+    /// ### Arguments
+    /// * `new_admin` - The new admin address
+    ///
+    /// ### Panics
+    /// If the caller is not the owner
     fn set_admin(e: &Env, new_admin: Address);
+    
+    /// Deposit collateral into a lending protocol through the yield controller
+    ///
+    /// Returns the actual amount deposited into the protocol
+    ///
+    /// ### Arguments
+    /// * `protocol` - The symbol identifier of the lending protocol
+    /// * `user` - The address of the user depositing collateral
+    /// * `asset` - The address of the asset being deposited
+    /// * `amount` - The amount of the asset to deposit
+    ///
+    /// ### Panics
+    /// If the user does not authorize the transaction
+    /// If the protocol is not registered in the adapter registry
     fn deposit_collateral(
         e: &Env,
         protocol: Symbol,
@@ -34,6 +94,20 @@ pub trait LendingYieldControllerTrait {
         asset: Address,
         amount: i128,
     ) -> i128;
+    
+    /// Withdraw collateral from a lending protocol through the yield controller
+    ///
+    /// Returns the actual amount withdrawn from the protocol
+    ///
+    /// ### Arguments
+    /// * `protocol` - The symbol identifier of the lending protocol
+    /// * `user` - The address of the user withdrawing collateral
+    /// * `asset` - The address of the asset being withdrawn
+    /// * `amount` - The amount of the asset to withdraw
+    ///
+    /// ### Panics
+    /// If the user does not authorize the transaction
+    /// If the user has insufficient deposited balance
     fn withdraw_collateral(
         e: &Env,
         protocol: Symbol,
@@ -41,15 +115,50 @@ pub trait LendingYieldControllerTrait {
         asset: Address,
         amount: i128,
     ) -> i128;
+    
+    /// Fetch the accumulated yield available for distribution
     fn get_yield(e: &Env) -> i128;
+    
+    /// Claim accumulated yield and distribute it through the yield distributor
+    ///
+    /// Returns the total amount of yield claimed and distributed
+    ///
+    /// ### Panics
+    /// If no yield is available to claim
+    /// If distribution is not available from the yield distributor
     fn claim_yield(e: &Env) -> i128;
+    
+    /// Claim emissions rewards from a specific protocol for an asset
+    ///
+    /// Returns the total amount of emissions claimed
+    ///
+    /// ### Arguments
+    /// * `protocol` - The symbol identifier of the lending protocol
+    /// * `asset` - The address of the asset for which to claim emissions
     fn claim_emissions(e: &Env, protocol: Symbol, asset: Address) -> i128;
+    
+    /// Fetch the accumulated emissions rewards for a specific protocol and asset
+    ///
+    /// ### Arguments
+    /// * `protocol` - The symbol identifier of the lending protocol
+    /// * `asset` - The address of the asset to check emissions for
     fn get_emissions(e: &Env, protocol: Symbol, asset: Address) -> i128;
+    
+    /// Fetch the total APY across all protocols for a specific asset
+    ///
+    /// ### Arguments
+    /// * `asset` - The address of the asset to check APY for
     fn get_total_apy(e: &Env, asset: Address) -> u32;
+    
+    /// Fetch the weighted average APY across all assets and protocols
     fn get_weighted_total_apy(e: &Env) -> u32;
 }
 
 
+/// ### LendingYieldController
+///
+/// Central controller for managing yield generation across multiple lending protocols.
+/// Handles deposits, withdrawals, yield aggregation, and distribution to the Coopstable ecosystem.
 #[contract]
 pub struct LendingYieldController;
 

@@ -1,6 +1,6 @@
-# Coopstable - Decentralized Stable Coin System
+# Coopstable - Decentralized Cooperative Stablecoin Protocol
 
-Coopstable is a decentralized stable coin (cUSD) system built on the Stellar network. The system enables users to mint stable coins by providing collateral to yield-generating protocols, with yield being distributed to members of the cooperative.
+Coopstable is a decentralized cooperative stablecoin protocol built on the Stellar network using Soroban smart contracts. The system implements a novel "lossless donation" model where users mint cUSD stablecoins by depositing collateral into yield-generating DeFi protocols, with the generated yield distributed to cooperative members and projects while users retain their principal.
 
 ## Table of Contents
 
@@ -11,7 +11,12 @@ Coopstable is a decentralized stable coin (cUSD) system built on the Stellar net
 - [Getting Started](#getting-started)
 - [Smart Contracts](#smart-contracts)
 - [Deployment](#deployment)
+- [Common Operations](#common-operations)
 - [Testing](#testing)
+- [TypeScript Bindings](#typescript-bindings)
+- [System Configuration](#system-configuration)
+- [Troubleshooting](#troubleshooting)
+- [Protocol Economics](#protocol-economics)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -19,17 +24,22 @@ Coopstable is a decentralized stable coin (cUSD) system built on the Stellar net
 
 The Coopstable system consists of several interconnected smart contracts that work together to:
 
-1. **Manage collateralized stable coin minting and burning**
-2. **Generate yield through yield adapters** (e.g., Blend Capital integration)
-3. **Distribute yield to cooperative members**
+1. **Manage collateralized stablecoin minting and burning** through the cUSD Manager
+2. **Generate yield through extensible protocol adapters** (currently Blend Capital)
+3. **Distribute yield to cooperative members and treasury** through time-based epochs
+4. **Provide a registry system** for managing multiple yield protocols
+5. **Implement role-based access control** across all system components
 
 ### Key Features
 
-- **Collateral-backed stable coin**: Mint cUSD by depositing supported assets
-- **Yield generation**: Earn yield from DeFi protocols automatically
-- **Cooperative distribution**: Yield is distributed among members
-- **Modular design**: Support for multiple yield protocols through adapters
-- **Role-based access control**: Secure permission management system
+- **Collateral-backed stablecoin**: Mint cUSD 1:1 by depositing USDC and other supported assets
+- **Automated yield generation**: Earn yield from DeFi protocols (currently Blend Capital)
+- **Cooperative distribution**: Yield distributed equally among members after treasury share
+- **Lossless donations**: Users retain their principal while supporting public goods
+- **Modular architecture**: Extensible adapter system for multiple yield protocols
+- **Time-based epochs**: Configurable distribution periods prevent gaming
+- **Role-based access control**: Owner/Admin permission hierarchy
+- **Emissions rewards**: Claim protocol token emissions (e.g., BLND) in addition to yield
 
 ## Architecture
 
@@ -59,6 +69,8 @@ graph TD
 - **Stellar CLI** 20.0.0 or later
 - **Node.js** (for TypeScript bindings)
 - **Make** (for build automation)
+- **Soroban contracts** capability (included in Stellar CLI)
+- **Git** for version control
 
 ### Installation
 
@@ -81,19 +93,18 @@ rustup target add wasm32v1-none
 
 ```
 ├── contracts/                    # Core smart contracts
-│   ├── cusd_manager/             # cUSD token management
-│   ├── yield_adapter_registry/   # Adapter registry
-│   ├── yield_distributor/        # Yield distribution
-│   └── lending_yield_controller/ # Main controller
-├── packages/                     # Shared libraries
-│   ├── access_control/           # Permission management
-│   ├── yield_adapter/            # Adapter interfaces
-│   └── blend_capital_adapter/    # Blend protocol integration
-├── deployments/                  # Deployment configurations
-│   ├── local.json
-│   └── testnet.json
+│   ├── cusd_manager/             # cUSD token management and minting
+│   ├── yield_adapter_registry/   # Registry for yield protocol adapters
+│   ├── yield_distributor/        # Yield distribution with epochs
+│   └── lending_yield_controller/ # Main system orchestrator
+├── packages/                     # Shared libraries and adapters
+│   ├── yield_adapter/            # Common adapter interfaces
+│   └── blend_capital_adapter/    # Blend Capital protocol integration
+├── target/                       # Build artifacts
+│   └── wasm32v1-none/release/    # Compiled WASM contracts
+├── ts/                          # TypeScript bindings (generated)
 ├── Cargo.toml                    # Workspace configuration
-├── Makefile                      # Build automation
+├── Makefile                      # Comprehensive build and deployment automation
 └── README.md
 ```
 
@@ -103,7 +114,7 @@ rustup target add wasm32v1-none
 
 ```bash
 git clone https://github.com/BreadchainCoop/Coop-Stable-Contracts
-cd Coop-Stable-Contracts
+cd coopstable-contracts
 ```
 
 ### 2. Build the Project
@@ -112,27 +123,24 @@ cd Coop-Stable-Contracts
 # Build all contracts
 make build
 
-# Or build individual components
-cd contracts/cusd_manager
-make build
-```
-
-### 3. Run Tests
-
-```bash
-# Run all tests
+# Build and run tests
 make test
 
-# Run specific contract tests
-cd contracts/cusd_manager
-make test
-```
-
-### 4. Format Code
-
-```bash
+# Format code
 make fmt
+
+# Clean build artifacts
+make clean
 ```
+
+### 3. View Available Commands
+
+```bash
+# Show all available make targets
+make help
+```
+
+The Makefile provides comprehensive automation for building, testing, deploying, and managing the Coopstable protocol.
 
 ## Smart Contracts
 
@@ -140,18 +148,26 @@ make fmt
 
 | Contract | Description | Key Functions |
 |----------|-------------|---------------|
-| **cUSD Manager** | Manages cUSD token minting/burning | `issue_cusd()`, `burn_cusd()` |
-| **Yield Adapter Registry** | Manages yield protocol adapters | `register_adapter()`, `get_adapter()` |
-| **Yield Distributor** | Distributes yield to members | `distribute_yield()`, `add_member()` |
-| **Lending Yield Controller** | Main system controller | `deposit_collateral()`, `claim_yield()` |
+| **cUSD Manager** | Central authority for cUSD token lifecycle | `issue_cusd()`, `burn_cusd()`, `cusd_total_supply()` |
+| **Lending Yield Controller** | Main system orchestrator and user interface | `deposit_collateral()`, `withdraw_collateral()`, `claim_yield()` |
+| **Yield Distributor** | Manages yield distribution with epochs | `distribute_yield()`, `add_member()`, `is_distribution_available()` |
+| **Yield Adapter Registry** | Registry for managing yield protocol adapters | `register_adapter()`, `get_adapter()`, `is_supported_asset()` |
 
-### Packages
+### Adapter Packages
 
-| Package | Description |
-|---------|-------------|
-| **access_control** | Role-based permission system |
-| **yield_adapter** | Interfaces for yield adapters |
-| **blend_capital_adapter** | Blend Capital integration |
+| Package | Description | Key Functions |
+|---------|-------------|---------------|
+| **yield_adapter** | Common interfaces for all yield adapters | `LendingAdapter` trait, events, types |
+| **blend_capital_adapter** | Blend Capital protocol integration | `deposit()`, `withdraw()`, `get_yield()`, `claim_emissions()` |
+
+### System Flow
+
+1. **User deposits collateral** → Lending Yield Controller
+2. **Controller routes to adapter** → Blend Capital Adapter
+3. **Adapter deposits to protocol** → Blend Capital Pool
+4. **Controller mints cUSD** → cUSD Manager
+5. **Yield accumulates** → Claimed periodically
+6. **Yield distributed** → Treasury and Members via Yield Distributor
 
 ## Deployment
 
@@ -162,120 +178,164 @@ make fmt
 stellar keys generate owner
 stellar keys generate admin
 stellar keys generate treasury
+stellar keys generate member_1
+stellar keys generate member_2
+stellar keys generate member_3
 ```
 
 2. **Fund accounts** with XLM:
 ```bash
 stellar keys fund $(stellar keys public-key owner)
+stellar keys fund $(stellar keys public-key admin)
+stellar keys fund $(stellar keys public-key treasury)
 ```
 
-### Local Deployment
+### Automated Deployment
 
-1. **Start local network**:
+The Makefile provides comprehensive deployment automation:
+
 ```bash
-stellar network container start local
+# Build and deploy entire protocol
+make quick-deploy
+
+# Deploy protocol with dependency management
+make deploy-protocol
+
+# Clean redeploy entire protocol
+make redeploy-protocol
+
+# Deploy specific components
+make deploy-cusd-manager-full
+make deploy-controller-full
+make deploy-blend-adapter-full
 ```
 
-2. **Deploy cUSD asset**:
+### Manual Deployment Steps
+
+1. **Build contracts**:
 ```bash
-stellar contract asset deploy \
-  --source owner \
-  --asset CUSD:$(stellar keys public-key owner) \
-  --network local
+make build
 ```
 
-3. **Deploy contracts** in order:
+2. **Deploy contracts in dependency order**:
 ```bash
-# Deploy cUSD Manager
-stellar contract deploy \
-  --wasm ./target/wasm32v1-none/release/cusd_manager.wasm \
-  --source owner \
-  --network local \
-  --alias cusd_manager \
-  -- \
-  --cusd_id <SAC_ID> \
-  --owner $(stellar keys public-key owner) \
-  --admin $(stellar keys public-key admin)
+# Deploy core contracts
+make deploy-core
 
-# Deploy Yield Adapter Registry
-stellar contract deploy \
-  --wasm ./target/wasm32v1-none/release/yield_adapter_registry.wasm \
-  --source owner \
-  --network local \
-  --alias yield_adapter_registry \
-  -- \
-  --admin $(stellar keys public-key admin)
+# Deploy adapters
+make deploy-adapters
 
-# Deploy Yield Distributor
-stellar contract deploy \
-  --wasm ./target/wasm32v1-none/release/yield_distributor.wasm \
-  --source owner \
-  --network local \
-  --alias yield_distributor \
-  -- \
-  --treasury $(stellar keys public-key treasury) \
-  --treasury_share_bps 1000 \
-  --yield_controller GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF \
-  --distribution_period 60 \
-  --owner $(stellar keys public-key owner) \
-  --admin $(stellar keys public-key admin)
-
-# Deploy Lending Yield Controller
-stellar contract deploy \
-  --wasm ./target/wasm32v1-none/release/lending_yield_controller.wasm \
-  --source owner \
-  --network local \
-  --alias lending_yield_controller \
-  -- \
-  --yield_distributor <YIELD_DISTRIBUTOR_ADDRESS> \
-  --adapter_registry <YIELD_ADAPTER_REGISTRY_ADDRESS> \
-  --cusd_manager <CUSD_MANAGER_ADDRESS> \
-  --admin $(stellar keys public-key admin) \
-  --owner $(stellar keys public-key owner)
-
-# Deploy Blend Capital Adapter
-stellar contract deploy \
-  --wasm ./target/wasm32v1-none/release/blend_capital_adapter.wasm \
-  --source owner \
-  --network local \
-  --alias blend_capital_adapter \
-  -- \
-  --lending_adapter_controller_id <LENDING_YIELD_CONTROLLER_ADDRESS> \
-  --lending_pool_id <BLEND_POOL_ID>
+# Configure all contracts
+make configure-all
 ```
 
-### Testnet Deployment
-
-Replace `--network local` with `--network testnet` in the above commands.
+3. **Add members to yield distribution**:
+```bash
+make add-all-members
+```
 
 ### Configuration
 
-After deployment, configure the system:
+After deployment, the system is automatically configured with:
+- cUSD Manager set as token issuer
+- Yield Controller configured in cUSD Manager
+- Yield Controller set in Yield Distributor
+- Blend Capital Adapter registered for USDC
+- Treasury and members configured
 
-1. **Set yield controller** on distributor:
+### Testnet Deployment
+
+Set the network variable:
 ```bash
-stellar contract invoke \
-  --source admin \
-  --network local \
-  --id <YIELD_DISTRIBUTOR_ADDRESS> \
-  -- \
-  set_yield_controller \
-  --caller $(stellar keys public-key admin) \
-  --yield_controller <LENDING_YIELD_CONTROLLER_ADDRESS>
+NETWORK=testnet make deploy-protocol
 ```
 
-2. **Register adapter** in registry:
+### Deployment Verification
+
 ```bash
+# Check deployment status
+make verify-deployment
+
+# View all deployed addresses
+make show-addresses
+
+# Check protocol configuration
+make check-config
+```
+
+## Common Operations
+
+### Protocol Testing
+
+```bash
+# Test complete workflow
+make test-full-cycle
+
+# Test individual operations
+make test-deposit
+make test-claim-yield
+make test-withdraw
+
+# Read current yield
+make test-read-yield
+
+# Check balances
+make get-balances
+```
+
+### Deposit Collateral and Mint cUSD
+
+```bash
+# Test deposit (500 USDC)
+TEST_AMOUNT=5000000000 make test-deposit
+
+# Or manually
 stellar contract invoke \
   --source admin \
-  --network local \
-  --id <YIELD_ADAPTER_REGISTRY_ADDRESS> \
+  --network testnet \
+  --id <LENDING_YIELD_CONTROLLER_ADDRESS> \
   -- \
-  register_adapter \
-  --caller $(stellar keys public-key admin) \
-  --yield_type LEND \
+  deposit_collateral \
   --protocol BC_LA \
-  --adapter_address <BLEND_CAPITAL_ADAPTER_ADDRESS>
+  --user $(stellar keys public-key admin) \
+  --asset <USDC_ADDRESS> \
+  --amount 5000000000
+```
+
+### Claim Yield and Distribute
+
+```bash
+# Claim accumulated yield
+make test-claim-yield
+
+# Check distribution status
+make check-distribution-status
+
+# View distribution history
+make distribution-history
+```
+
+### Member Management
+
+```bash
+# Add a member
+make add-member MEMBER=$(stellar keys public-key member_1)
+
+# List all members
+make list-members
+
+# Check next distribution time
+make next-distribution
+```
+
+### Withdraw Collateral
+
+```bash
+# Withdraw specific amount
+TEST_AMOUNT=1000000000 make test-withdraw
+
+# Withdraw all cUSD balance
+make burn-cusd ACC=admin
 ```
 
 ## Testing
@@ -284,14 +344,15 @@ stellar contract invoke \
 
 ```bash
 # Run all tests
-cargo test
+make test
+
+# Run specific contract tests
+cd contracts/cusd_manager
+make test
 
 # Run specific package tests
-cd packages/access_control
-cargo test
-
-# Run with coverage
-cargo tarpaulin --out Html
+cd packages/blend_capital_adapter
+make test
 ```
 
 ## TypeScript Bindings
@@ -299,52 +360,35 @@ cargo tarpaulin --out Html
 Generate TypeScript bindings for frontend integration:
 
 ```bash
-stellar contract bindings typescript \                              
---wasm <path-to-contract-wasm-build> \             
---output-dir ts/<name-of-contract> \
-```
-Bindings will be available in the `./ts/` directory.
+# Generate all bindings
+make bindings
 
-## Common Operations
-
-### Deposit Collateral and Mint cUSD
-
-```bash
-# User deposits USDC collateral
-stellar contract invoke \
-  --source user \
-  --network local \
-  --id <LENDING_YIELD_CONTROLLER_ADDRESS> \
-  -- \
-  deposit_collateral \
-  --protocol BC_LA \
-  --user $(stellar keys public-key user) \
-  --asset <USDC_ADDRESS> \
-  --amount 1000000000
+# Or generate manually for specific contracts
+stellar contract bindings typescript \
+  --wasm target/wasm32v1-none/release/cusd_manager.wasm \
+  --output-dir ts/cusd_manager \
+  --overwrite
 ```
 
-### Claim Yield
+Bindings will be available in the `./ts/` directory with one folder per contract.
+
+## System Configuration
+
+### Default Configuration
+
+- **Treasury Share**: 10% (1000 basis points)
+- **Distribution Period**: 24 hours (86400 seconds)
+- **Supported Assets**: USDC
+- **Yield Protocol**: Blend Capital
+- **Network**: Testnet (configurable)
+
+### Environment Variables
 
 ```bash
-stellar contract invoke \
-  --source admin \
-  --network local \
-  --id <LENDING_YIELD_CONTROLLER_ADDRESS> \
-  -- \
-  claim_yield
-```
-
-### Add Member to Distribution
-
-```bash
-stellar contract invoke \
-  --source admin \
-  --network local \
-  --id <YIELD_DISTRIBUTOR_ADDRESS> \
-  -- \
-  add_member \
-  --caller $(stellar keys public-key admin) \
-  --member <MEMBER_ADDRESS>
+# Override default values
+NETWORK=testnet make deploy-protocol
+TREASURY_SHARE_BPS=500 make deploy-protocol
+DISTRIBUTION_PERIOD=3600 make deploy-protocol
 ```
 
 ## Troubleshooting
@@ -354,12 +398,35 @@ stellar contract invoke \
 1. **Insufficient Balance**: Ensure all accounts are funded with XLM
 2. **Authorization Errors**: Check that proper roles are assigned
 3. **Asset Support**: Verify assets are registered in the adapter registry
+4. **Distribution Not Available**: Check time since last distribution
+5. **Build Errors**: Ensure `wasm32v1-none` target is installed
 
-### Debugging Tools
+### Stellar CLI Debugging
 
 - Use `stellar contract events` to view transaction events
 - Check contract state with `stellar contract read`
 - Monitor network with Stellar Laboratory
+- View transaction details with `stellar tx show`
+
+## Protocol Economics
+
+### Yield Distribution Model
+
+- **Treasury receives**: 10% of yield (configurable)
+- **Members receive**: 90% of yield distributed equally
+- **Distribution frequency**: Every 24 hours (configurable)
+- **Minimum distribution**: Only when yield is available
+
+### Supported Assets
+
+- **USDC**: Primary collateral asset
+- **Future assets**: Expandable through adapter registry
+
+### Protocol Integration
+
+- **Blend Capital**: Current yield source
+- **Emissions**: BLND token rewards claimed separately
+- **Future protocols**: Extensible adapter architecture
 
 ## Contributing
 
@@ -382,7 +449,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- [Stellar Development Foundation](https://stellar.org/)
+- [Stellar Development Foundation](https://stellar.org/) for Soroban smart contract platform
 - [Blend Capital](https://www.blend.capital/) for yield protocol integration
-- The Breadchain Cooperative community
-
+- The Breadchain Cooperative community for cooperative stablecoin vision
+- Bread Token project for inspiration on yield-bearing stablecoins

@@ -205,17 +205,12 @@ fn test_burn_cusd() {
     let issue_amount = 1000_0000000i128;
     let burn_amount = 400_0000000i128;
 
-    // Issue tokens first
     fixture.issue_tokens_to_user(&fixture.user1, issue_amount);
     assert_eq!(fixture.token_client().balance(&fixture.user1), issue_amount);
 
-    // Burn tokens
     fixture.burn_tokens_from_user(&fixture.user1, burn_amount);
 
-    // Verify balance
     assert_eq!(fixture.token_client().balance(&fixture.user1), issue_amount - burn_amount);
-
-    // Note: Event testing might be affected by cross-contract calls
 }
 
 #[test]
@@ -234,14 +229,11 @@ fn test_burn_cusd_zero_amount() {
     let fixture = TestFixture::create();
     let issue_amount = 1000_0000000i128;
     
-    // Issue tokens first
     fixture.issue_tokens_to_user(&fixture.user1, issue_amount);
     
-    // Burn zero amount
     fixture.env.mock_all_auths_allowing_non_root_auth();
     fixture.cusd_manager.burn_cusd(&fixture.user1, &0);
 
-    // Balance should remain unchanged
     assert_eq!(fixture.token_client().balance(&fixture.user1), issue_amount);
 }
 
@@ -330,7 +322,6 @@ fn test_set_yield_controller_unauthorized() {
     let fixture = TestFixture::create();
     let new_yield_controller = Address::generate(&fixture.env);
 
-    // Don't mock admin auth
     fixture.env.mock_auths(&[]);
     
     fixture.cusd_manager.set_yield_controller(&new_yield_controller);
@@ -342,7 +333,6 @@ fn test_set_yield_controller_by_owner_should_fail() {
     let fixture = TestFixture::create();
     let new_yield_controller = Address::generate(&fixture.env);
 
-    // Owner cannot set yield controller (only admin can)
     fixture.env.mock_auths(&[]);
     
     fixture.cusd_manager.set_yield_controller(&new_yield_controller);

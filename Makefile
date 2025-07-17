@@ -34,7 +34,9 @@ CUSD_ADDRESS = $(CUSD_CODE):$(OWNER)
 
 # Default values
 TREASURY_SHARE_BPS ?= 1000
-DISTRIBUTION_PERIOD ?= 60
+# DISTRIBUTION_PERIOD ?= 60
+DISTRIBUTION_PERIOD ?= 86400
+
 
 # Colors for output - using printf for proper color rendering
 GREEN := \033[0;32m

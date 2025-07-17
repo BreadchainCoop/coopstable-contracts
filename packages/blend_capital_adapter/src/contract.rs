@@ -5,6 +5,10 @@ use yield_adapter::{
     lending_adapter::LendingAdapter,
 };
 
+/// ### BlendCapitalAdapter
+///
+/// Adapter contract that integrates Blend Capital lending protocol with Coopstable.
+/// Manages deposits, withdrawals, yield generation, and emissions for Blend Capital pools.
 #[contract]
 pub struct BlendCapitalAdapter;
 

@@ -43,11 +43,8 @@ impl TestFixture {
         let member3 = Address::generate(&env);
         let token_admin = Address::generate(&env);
 
-        // Create test token
         let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
         let token_id = token_contract.address();
-
-        // Deploy yield distributor
         let distributor_id = env.register(
             YieldDistributor,
             (
@@ -152,17 +149,13 @@ impl TestFixture {
 fn test_constructor() {
     let fixture = TestFixture::create();
 
-    // Verify initial configuration
     assert_eq!(fixture.distributor.get_treasury(), fixture.treasury);
     assert_eq!(fixture.distributor.get_treasury_share(), fixture.treasury_share_bps);
     assert_eq!(fixture.distributor.get_yield_controller(), fixture.yield_controller);
     assert_eq!(fixture.distributor.get_distribution_period(), fixture.distribution_period);
     
-    // Verify no members initially
     let members = fixture.distributor.list_members();
     assert_eq!(members.len(), 0);
-    
-    // Verify distribution is available initially
     assert!(fixture.distributor.is_distribution_available());
 }
 
@@ -172,18 +165,13 @@ fn test_add_member() {
     
     fixture.env.mock_all_auths();
 
-    // Clear events before operation
     let _ = fixture.env.events().all();
 
-    // Add member
     fixture.distributor.add_member(&fixture.member1);
 
-    // Verify member is added
     let members = fixture.distributor.list_members();
     assert_eq!(members.len(), 1);
     assert_eq!(members.get(0).unwrap(), fixture.member1);
-
-    // Verify event
     fixture.assert_event_with_address_data(
         (Symbol::new(&fixture.env, "add_member"),),
         fixture.member1.clone()
@@ -195,7 +183,6 @@ fn test_add_member() {
 fn test_add_member_unauthorized() {
     let fixture = TestFixture::create();
 
-    // Don't mock admin auth
     fixture.env.mock_auths(&[]);
     
     fixture.distributor.add_member(&fixture.member1);
@@ -208,10 +195,7 @@ fn test_add_member_already_exists() {
     
     fixture.env.mock_all_auths();
 
-    // Add member first time
     fixture.distributor.add_member(&fixture.member1);
-
-    // Try to add same member again (should fail)
     fixture.distributor.add_member(&fixture.member1);
 }
 
@@ -221,12 +205,9 @@ fn test_add_multiple_members() {
     
     fixture.env.mock_all_auths();
 
-    // Add multiple members
     fixture.distributor.add_member(&fixture.member1);
     fixture.distributor.add_member(&fixture.member2);
     fixture.distributor.add_member(&fixture.member3);
-
-    // Verify all members are added
     let members = fixture.distributor.list_members();
     assert_eq!(members.len(), 3);
     assert!(members.contains(&fixture.member1));
@@ -240,22 +221,16 @@ fn test_remove_member() {
     
     fixture.env.mock_all_auths();
 
-    // Add members first
     fixture.distributor.add_member(&fixture.member1);
     fixture.distributor.add_member(&fixture.member2);
 
-    // Clear events before remove operation
     let _ = fixture.env.events().all();
 
-    // Remove member
     fixture.distributor.remove_member(&fixture.member1);
 
-    // Verify member is removed
     let members = fixture.distributor.list_members();
     assert_eq!(members.len(), 1);
     assert_eq!(members.get(0).unwrap(), fixture.member2);
-
-    // Verify event
     fixture.assert_event_with_address_data(
         (Symbol::new(&fixture.env, "remove_member"),),
         fixture.member1.clone()
@@ -270,7 +245,6 @@ fn test_remove_member_unauthorized() {
     fixture.env.mock_all_auths();
     fixture.distributor.add_member(&fixture.member1);
 
-    // Clear auth for unauthorized operation
     fixture.env.mock_auths(&[]);
     
     fixture.distributor.remove_member(&fixture.member1);
@@ -283,7 +257,6 @@ fn test_remove_member_does_not_exist() {
     
     fixture.env.mock_all_auths();
 
-    // Try to remove member that was never added
     fixture.distributor.remove_member(&fixture.member1);
 }
 
@@ -294,16 +267,11 @@ fn test_set_treasury() {
     
     fixture.env.mock_all_auths();
 
-    // Clear events before operation
     let _ = fixture.env.events().all();
 
-    // Set new treasury
     fixture.distributor.set_treasury(&new_treasury);
 
-    // Verify treasury is updated
     assert_eq!(fixture.distributor.get_treasury(), new_treasury);
-
-    // Verify event
     fixture.assert_event_with_address_data(
         (Symbol::new(&fixture.env, "set_treasury"),),
         new_treasury.clone()
@@ -316,7 +284,6 @@ fn test_set_treasury_unauthorized() {
     let fixture = TestFixture::create();
     let new_treasury = Address::generate(&fixture.env);
 
-    // Don't mock admin auth
     fixture.env.mock_auths(&[]);
     
     fixture.distributor.set_treasury(&new_treasury);
@@ -329,16 +296,11 @@ fn test_set_treasury_share() {
     
     fixture.env.mock_all_auths();
 
-    // Clear events before operation
     let _ = fixture.env.events().all();
 
-    // Set new treasury share
     fixture.distributor.set_treasury_share(&new_share);
 
-    // Verify treasury share is updated
     assert_eq!(fixture.distributor.get_treasury_share(), new_share);
-
-    // Verify event
     fixture.assert_event_with_u32_data(
         (Symbol::new(&fixture.env, "set_treasury_share"),),
         new_share
@@ -351,7 +313,6 @@ fn test_set_treasury_share_unauthorized() {
     let fixture = TestFixture::create();
     let new_share = 2000u32;
 
-    // Don't mock admin auth
     fixture.env.mock_auths(&[]);
     
     fixture.distributor.set_treasury_share(&new_share);
@@ -364,16 +325,11 @@ fn test_set_distribution_period() {
     
     fixture.env.mock_all_auths();
 
-    // Clear events before operation
     let _ = fixture.env.events().all();
 
-    // Set new distribution period
     fixture.distributor.set_distribution_period(&new_period);
 
-    // Verify distribution period is updated
     assert_eq!(fixture.distributor.get_distribution_period(), new_period);
-
-    // Verify event
     fixture.assert_event_with_u64_data(
         (Symbol::new(&fixture.env, "set_distribution_period"),),
         new_period
@@ -386,7 +342,6 @@ fn test_set_distribution_period_unauthorized() {
     let fixture = TestFixture::create();
     let new_period = 172800u64;
 
-    // Don't mock admin auth
     fixture.env.mock_auths(&[]);
     
     fixture.distributor.set_distribution_period(&new_period);
@@ -399,16 +354,11 @@ fn test_set_yield_controller() {
     
     fixture.env.mock_all_auths();
 
-    // Clear events before operation
     let _ = fixture.env.events().all();
 
-    // Set new yield controller
     fixture.distributor.set_yield_controller(&new_controller);
 
-    // Verify yield controller is updated
     assert_eq!(fixture.distributor.get_yield_controller(), new_controller);
-
-    // Verify event
     fixture.assert_event_with_address_data(
         (Symbol::new(&fixture.env, "set_yield_controller"),),
         new_controller.clone()
@@ -421,7 +371,6 @@ fn test_set_yield_controller_unauthorized() {
     let fixture = TestFixture::create();
     let new_controller = Address::generate(&fixture.env);
 
-    // Don't mock admin auth
     fixture.env.mock_auths(&[]);
     
     fixture.distributor.set_yield_controller(&new_controller);
@@ -432,17 +381,13 @@ fn test_yield_distribution_basic() {
     let fixture = TestFixture::create();
     let total_amount = 10000i128;
 
-    // Setup: add members and mint tokens
     fixture.add_members();
     fixture.mint_tokens_to_distributor(total_amount);
 
     fixture.env.mock_all_auths_allowing_non_root_auth();
 
-    // Perform distribution
     let result = fixture.distributor.distribute_yield(&fixture.token_id, &total_amount);
     assert_eq!(result, total_amount);
-
-    // Verify balances
     let treasury_share = (total_amount * fixture.treasury_share_bps as i128) / 10000;
     let member_share = total_amount - treasury_share;
     let per_member_amount = member_share / 3; // 3 members
@@ -462,7 +407,6 @@ fn test_distribute_yield_unauthorized() {
     fixture.add_members();
     fixture.mint_tokens_to_distributor(total_amount);
 
-    // Don't mock yield controller auth
     fixture.env.mock_auths(&[]);
     
     fixture.distributor.distribute_yield(&fixture.token_id, &total_amount);
@@ -473,16 +417,12 @@ fn test_yield_distribution_no_members() {
     let fixture = TestFixture::create();
     let total_amount = 10000i128;
 
-    // Don't add any members
     fixture.mint_tokens_to_distributor(total_amount);
 
     fixture.env.mock_all_auths_allowing_non_root_auth();
 
-    // Perform distribution - should return the full amount even with no members (goes to treasury)
     let result = fixture.distributor.distribute_yield(&fixture.token_id, &total_amount);
     assert_eq!(result, total_amount);
-
-    // All tokens should go to treasury when no members
     assert_eq!(fixture.token_client().balance(&fixture.treasury), total_amount);
 }
 
@@ -491,7 +431,6 @@ fn test_yield_distribution_zero_treasury_share() {
     let fixture = TestFixture::create();
     let total_amount = 10000i128;
 
-    // Set treasury share to 0%
     fixture.env.mock_all_auths();
     fixture.distributor.set_treasury_share(&0u32);
 
@@ -500,11 +439,8 @@ fn test_yield_distribution_zero_treasury_share() {
 
     fixture.env.mock_all_auths_allowing_non_root_auth();
 
-    // Perform distribution
     let result = fixture.distributor.distribute_yield(&fixture.token_id, &total_amount);
     assert_eq!(result, total_amount);
-
-    // All should go to members
     let per_member_amount = total_amount / 3; // 3 members
     assert_eq!(fixture.token_client().balance(&fixture.treasury), 0);
     assert_eq!(fixture.token_client().balance(&fixture.member1), per_member_amount);
@@ -517,7 +453,6 @@ fn test_yield_distribution_100_percent_treasury() {
     let fixture = TestFixture::create();
     let total_amount = 10000i128;
 
-    // Set treasury share to 100%
     fixture.env.mock_all_auths();
     fixture.distributor.set_treasury_share(&10000u32);
 
@@ -526,11 +461,8 @@ fn test_yield_distribution_100_percent_treasury() {
 
     fixture.env.mock_all_auths_allowing_non_root_auth();
 
-    // Perform distribution
     let result = fixture.distributor.distribute_yield(&fixture.token_id, &total_amount);
     assert_eq!(result, total_amount);
-
-    // All should go to treasury
     assert_eq!(fixture.token_client().balance(&fixture.treasury), total_amount);
     assert_eq!(fixture.token_client().balance(&fixture.member1), 0);
     assert_eq!(fixture.token_client().balance(&fixture.member2), 0);
@@ -541,20 +473,15 @@ fn test_yield_distribution_100_percent_treasury() {
 fn test_distribution_availability() {
     let fixture = TestFixture::create();
 
-    // Initially available
     assert!(fixture.distributor.is_distribution_available());
 
-    // After distribution, should have a next distribution time
     fixture.add_members();
     fixture.mint_tokens_to_distributor(1000);
 
     fixture.env.mock_all_auths_allowing_non_root_auth();
     fixture.distributor.distribute_yield(&fixture.token_id, &1000);
 
-    // After distribution, the next one won't be available until the period has passed
     assert!(!fixture.distributor.is_distribution_available());
-    
-    // Check the next distribution time is in the future
     let next_time = fixture.distributor.get_next_distribution_time();
     assert!(next_time > fixture.env.ledger().timestamp());
 }
@@ -565,21 +492,16 @@ fn test_member_management_cycle() {
     
     fixture.env.mock_all_auths();
 
-    // Add members
     fixture.distributor.add_member(&fixture.member1);
     fixture.distributor.add_member(&fixture.member2);
     assert_eq!(fixture.distributor.list_members().len(), 2);
 
-    // Remove one member
     fixture.distributor.remove_member(&fixture.member1);
     assert_eq!(fixture.distributor.list_members().len(), 1);
     assert_eq!(fixture.distributor.list_members().get(0).unwrap(), fixture.member2);
 
-    // Add member back
     fixture.distributor.add_member(&fixture.member1);
     assert_eq!(fixture.distributor.list_members().len(), 2);
-
-    // Remove all members
     fixture.distributor.remove_member(&fixture.member1);
     fixture.distributor.remove_member(&fixture.member2);
     assert_eq!(fixture.distributor.list_members().len(), 0);
@@ -591,7 +513,6 @@ fn test_treasury_configuration_changes() {
     
     fixture.env.mock_all_auths();
 
-    // Test various treasury shares
     let shares = [0u32, 500u32, 2500u32, 5000u32, 10000u32]; // 0%, 5%, 25%, 50%, 100%
     
     for share in shares.iter() {
@@ -599,7 +520,6 @@ fn test_treasury_configuration_changes() {
         assert_eq!(fixture.distributor.get_treasury_share(), *share);
     }
 
-    // Test treasury address changes
     let new_treasury1 = Address::generate(&fixture.env);
     let new_treasury2 = Address::generate(&fixture.env);
     
@@ -616,7 +536,6 @@ fn test_distribution_period_changes() {
     
     fixture.env.mock_all_auths();
 
-    // Test various distribution periods
     let periods = [3600u64, 86400u64, 604800u64, 2592000u64]; // 1 hour, 1 day, 1 week, 1 month
     
     for period in periods.iter() {
@@ -634,7 +553,6 @@ fn test_yield_controller_changes() {
     let new_controller1 = Address::generate(&fixture.env);
     let new_controller2 = Address::generate(&fixture.env);
     
-    // Change yield controller
     fixture.distributor.set_yield_controller(&new_controller1);
     assert_eq!(fixture.distributor.get_yield_controller(), new_controller1);
     
@@ -652,11 +570,8 @@ fn test_small_amount_distribution() {
 
     fixture.env.mock_all_auths_allowing_non_root_auth();
 
-    // Perform distribution
     let result = fixture.distributor.distribute_yield(&fixture.token_id, &small_amount);
     assert_eq!(result, small_amount);
-
-    // Verify total is distributed (even if amounts are very small)
     let total_distributed = fixture.token_client().balance(&fixture.treasury) +
                           fixture.token_client().balance(&fixture.member1) +
                           fixture.token_client().balance(&fixture.member2) +
@@ -674,11 +589,8 @@ fn test_large_amount_distribution() {
 
     fixture.env.mock_all_auths_allowing_non_root_auth();
 
-    
     let result = fixture.distributor.distribute_yield(&fixture.token_id, &large_amount);
     assert_eq!(result, large_amount);
-
-    // Verify treasury gets correct share
     let treasury_share = (large_amount * fixture.treasury_share_bps as i128) / 10000;
     assert_eq!(fixture.token_client().balance(&fixture.treasury), treasury_share);
 }
