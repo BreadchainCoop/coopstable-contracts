@@ -7,3 +7,7 @@ target
 
 contracts/*/test_snapshots/
 packages/*/test_snapshots/
+
+# Generated files
+deployed_addresses.mk
+deployed_addresses.sh

@@ -9,24 +9,25 @@ BINDINGS_BASE_DIR := ./ts
 BUILD_FLAGS ?=
 
 # Deployment configuration
-NETWORK ?= testnet
+NETWORK ?= mainnet
 WASM_DIR = ./target/wasm32v1-none/release
 
 # Account keys (set these as environment variables or override them)
-OWNER_KEY ?= owner
-ADMIN_KEY ?= admin
+OWNER_KEY ?= owner-mainnet
+ADMIN_KEY ?= admin-mainnet
 TREASURY_KEY ?= treasury
 CUSD_CODE ?= CUSD
 
 # Get public keys from stellar keys
 OWNER := $(shell stellar keys public-key $(OWNER_KEY))
 ADMIN := $(shell stellar keys public-key $(ADMIN_KEY))
-TREASURY := $(shell stellar keys public-key $(TREASURY_KEY))
+# TREASURY := $(shell stellar keys public-key $(TREASURY_KEY))
+TREASURY := GCEUSAY6FKAYIAFNYZUKSO5GIPWGUWPKVVPYOL5MFXBKSDOVGMLZNQTN
 
 # External Contract IDs (pre-deployed on testnet)
-BLEND_POOL_ID = CCLBPEYS3XFK65MYYXSBMOGKUI4ODN5S7SUZBGD7NALUQF64QILLX5B5
-BLEND_TOKEN_ID = CB22KRA3YZVCNCQI64JQ5WE7UY2VAV7WFLK6A2JN3HEX56T2EDAFO7QF
-USDC_ID = CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU
+BLEND_POOL_ID = CCCCIQSDILITHMM7PBSLVDT5MISSY7R26MNZXCX4H7J5JQ5FPIYOGYFS
+BLEND_TOKEN_ID = CD25MNVTZDL4Y3XBCPCJXGXATV5WUHHOWMYFF4YBEGU5FCPGMYTVG5JY
+USDC_ID = CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75
 CUSD_ADDRESS = $(CUSD_CODE):$(OWNER)
 
 # Contract addresses (will be set after deployment or loaded from file)
@@ -35,7 +36,7 @@ CUSD_ADDRESS = $(CUSD_CODE):$(OWNER)
 # Default values
 TREASURY_SHARE_BPS ?= 1000
 # DISTRIBUTION_PERIOD ?= 60
-DISTRIBUTION_PERIOD ?= 86400
+DISTRIBUTION_PERIOD ?= 2592000 # 30 days
 
 
 # Colors for output - using printf for proper color rendering
@@ -160,7 +161,9 @@ deploy-protocol: check-build
 	@$(MAKE) deploy-distributor-full
 	@$(MAKE) deploy-controller-full
 	@$(MAKE) deploy-blend-adapter-full
-	@$(MAKE) add-all-members
+	@if [ "$(NETWORK)" = "testnet" ]; then \
+		$(MAKE) add-all-members; \
+	fi
 	@printf "$(GREEN)Full protocol deployment complete!$(NC)\n"
 	@$(MAKE) show-addresses
 	@$(MAKE) save-addresses
@@ -301,14 +304,16 @@ deploy-cusd: check-build
 		--network testnet \
 		--asset CUSD:$$(stellar keys public-key owner) 2>/dev/null || \
 		stellar contract id asset --asset CUSD:$$(stellar keys public-key owner)); \
-	for account in admin treasury member_1 member_2 member_3; do \
-		echo "Setting trustline for $$account..."; \
-		stellar tx new change-trust \
-			--source-account $$account \
-			--line CUSD:$$(stellar keys public-key owner) \
-			--fee 1000 \
-			--network testnet; \
-	done; \
+	if [ "$(NETWORK)" = "testnet" ]; then \
+		for account in admin treasury member_1 member_2 member_3; do \
+			echo "Setting trustline for $$account..."; \
+			stellar tx new change-trust \
+				--source-account $$account \
+				--line CUSD:$$(stellar keys public-key owner) \
+				--fee 1000 \
+				--network testnet; \
+		done; \
+	fi; \
 	printf "$(GREEN)CUSD Token deployed: $$CUSD_ID$(NC)\n"; \
 	echo "# Deployed contract addresses - $$(date)" > deployed_addresses.mk.tmp; \
 	echo "CUSD_ID = $$CUSD_ID" >> deployed_addresses.mk.tmp; \
