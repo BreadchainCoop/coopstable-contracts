@@ -291,27 +291,27 @@ deploy-cusd: check-build
 	@printf "$(YELLOW)Deploying CUSD Token...$(NC)\n"
 	# creates the stellar asset ensures it exists
 	stellar tx new payment \
-		--source-account owner \
-		--destination $$(stellar keys public-key owner) \
-		--asset CUSD:$$(stellar keys public-key owner) \
+		--source-account $(OWNER_KEY) \
+		--destination $(OWNER) \
+		--asset CUSD:$(OWNER) \
 		--amount 1000 \
 		--fee 1000 \
 		--network $(NETWORK)
 	@CUSD_ID=$$(stellar contract asset deploy \
-		--source-account owner \
+		--source-account $(OWNER_KEY) \
 		--alias cusd_token \
 		--fee 1000 \
-		--network testnet \
-		--asset CUSD:$$(stellar keys public-key owner) 2>/dev/null || \
-		stellar contract id asset --asset CUSD:$$(stellar keys public-key owner)); \
+		--network $(NETWORK) \
+		--asset CUSD:$(OWNER) 2>/dev/null || \
+		stellar contract id asset --asset CUSD:$(OWNER)); \
 	if [ "$(NETWORK)" = "testnet" ]; then \
 		for account in admin treasury member_1 member_2 member_3; do \
 			echo "Setting trustline for $$account..."; \
 			stellar tx new change-trust \
 				--source-account $$account \
-				--line CUSD:$$(stellar keys public-key owner) \
+				--line CUSD:$(OWNER) \
 				--fee 1000 \
-				--network testnet; \
+				--network $(NETWORK); \
 		done; \
 	fi; \
 	printf "$(GREEN)CUSD Token deployed: $$CUSD_ID$(NC)\n"; \
@@ -352,8 +352,9 @@ deploy-registry: check-build
 	@printf "$(YELLOW)Deploying Yield Adapter Registry...$(NC)\n"
 	$(eval YIELD_ADAPTER_REGISTRY_ID := $(shell stellar contract deploy \
 		--wasm $(WASM_DIR)/yield_adapter_registry.wasm \
-		--source $(OWNER_KEY) \
+		--source-account $(OWNER_KEY) \
 		--network $(NETWORK) \
+		--fee 2000 \
 		-- \
 		--admin $(ADMIN) \
 		--owner $(OWNER)))
@@ -368,8 +369,9 @@ deploy-distributor: check-build
 	@printf "$(YELLOW)Deploying Yield Distributor...$(NC)\n"
 	$(eval YIELD_DISTRIBUTOR_ID := $(shell stellar contract deploy \
 		--wasm $(WASM_DIR)/yield_distributor.wasm \
-		--source $(OWNER_KEY) \
+		--source-account $(OWNER_KEY) \
 		--network $(NETWORK) \
+		--fee 500 \
 		-- \
 		--treasury $(TREASURY) \
 		--treasury_share_bps $(TREASURY_SHARE_BPS) \
@@ -490,7 +492,7 @@ cusd-manager-set-admin:
 	fi
 	stellar contract invoke \
 		--source admin \
-		--network testnet \
+		--network $(NETWORK) \
 		--id $(CUSD_ID) \
 		-- \
 		set_admin \
@@ -656,7 +658,7 @@ withdraw:
 		--amount $$(stellar contract invoke \
 		--id $(CUSD_ID) \
 		--source-account $(ACCOUNT_KEY) \
-		--network testnet \
+		--network $(NETWORK) \
 		-- \
 		balance \
 		--id $(ACCOUNT))
