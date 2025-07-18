@@ -9,7 +9,7 @@ BINDINGS_BASE_DIR := ./ts
 BUILD_FLAGS ?=
 
 # Deployment configuration
-NETWORK ?= mainnet
+NETWORK ?= soroban
 WASM_DIR = ./target/wasm32v1-none/release
 
 # Account keys (set these as environment variables or override them)
@@ -354,7 +354,7 @@ deploy-registry: check-build
 		--wasm $(WASM_DIR)/yield_adapter_registry.wasm \
 		--source-account $(OWNER_KEY) \
 		--network $(NETWORK) \
-		--fee 2000 \
+		--fee 1100 \
 		-- \
 		--admin $(ADMIN) \
 		--owner $(OWNER)))
@@ -396,6 +396,7 @@ deploy-controller: check-build
 		--wasm $(WASM_DIR)/lending_yield_controller.wasm \
 		--source $(OWNER_KEY) \
 		--network $(NETWORK) \
+		--fee 1100 \
 		-- \
 		--yield_distributor $(YIELD_DISTRIBUTOR_ID) \
 		--adapter_registry $(YIELD_ADAPTER_REGISTRY_ID) \
@@ -420,6 +421,7 @@ deploy-blend-adapter: check-build
 		--source $(OWNER_KEY) \
 		--network $(NETWORK) \
 		-- \
+		--fee 1100 \
 		--yield_controller $(LENDING_YIELD_CONTROLLER_ID) \
 		--blend_pool_id $(BLEND_POOL_ID) \
 		--blend_token_id $(BLEND_TOKEN_ID)))
@@ -913,6 +915,7 @@ add-member:
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
 		--id $(YIELD_DISTRIBUTOR_ID) \
+		--fee 1100 \
 		-- \
 		add_member \
 		--member $(MEMBER)
