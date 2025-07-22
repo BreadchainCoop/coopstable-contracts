@@ -98,10 +98,13 @@ pub fn add_member(e: &Env, address: &Address) {
         members.push_back(address.clone());
         e.storage().persistent().set(&members_key, &members);
         extend_persistent(e, &members_key);
+        
+        // Update cached active member count
+        update_active_member_count(e);
     }
     
-    // Update current distribution with new member list
-    update_current_distribution_members(e);
+    // Update current distribution with new member count
+    update_current_distribution_member_count(e);
 }
 
 pub fn remove_member(e: &Env, address: &Address) {
@@ -117,10 +120,13 @@ pub fn remove_member(e: &Env, address: &Address) {
             INSTANCE_LIFETIME_THRESHOLD,
             INSTANCE_BUMP_AMOUNT,
         );
+        
+        // Update cached active member count
+        update_active_member_count(e);
     }
 
-    // Update current distribution with new member list
-    update_current_distribution_members(e);
+    // Update current distribution with new member count
+    update_current_distribution_member_count(e);
     
     // Note: We don't remove from the members list to maintain history
 }
@@ -157,13 +163,40 @@ pub fn get_active_members(e: &Env) -> Vec<Address> {
     Vec::new(e)
 }
 
-fn update_current_distribution_members(e: &Env) {
+fn update_current_distribution_member_count(e: &Env) {
     let current_epoch = read_epoch_current(e);
     if e.storage().persistent().has(&DataKey::Distribution(current_epoch)) {
         let mut current_distribution = read_distribution(e, current_epoch);
-        current_distribution.members = get_active_members(e);
+        current_distribution.member_count = get_active_member_count(e);
         write_distribution(e, current_epoch, current_distribution);
     }
+}
+
+fn update_active_member_count(e: &Env) {
+    let count = calculate_active_member_count(e);
+    e.storage().persistent().set(&DataKey::ActiveMemberCount, &count);
+    extend_persistent(e, &DataKey::ActiveMemberCount);
+}
+
+fn calculate_active_member_count(e: &Env) -> u32 {
+    let members_key = DataKey::Members;
+    if let Some(all_members) = e.storage().persistent().get::<DataKey, Vec<Address>>(&members_key) {
+        let mut count = 0u32;
+        for address in all_members.iter() {
+            if let Some(member) = get_member(e, &address) {
+                if member.active {
+                    count += 1;
+                }
+            }
+        }
+        count
+    } else {
+        0u32
+    }
+}
+
+fn get_active_member_count(e: &Env) -> u32 {
+    e.storage().persistent().get(&DataKey::ActiveMemberCount).unwrap_or(0u32)
 }
 
 pub fn record_distribution(e: &Env, total: i128, treasury_amount: i128, member_amount: i128) {
@@ -178,6 +211,11 @@ pub fn record_distribution(e: &Env, total: i128, treasury_amount: i128, member_a
     distribution.distribution_member = member_amount;
     distribution.is_processed = true;
 
+    // Store member list for historical tracking of this epoch
+    let active_members = get_active_members(e);
+    e.storage().persistent().set(&DataKey::EpochMembers(epoch), &active_members);
+    extend_persistent(e, &DataKey::EpochMembers(epoch));
+
     write_distribution(e, epoch, distribution);
     write_total_distributed(e, total);
 
@@ -185,7 +223,7 @@ pub fn record_distribution(e: &Env, total: i128, treasury_amount: i128, member_a
     let next_epoch = epoch + 1;
     write_epoch(e, next_epoch);
     
-    // Create the next distribution
+    // Create the next distribution with minimal data - no member list stored
     let next_distribution = Distribution { 
         distribution_start_timestamp: e.ledger().timestamp(),
         epoch: next_epoch,
@@ -193,7 +231,7 @@ pub fn record_distribution(e: &Env, total: i128, treasury_amount: i128, member_a
         distribution_total: 0,
         distribution_treasury: 0,
         distribution_member: 0,
-        members: get_active_members(e),
+        member_count: get_active_member_count(e),
         is_processed: false,
     };
     write_distribution(e, next_epoch, next_distribution);
@@ -247,7 +285,7 @@ pub fn read_distribution_of_current_epoch(e: &Env) -> Distribution {
             distribution_total: 0,
             distribution_treasury: 0,
             distribution_member: 0,
-            members: Vec::new(e),
+            member_count: get_active_member_count(e),
             is_processed: false,
         }
     }
@@ -343,4 +381,24 @@ pub fn read_epoch_current(e: &Env) -> u64 {
         .instance()
         .get(&CURRENT_EPOCH_KEY)
         .unwrap_or(0)
+}
+
+/// Get members for a specific epoch - for historical tracking and distribution events
+pub fn get_epoch_members(e: &Env, epoch: u64) -> Vec<Address> {
+    extend_persistent(e, &DataKey::EpochMembers(epoch));
+    e.storage()
+        .persistent()
+        .get(&DataKey::EpochMembers(epoch))
+        .unwrap_or_else(|| {
+            // Fallback to current active members if epoch members not found
+            // This handles backward compatibility
+            get_active_members(e)
+        })
+}
+
+/// Initialize active member count cache
+pub fn initialize_active_member_count(e: &Env) {
+    if !e.storage().persistent().has(&DataKey::ActiveMemberCount) {
+        update_active_member_count(e);
+    }
 }

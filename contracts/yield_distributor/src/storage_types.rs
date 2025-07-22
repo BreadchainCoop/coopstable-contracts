@@ -34,7 +34,7 @@ pub struct Distribution {
     pub distribution_total: i128,
     pub distribution_treasury: i128,
     pub distribution_member: i128,
-    pub members: Vec<Address>,
+    pub member_count: u32,
     pub is_processed: bool, // In seconds
     pub epoch: u64,
 }
@@ -54,4 +54,6 @@ pub enum DataKey {
     Epoch(u64),
     EpochStartTimestamp(u64),
     TotalDistributed,
+    EpochMembers(u64), // Store member list for specific epoch
+    ActiveMemberCount, // Cache active member count
 }

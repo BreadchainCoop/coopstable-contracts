@@ -685,7 +685,7 @@ test-claim-yield:
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
 		--id $(LENDING_YIELD_CONTROLLER_ID) \
-		--fee 331510 \
+		--fee 450000 \
 		-- \
 		claim_yield
 	@printf "$(YELLOW)Step 3: Checking if distribution occurred:$(NC)\n"

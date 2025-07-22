@@ -196,7 +196,7 @@ impl YieldDistributorTrait for YieldDistributor {
             distribution_total: 0,
             distribution_treasury: 0,
             distribution_member: 0,
-            members: Vec::new(&e),
+            member_count: 0,
             is_processed: false,
         };
         e.storage().persistent().set(&storage_types::DataKey::Distribution(0), &initial_distribution);
@@ -207,6 +207,9 @@ impl YieldDistributorTrait for YieldDistributor {
         );   
 
         e.storage().persistent().set(&storage_types::DataKey::TotalDistributed, &0i128);
+        
+        // Initialize active member count cache
+        storage::initialize_active_member_count(&e);
     }
 
     fn set_yield_controller(e: &Env, yield_controller: Address) {
@@ -293,12 +296,16 @@ impl YieldDistributorTrait for YieldDistributor {
         let distribution = storage::read_distribution_of_current_epoch(e);
         let treasury_share_bps = storage::get_treasury_share_bps(e);
         let treasury = storage::get_treasury(e);
+        
+        // Get current active members for actual distribution
+        let active_members = storage::get_active_members(e);
+        let member_count = active_members.len();
 
         let mut treasury_amount = (amount as i128 * treasury_share_bps as i128) / 10000;
         let members_amount = amount - treasury_amount;
         
-        let per_member_amount = if distribution.members.len() > 0 {
-            members_amount / distribution.members.len() as i128
+        let per_member_amount = if member_count > 0 {
+            members_amount / member_count as i128
         } else {
             treasury_amount = amount; // if no members then it all goes to the treasury
             0
@@ -306,7 +313,7 @@ impl YieldDistributorTrait for YieldDistributor {
 
         let token_client = TokenClient::new(e, &token);
         if per_member_amount > 0 {
-            for member in distribution.members.iter() {
+            for member in active_members.iter() {
                 utils::authenticate_contract(
                     &e, 
                     token_client.address.clone(), 
@@ -349,7 +356,7 @@ impl YieldDistributorTrait for YieldDistributor {
             token,
             amount,
             treasury_amount,
-            distribution.members,
+            active_members,
             per_member_amount,
         );
 

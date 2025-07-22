@@ -650,18 +650,18 @@ fn test_resource_limit_simulation_multiple_rounds() {
         // Each round should have more members than the previous
         if i > 0 {
             let prev_dist = final_history.get((i - 1) as u32).unwrap();
-            assert!(dist.members.len() >= prev_dist.members.len());
+            assert!(dist.member_count >= prev_dist.member_count);
         }
     }
     
-    // Calculate total member entries stored across all distributions
-    let total_member_entries: u32 = final_history.iter()
-        .map(|dist| dist.members.len())
+    // Calculate total member count across all distributions
+    let total_member_count: u32 = final_history.iter()
+        .map(|dist| dist.member_count)
         .sum();
     
     // This demonstrates exponential memory growth that causes ResourceLimitExceeded
     // Each distribution stores a full member list, so total entries = distributions × members
-    assert!(total_member_entries > 0); // Should have stored member entries
+    assert!(total_member_count > 0); // Should have stored member count
 }
 
 #[test] 
@@ -697,7 +697,7 @@ fn test_resource_limit_with_many_members() {
         // Check resource usage by getting history (expensive operation)
         let history = fixture.distributor.get_distribution_history();
         let total_addresses_stored = history.iter()
-            .map(|dist| dist.members.len() as u32)
+            .map(|dist| dist.member_count)
             .sum::<u32>();
             
         // Resource usage grows as: rounds × members_per_round
@@ -740,12 +740,12 @@ fn test_distribution_history_memory_stress() {
     
     // Final memory usage analysis
     let final_history = fixture.distributor.get_distribution_history();
-    let total_member_entries: u32 = final_history.iter()
-        .map(|dist| dist.members.len())
+    let total_member_count: u32 = final_history.iter()
+        .map(|dist| dist.member_count)
         .sum();
     
     // This demonstrates the exponential memory growth that causes ResourceLimitExceeded
-    assert!(total_member_entries >= 150); // 10 distributions × 15 members = 150 entries minimum
+    assert!(total_member_count >= 150); // 10 distributions × 15 members = 150 entries minimum
 }
 
 #[test]
@@ -776,11 +776,11 @@ fn test_simulate_actual_resource_limit() {
         
         // Check if we're accumulating significant memory usage
         let history = fixture.distributor.get_distribution_history();
-        let total_addresses: u32 = history.iter().map(|d| d.members.len()).sum();
+        let total_member_count: u32 = history.iter().map(|d| d.member_count).sum();
         
         // By round 6+, this would cause ResourceLimitExceeded in Stellar
         if round >= 5 {
-            assert!(total_addresses > 250); // Significant memory usage
+            assert!(total_member_count > 250); // Significant memory usage
         }
     }
 }
@@ -909,7 +909,7 @@ fn test_distribution_history_consistency_after_optimization() {
     for (i, distribution) in history.iter().enumerate() {
         assert!(distribution.is_processed, "Distribution {} should be processed", i);
         assert!(distribution.distribution_total > 0, "Distribution {} should have positive total", i);
-        assert_eq!(distribution.members.len(), 2, "Distribution {} should have 2 members", i);
+        assert_eq!(distribution.member_count, 2, "Distribution {} should have 2 members", i);
     }
     
     // Verify we can call get_distribution_history multiple times without issues
@@ -967,7 +967,7 @@ fn test_memory_efficiency_stress_test() {
     
     // Each distribution should have the expected member count
     for (i, dist) in history.iter().enumerate() {
-        assert_eq!(dist.members.len(), 25, "Distribution {} should have 25 members", i);
+        assert_eq!(dist.member_count, 25, "Distribution {} should have 25 members", i);
         assert!(dist.is_processed, "Distribution {} should be processed", i);
         assert!(dist.distribution_total > 0, "Distribution {} should have positive total", i);
     }
