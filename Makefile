@@ -9,25 +9,26 @@ BINDINGS_BASE_DIR := ./ts
 BUILD_FLAGS ?=
 
 # Deployment configuration
-NETWORK ?= soroban
+NETWORK ?= testnet
 WASM_DIR = ./target/wasm32v1-none/release
+OPTIMIZED_SUFFIX = .optimized.wasm
 
 # Account keys (set these as environment variables or override them)
-OWNER_KEY ?= owner-mainnet
-ADMIN_KEY ?= admin-mainnet
+OWNER_KEY ?= owner
+ADMIN_KEY ?= admin
 TREASURY_KEY ?= treasury
 CUSD_CODE ?= CUSD
 
 # Get public keys from stellar keys
 OWNER := $(shell stellar keys public-key $(OWNER_KEY))
 ADMIN := $(shell stellar keys public-key $(ADMIN_KEY))
-# TREASURY := $(shell stellar keys public-key $(TREASURY_KEY))
-TREASURY := GCEUSAY6FKAYIAFNYZUKSO5GIPWGUWPKVVPYOL5MFXBKSDOVGMLZNQTN
+TREASURY := $(shell stellar keys public-key $(TREASURY_KEY))
+# TREASURY := GCEUSAY6FKAYIAFNYZUKSO5GIPWGUWPKVVPYOL5MFXBKSDOVGMLZNQTN
 
 # External Contract IDs (pre-deployed on testnet)
-BLEND_POOL_ID = CCCCIQSDILITHMM7PBSLVDT5MISSY7R26MNZXCX4H7J5JQ5FPIYOGYFS
-BLEND_TOKEN_ID = CD25MNVTZDL4Y3XBCPCJXGXATV5WUHHOWMYFF4YBEGU5FCPGMYTVG5JY
-USDC_ID = CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75
+BLEND_POOL_ID = CCLBPEYS3XFK65MYYXSBMOGKUI4ODN5S7SUZBGD7NALUQF64QILLX5B5
+BLEND_TOKEN_ID = CB22KRA3YZVCNCQI64JQ5WE7UY2VAV7WFLK6A2JN3HEX56T2EDAFO7QF
+USDC_ID = CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU
 CUSD_ADDRESS = $(CUSD_CODE):$(OWNER)
 
 # Contract addresses (will be set after deployment or loaded from file)
@@ -35,9 +36,8 @@ CUSD_ADDRESS = $(CUSD_CODE):$(OWNER)
 
 # Default values
 TREASURY_SHARE_BPS ?= 1000
-# DISTRIBUTION_PERIOD ?= 60
-DISTRIBUTION_PERIOD ?= 2592000 # 30 days
-
+DISTRIBUTION_PERIOD ?= 60
+# DISTRIBUTION_PERIOD ?= 2592000 # 30 days
 
 # Colors for output - using printf for proper color rendering
 GREEN := \033[0;32m
@@ -58,9 +58,16 @@ help:
 	@printf "\n"
 	@printf "$(YELLOW)Build targets:$(NC)\n"
 	@printf "  $(GREEN)make build$(NC)              - Build all contracts\n"
+	@printf "  $(GREEN)make build-optimized$(NC)    - Build and optimize all contracts\n"
 	@printf "  $(GREEN)make test$(NC)               - Build and test all contracts\n"
 	@printf "  $(GREEN)make fmt$(NC)                - Format all code\n"
 	@printf "  $(GREEN)make clean$(NC)              - Clean all build artifacts\n"
+	@printf "\n"
+	@printf "$(YELLOW)Optimization targets:$(NC)\n"
+	@printf "  $(GREEN)make optimize-wasm$(NC)      - Optimize all WASM files\n"
+	@printf "  $(GREEN)make clean-optimized$(NC)    - Remove optimized WASM files\n"
+	@printf "  $(GREEN)make compare-sizes$(NC)      - Compare original vs optimized sizes\n"
+	@printf "  $(GREEN)make deploy-optimized$(NC)   - Deploy using optimized contracts\n"
 	@printf "\n"
 	@printf "$(YELLOW)Full Protocol Deployment:$(NC)\n"
 	@printf "  $(GREEN)make deploy-protocol$(NC)    - Deploy entire protocol with dependencies\n"
@@ -123,6 +130,7 @@ clean:
 		$(MAKE) -C $$dir clean WORKSPACE_ROOT=$(PWD) || exit 1; \
 	done
 	@rm -f deployed_addresses.mk deployed_addresses.sh
+	@rm -f $(WASM_DIR)/*$(OPTIMIZED_SUFFIX)
 
 # Generate all bindings
 .PHONY: bindings
@@ -137,6 +145,86 @@ bindings: check-build
 			--overwrite || exit 1; \
 	done
 	@printf "$(GREEN)✓ All bindings generated successfully!$(NC)\n"
+
+# ========== OPTIMIZATION TARGETS ==========
+
+# Optimize all WASM files using stellar contract optimize
+.PHONY: optimize-wasm
+optimize-wasm: check-build
+	@printf "$(YELLOW)Optimizing all WASM files...$(NC)\n"
+	@total=0; \
+	optimized=0; \
+	for wasm in $(WASM_DIR)/*.wasm; do \
+		if [[ -f "$$wasm" ]] && [[ ! "$$wasm" == *"$(OPTIMIZED_SUFFIX)" ]]; then \
+			total=$$((total + 1)); \
+			wasm_name=$$(basename "$$wasm"); \
+			printf "$(YELLOW)Optimizing $$wasm_name...$(NC)\n"; \
+			if stellar contract optimize --wasm "$$wasm"; then \
+				optimized=$$((optimized + 1)); \
+				optimized_file="$${wasm%.wasm}$(OPTIMIZED_SUFFIX)"; \
+				if [[ -f "$$optimized_file" ]]; then \
+					size_before=$$(stat -f%z "$$wasm" 2>/dev/null || stat -c%s "$$wasm"); \
+					size_after=$$(stat -f%z "$$optimized_file" 2>/dev/null || stat -c%s "$$optimized_file"); \
+					reduction=$$((100 - (size_after * 100 / size_before))); \
+					printf "  $(GREEN)✓ Created: $$(basename "$$optimized_file")$(NC)\n"; \
+					printf "  $(GREEN)  Size: $$size_before → $$size_after bytes ($$reduction%% reduction)$(NC)\n"; \
+				fi \
+			else \
+				printf "  $(RED)✗ Failed to optimize $$wasm_name$(NC)\n"; \
+			fi \
+		fi \
+	done; \
+	printf "$(GREEN)Optimization complete: $$optimized/$$total files optimized$(NC)\n"
+
+# Build and optimize in one step
+.PHONY: build-optimized
+build-optimized: build optimize-wasm
+	@printf "$(GREEN)✓ Build and optimization complete!$(NC)\n"
+
+# Clean optimized files
+.PHONY: clean-optimized
+clean-optimized:
+	@printf "$(YELLOW)Removing optimized WASM files...$(NC)\n"
+	@rm -f $(WASM_DIR)/*$(OPTIMIZED_SUFFIX)
+	@printf "$(GREEN)✓ Optimized files removed$(NC)\n"
+
+# Check if optimized contracts exist
+.PHONY: check-optimized
+check-optimized:
+	@if [ ! -f "$(WASM_DIR)/cusd_manager$(OPTIMIZED_SUFFIX)" ]; then \
+		printf "$(RED)Error: Optimized contracts not found. Run 'make build-optimized' first.$(NC)\n"; \
+		exit 1; \
+	fi
+	@printf "$(GREEN)✓ Optimized contracts found$(NC)\n"
+
+# Compare original vs optimized sizes
+.PHONY: compare-sizes
+compare-sizes:
+	@printf "$(YELLOW)Comparing original vs optimized WASM sizes:$(NC)\n"
+	@printf "%-40s %-15s %-15s %-10s\n" "Contract" "Original" "Optimized" "Reduction"
+	@printf "%-40s %-15s %-15s %-10s\n" "--------" "--------" "---------" "---------"
+	@for wasm in $(WASM_DIR)/*.wasm; do \
+		if [[ -f "$$wasm" ]] && [[ ! "$$wasm" == *"$(OPTIMIZED_SUFFIX)" ]]; then \
+			optimized_file="$${wasm%.wasm}$(OPTIMIZED_SUFFIX)"; \
+			if [[ -f "$$optimized_file" ]]; then \
+				wasm_name=$$(basename "$$wasm"); \
+				size_before=$$(stat -f%z "$$wasm" 2>/dev/null || stat -c%s "$$wasm"); \
+				size_after=$$(stat -f%z "$$optimized_file" 2>/dev/null || stat -c%s "$$optimized_file"); \
+				reduction=$$((100 - (size_after * 100 / size_before))); \
+				printf "%-40s %-15s %-15s %-9s%%\n" \
+					"$$wasm_name" \
+					"$$size_before" \
+					"$$size_after" \
+					"$$reduction"; \
+			fi \
+		fi \
+	done
+
+# Deploy with optimized contracts
+.PHONY: deploy-optimized
+deploy-optimized: check-optimized
+	@printf "$(YELLOW)Deploying with optimized contracts...$(NC)\n"
+	@$(MAKE) deploy-protocol
 
 # ========== DEPLOYMENT TARGETS ==========
 
@@ -293,23 +381,23 @@ deploy-cusd: check-build
 	stellar tx new payment \
 		--source-account $(OWNER_KEY) \
 		--destination $(OWNER) \
-		--asset CUSD:$(OWNER) \
+		--asset $(CUSD_CODE):$(OWNER) \
 		--amount 1000 \
 		--fee 1000 \
 		--network $(NETWORK)
 	@CUSD_ID=$$(stellar contract asset deploy \
 		--source-account $(OWNER_KEY) \
-		--alias cusd_token \
 		--fee 1000 \
 		--network $(NETWORK) \
-		--asset CUSD:$(OWNER) 2>/dev/null || \
-		stellar contract id asset --asset CUSD:$(OWNER)); \
+		--asset $(CUSD_CODE):$(OWNER) || \
+		stellar contract asset id \
+		--asset $(CUSD_CODE):$$(stellar keys public-key owner)); \
 	if [ "$(NETWORK)" = "testnet" ]; then \
 		for account in admin treasury member_1 member_2 member_3; do \
 			echo "Setting trustline for $$account..."; \
 			stellar tx new change-trust \
 				--source-account $$account \
-				--line CUSD:$(OWNER) \
+				--line $(CUSD_CODE):$(OWNER) \
 				--fee 1000 \
 				--network $(NETWORK); \
 		done; \
@@ -329,8 +417,13 @@ deploy-cusd-manager: check-build
 			printf "$(RED)Error: CUSD_ID not found in deployed_addresses.mk. Please deploy CUSD first.$(NC)\n"; \
 			exit 1; \
 		fi; \
+		WASM_FILE="$(WASM_DIR)/cusd_manager.wasm"; \
+		if [ -f "$(WASM_DIR)/cusd_manager$(OPTIMIZED_SUFFIX)" ]; then \
+			WASM_FILE="$(WASM_DIR)/cusd_manager$(OPTIMIZED_SUFFIX)"; \
+			printf "$(GREEN)Using optimized WASM file$(NC)\n"; \
+		fi; \
 		CUSD_MANAGER_ID=$$(stellar contract deploy \
-			--wasm $(WASM_DIR)/cusd_manager.wasm \
+			--wasm $$WASM_FILE \
 			--source $(OWNER_KEY) \
 			--network $(NETWORK) \
 			-- \
@@ -350,25 +443,35 @@ deploy-cusd-manager: check-build
 .PHONY: deploy-registry
 deploy-registry: check-build
 	@printf "$(YELLOW)Deploying Yield Adapter Registry...$(NC)\n"
-	$(eval YIELD_ADAPTER_REGISTRY_ID := $(shell stellar contract deploy \
-		--wasm $(WASM_DIR)/yield_adapter_registry.wasm \
+	@WASM_FILE="$(WASM_DIR)/yield_adapter_registry.wasm"; \
+	if [ -f "$(WASM_DIR)/yield_adapter_registry$(OPTIMIZED_SUFFIX)" ]; then \
+		WASM_FILE="$(WASM_DIR)/yield_adapter_registry$(OPTIMIZED_SUFFIX)"; \
+		printf "$(GREEN)Using optimized WASM file$(NC)\n"; \
+	fi; \
+	YIELD_ADAPTER_REGISTRY_ID=$$(stellar contract deploy \
+		--wasm $$WASM_FILE \
 		--source-account $(OWNER_KEY) \
 		--network $(NETWORK) \
 		--fee 1100 \
 		-- \
 		--admin $(ADMIN) \
-		--owner $(OWNER)))
-	@printf "$(GREEN)Yield Adapter Registry deployed: $(YIELD_ADAPTER_REGISTRY_ID)$(NC)\n"
-	@echo "# Deployed contract addresses - $$(date)" > deployed_addresses.mk.tmp
-	@echo "YIELD_ADAPTER_REGISTRY_ID = $(YIELD_ADAPTER_REGISTRY_ID)" >> deployed_addresses.mk.tmp
-	@if [ -f deployed_addresses.mk ]; then grep -v "^YIELD_ADAPTER_REGISTRY_ID" deployed_addresses.mk | grep -v "^#" >> deployed_addresses.mk.tmp || true; fi
-	@mv deployed_addresses.mk.tmp deployed_addresses.mk
+		--owner $(OWNER)); \
+	printf "$(GREEN)Yield Adapter Registry deployed: $$YIELD_ADAPTER_REGISTRY_ID$(NC)\n"; \
+	echo "# Deployed contract addresses - $$(date)" > deployed_addresses.mk.tmp; \
+	echo "YIELD_ADAPTER_REGISTRY_ID = $$YIELD_ADAPTER_REGISTRY_ID" >> deployed_addresses.mk.tmp; \
+	if [ -f deployed_addresses.mk ]; then grep -v "^YIELD_ADAPTER_REGISTRY_ID" deployed_addresses.mk | grep -v "^#" >> deployed_addresses.mk.tmp || true; fi; \
+	mv deployed_addresses.mk.tmp deployed_addresses.mk
 
 .PHONY: deploy-distributor
 deploy-distributor: check-build
 	@printf "$(YELLOW)Deploying Yield Distributor...$(NC)\n"
-	$(eval YIELD_DISTRIBUTOR_ID := $(shell stellar contract deploy \
-		--wasm $(WASM_DIR)/yield_distributor.wasm \
+	@WASM_FILE="$(WASM_DIR)/yield_distributor.wasm"; \
+	if [ -f "$(WASM_DIR)/yield_distributor$(OPTIMIZED_SUFFIX)" ]; then \
+		WASM_FILE="$(WASM_DIR)/yield_distributor$(OPTIMIZED_SUFFIX)"; \
+		printf "$(GREEN)Using optimized WASM file$(NC)\n"; \
+	fi; \
+	YIELD_DISTRIBUTOR_ID=$$(stellar contract deploy \
+		--wasm $$WASM_FILE \
 		--source-account $(OWNER_KEY) \
 		--network $(NETWORK) \
 		--fee 500 \
@@ -378,12 +481,12 @@ deploy-distributor: check-build
 		--yield_controller GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF \
 		--distribution_period $(DISTRIBUTION_PERIOD) \
 		--owner $(OWNER) \
-		--admin $(ADMIN)))
-	@printf "$(GREEN)Yield Distributor deployed: $(YIELD_DISTRIBUTOR_ID)$(NC)\n"
-	@echo "# Deployed contract addresses - $$(date)" > deployed_addresses.mk.tmp
-	@echo "YIELD_DISTRIBUTOR_ID = $(YIELD_DISTRIBUTOR_ID)" >> deployed_addresses.mk.tmp
-	@if [ -f deployed_addresses.mk ]; then grep -v "^YIELD_DISTRIBUTOR_ID" deployed_addresses.mk | grep -v "^#" >> deployed_addresses.mk.tmp || true; fi
-	@mv deployed_addresses.mk.tmp deployed_addresses.mk
+		--admin $(ADMIN)); \
+	printf "$(GREEN)Yield Distributor deployed: $$YIELD_DISTRIBUTOR_ID$(NC)\n"; \
+	echo "# Deployed contract addresses - $$(date)" > deployed_addresses.mk.tmp; \
+	echo "YIELD_DISTRIBUTOR_ID = $$YIELD_DISTRIBUTOR_ID" >> deployed_addresses.mk.tmp; \
+	if [ -f deployed_addresses.mk ]; then grep -v "^YIELD_DISTRIBUTOR_ID" deployed_addresses.mk | grep -v "^#" >> deployed_addresses.mk.tmp || true; fi; \
+	mv deployed_addresses.mk.tmp deployed_addresses.mk
 
 .PHONY: deploy-controller
 deploy-controller: check-build
@@ -392,8 +495,13 @@ deploy-controller: check-build
 		printf "$(RED)Error: Required contract IDs not set. Deploy core contracts first or load addresses.$(NC)\n"; \
 		exit 1; \
 	fi
-	$(eval LENDING_YIELD_CONTROLLER_ID := $(shell stellar contract deploy \
-		--wasm $(WASM_DIR)/lending_yield_controller.wasm \
+	@WASM_FILE="$(WASM_DIR)/lending_yield_controller.wasm"; \
+	if [ -f "$(WASM_DIR)/lending_yield_controller$(OPTIMIZED_SUFFIX)" ]; then \
+		WASM_FILE="$(WASM_DIR)/lending_yield_controller$(OPTIMIZED_SUFFIX)"; \
+		printf "$(GREEN)Using optimized WASM file$(NC)\n"; \
+	fi; \
+	LENDING_YIELD_CONTROLLER_ID=$$(stellar contract deploy \
+		--wasm $$WASM_FILE \
 		--source $(OWNER_KEY) \
 		--network $(NETWORK) \
 		--fee 1100 \
@@ -402,12 +510,12 @@ deploy-controller: check-build
 		--adapter_registry $(YIELD_ADAPTER_REGISTRY_ID) \
 		--cusd_manager $(CUSD_MANAGER_ID) \
 		--admin $(ADMIN) \
-		--owner $(OWNER)))
-	@printf "$(GREEN)Lending Yield Controller deployed: $(LENDING_YIELD_CONTROLLER_ID)$(NC)\n"
-	@echo "# Deployed contract addresses - $$(date)" > deployed_addresses.mk.tmp
-	@echo "LENDING_YIELD_CONTROLLER_ID = $(LENDING_YIELD_CONTROLLER_ID)" >> deployed_addresses.mk.tmp
-	@if [ -f deployed_addresses.mk ]; then grep -v "^LENDING_YIELD_CONTROLLER_ID" deployed_addresses.mk | grep -v "^#" >> deployed_addresses.mk.tmp || true; fi
-	@mv deployed_addresses.mk.tmp deployed_addresses.mk
+		--owner $(OWNER)); \
+	printf "$(GREEN)Lending Yield Controller deployed: $$LENDING_YIELD_CONTROLLER_ID$(NC)\n"; \
+	echo "# Deployed contract addresses - $$(date)" > deployed_addresses.mk.tmp; \
+	echo "LENDING_YIELD_CONTROLLER_ID = $$LENDING_YIELD_CONTROLLER_ID" >> deployed_addresses.mk.tmp; \
+	if [ -f deployed_addresses.mk ]; then grep -v "^LENDING_YIELD_CONTROLLER_ID" deployed_addresses.mk | grep -v "^#" >> deployed_addresses.mk.tmp || true; fi; \
+	mv deployed_addresses.mk.tmp deployed_addresses.mk
 
 .PHONY: deploy-blend-adapter
 deploy-blend-adapter: check-build
@@ -416,20 +524,25 @@ deploy-blend-adapter: check-build
 		printf "$(RED)Error: Lending Yield Controller ID not set. Deploy controller first or load addresses.$(NC)\n"; \
 		exit 1; \
 	fi
-	$(eval BLEND_CAPITAL_ADAPTER_ID := $(shell stellar contract deploy \
-		--wasm $(WASM_DIR)/blend_capital_adapter.wasm \
+	@WASM_FILE="$(WASM_DIR)/blend_capital_adapter.wasm"; \
+	if [ -f "$(WASM_DIR)/blend_capital_adapter$(OPTIMIZED_SUFFIX)" ]; then \
+		WASM_FILE="$(WASM_DIR)/blend_capital_adapter$(OPTIMIZED_SUFFIX)"; \
+		printf "$(GREEN)Using optimized WASM file$(NC)\n"; \
+	fi; \
+	BLEND_CAPITAL_ADAPTER_ID=$$(stellar contract deploy \
+		--wasm $$WASM_FILE \
 		--source $(OWNER_KEY) \
 		--network $(NETWORK) \
-		-- \
 		--fee 1100 \
+		-- \
 		--yield_controller $(LENDING_YIELD_CONTROLLER_ID) \
 		--blend_pool_id $(BLEND_POOL_ID) \
-		--blend_token_id $(BLEND_TOKEN_ID)))
-	@printf "$(GREEN)Blend Capital Adapter deployed: $(BLEND_CAPITAL_ADAPTER_ID)$(NC)\n"
-	@echo "# Deployed contract addresses - $$(date)" > deployed_addresses.mk.tmp
-	@echo "BLEND_CAPITAL_ADAPTER_ID = $(BLEND_CAPITAL_ADAPTER_ID)" >> deployed_addresses.mk.tmp
-	@if [ -f deployed_addresses.mk ]; then grep -v "^BLEND_CAPITAL_ADAPTER_ID" deployed_addresses.mk | grep -v "^#" >> deployed_addresses.mk.tmp || true; fi
-	@mv deployed_addresses.mk.tmp deployed_addresses.mk
+		--blend_token_id $(BLEND_TOKEN_ID)); \
+	printf "$(GREEN)Blend Capital Adapter deployed: $$BLEND_CAPITAL_ADAPTER_ID$(NC)\n"; \
+	echo "# Deployed contract addresses - $$(date)" > deployed_addresses.mk.tmp; \
+	echo "BLEND_CAPITAL_ADAPTER_ID = $$BLEND_CAPITAL_ADAPTER_ID" >> deployed_addresses.mk.tmp; \
+	if [ -f deployed_addresses.mk ]; then grep -v "^BLEND_CAPITAL_ADAPTER_ID" deployed_addresses.mk | grep -v "^#" >> deployed_addresses.mk.tmp || true; fi; \
+	mv deployed_addresses.mk.tmp deployed_addresses.mk
 
 # ========== CONFIGURATION TARGETS ==========
 .PHONY: configure-cusd
@@ -566,7 +679,7 @@ register-blend-adapter:
 # ========== PROTOCOL TESTING TARGETS ==========
 
 # Test amount for operations (1 USDC = 10000000 stroops)
-TEST_AMOUNT ?= 5000000000
+TEST_AMOUNT ?= 16000000000
 
 # Read current yield from all protocols
 .PHONY: test-read-yield
@@ -666,7 +779,7 @@ withdraw:
 		--id $(ACCOUNT))
 	@printf "$(GREEN)Withdrawal test complete! User should have received USDC and burned cUSD.$(NC)\n"
 
-# Test yield claiming and distribution
+# Test yield claiming and distribution - NOW WITH HIGHER FEE
 .PHONY: test-claim-yield
 test-claim-yield:
 	@printf "$(YELLOW)Testing yield claiming and distribution...$(NC)\n"
@@ -686,6 +799,7 @@ test-claim-yield:
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
 		--id $(LENDING_YIELD_CONTROLLER_ID) \
+		--fee 1100 \
 		-- \
 		claim_yield
 	@printf "$(YELLOW)Step 3: Checking if distribution occurred:$(NC)\n"
@@ -697,6 +811,19 @@ test-claim-yield:
 			-- \
 			is_distribution_available; \
 	fi
+	@printf "$(GREEN)Yield claiming test complete!$(NC)\n"
+
+# Test yield claiming and distribution
+.PHONY: test-claim-yield-sim
+test-claim-yield-sim:
+	@printf "$(YELLOW)Testing yield claiming and distribution...$(NC)\n"
+	stellar contract invoke \
+		--source $(ADMIN_KEY) \
+		--network $(NETWORK) \
+		--id $(LENDING_YIELD_CONTROLLER_ID) \
+		-- \
+		claim_yield \
+		--simulate
 	@printf "$(GREEN)Yield claiming test complete!$(NC)\n"
 
 # Test yield claiming and distribution
@@ -1024,12 +1151,12 @@ check-distribution-status:
 cusd-check-balance:
 	@printf "$(YELLOW)Checking CUSD balance of $(ADMIN)...$(NC)\n"
 	stellar contract invoke \
-		--source $(ADMIN_KEY) \
-		--network $(NETWORK) \
-		--id $(CUSD_ID) \
-		-- \
-		balance \
-		--account $(ACCOUNT) || printf "$(RED)Error reading CUSD balance$(NC)\n"
+	--source $(ADMIN_KEY) \
+	--network $(NETWORK) \
+	--id $(CUSD_ID) \
+	-- \
+	balance \
+	--account $(ACCOUNT) || printf "$(RED)Error reading CUSD balance$(NC)\n"
 
 # Burn all cUSD balance for a user
 .PHONY: burn-cusd
@@ -1099,7 +1226,7 @@ clean-deployment:
 # ========== REDEPLOY TARGETS ==========
 
 .PHONY: redeploy-cusd-token
-redeploy-cusd-token: deploy-cusd-token save-addresses
+redeploy-cusd-token: deploy-cusd save-addresses
 	@printf "$(GREEN)CUSD Token redeployed!$(NC)\n"
 
 .PHONY: redeploy-cusd-manager
