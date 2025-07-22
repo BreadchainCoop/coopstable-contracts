@@ -9,25 +9,25 @@ BINDINGS_BASE_DIR := ./ts
 BUILD_FLAGS ?=
 
 # Deployment configuration
-NETWORK ?= soroban
+NETWORK ?= testnet
 WASM_DIR = ./target/wasm32v1-none/release
 
 # Account keys (set these as environment variables or override them)
-OWNER_KEY ?= owner-mainnet
-ADMIN_KEY ?= admin-mainnet
+OWNER_KEY ?= owner
+ADMIN_KEY ?= admin
 TREASURY_KEY ?= treasury
 CUSD_CODE ?= CUSD
 
 # Get public keys from stellar keys
 OWNER := $(shell stellar keys public-key $(OWNER_KEY))
 ADMIN := $(shell stellar keys public-key $(ADMIN_KEY))
-# TREASURY := $(shell stellar keys public-key $(TREASURY_KEY))
-TREASURY := GCEUSAY6FKAYIAFNYZUKSO5GIPWGUWPKVVPYOL5MFXBKSDOVGMLZNQTN
+TREASURY := $(shell stellar keys public-key $(TREASURY_KEY))
+# TREASURY := GCEUSAY6FKAYIAFNYZUKSO5GIPWGUWPKVVPYOL5MFXBKSDOVGMLZNQTN
 
 # External Contract IDs (pre-deployed on testnet)
-BLEND_POOL_ID = CCCCIQSDILITHMM7PBSLVDT5MISSY7R26MNZXCX4H7J5JQ5FPIYOGYFS
-BLEND_TOKEN_ID = CD25MNVTZDL4Y3XBCPCJXGXATV5WUHHOWMYFF4YBEGU5FCPGMYTVG5JY
-USDC_ID = CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75
+BLEND_POOL_ID = CCLBPEYS3XFK65MYYXSBMOGKUI4ODN5S7SUZBGD7NALUQF64QILLX5B5
+BLEND_TOKEN_ID = CB22KRA3YZVCNCQI64JQ5WE7UY2VAV7WFLK6A2JN3HEX56T2EDAFO7QF
+USDC_ID = CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU
 CUSD_ADDRESS = $(CUSD_CODE):$(OWNER)
 
 # Contract addresses (will be set after deployment or loaded from file)
@@ -35,9 +35,8 @@ CUSD_ADDRESS = $(CUSD_CODE):$(OWNER)
 
 # Default values
 TREASURY_SHARE_BPS ?= 1000
-# DISTRIBUTION_PERIOD ?= 60
-DISTRIBUTION_PERIOD ?= 2592000 # 30 days
-
+DISTRIBUTION_PERIOD ?= 60
+# DISTRIBUTION_PERIOD ?= 2592000 # 30 days
 
 # Colors for output - using printf for proper color rendering
 GREEN := \033[0;32m
@@ -293,23 +292,23 @@ deploy-cusd: check-build
 	stellar tx new payment \
 		--source-account $(OWNER_KEY) \
 		--destination $(OWNER) \
-		--asset CUSD:$(OWNER) \
+		--asset $(CUSD_CODE):$(OWNER) \
 		--amount 1000 \
 		--fee 1000 \
 		--network $(NETWORK)
 	@CUSD_ID=$$(stellar contract asset deploy \
 		--source-account $(OWNER_KEY) \
-		--alias cusd_token \
 		--fee 1000 \
 		--network $(NETWORK) \
-		--asset CUSD:$(OWNER) 2>/dev/null || \
-		stellar contract id asset --asset CUSD:$(OWNER)); \
+		--asset $(CUSD_CODE):$(OWNER) || \
+		stellar contract asset id \
+		--asset $(CUSD_CODE):$$(stellar keys public-key owner)); \
 	if [ "$(NETWORK)" = "testnet" ]; then \
 		for account in admin treasury member_1 member_2 member_3; do \
 			echo "Setting trustline for $$account..."; \
 			stellar tx new change-trust \
 				--source-account $$account \
-				--line CUSD:$(OWNER) \
+				--line $(CUSD_CODE):$(OWNER) \
 				--fee 1000 \
 				--network $(NETWORK); \
 		done; \
@@ -420,8 +419,8 @@ deploy-blend-adapter: check-build
 		--wasm $(WASM_DIR)/blend_capital_adapter.wasm \
 		--source $(OWNER_KEY) \
 		--network $(NETWORK) \
-		-- \
 		--fee 1100 \
+		-- \
 		--yield_controller $(LENDING_YIELD_CONTROLLER_ID) \
 		--blend_pool_id $(BLEND_POOL_ID) \
 		--blend_token_id $(BLEND_TOKEN_ID)))
@@ -566,7 +565,7 @@ register-blend-adapter:
 # ========== PROTOCOL TESTING TARGETS ==========
 
 # Test amount for operations (1 USDC = 10000000 stroops)
-TEST_AMOUNT ?= 5000000000
+TEST_AMOUNT ?= 16000000000
 
 # Read current yield from all protocols
 .PHONY: test-read-yield
@@ -686,6 +685,7 @@ test-claim-yield:
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
 		--id $(LENDING_YIELD_CONTROLLER_ID) \
+		--fee 331510 \
 		-- \
 		claim_yield
 	@printf "$(YELLOW)Step 3: Checking if distribution occurred:$(NC)\n"
@@ -697,6 +697,19 @@ test-claim-yield:
 			-- \
 			is_distribution_available; \
 	fi
+	@printf "$(GREEN)Yield claiming test complete!$(NC)\n"
+
+# Test yield claiming and distribution
+.PHONY: test-claim-yield
+test-claim-yield-sim:
+	@printf "$(YELLOW)Testing yield claiming and distribution...$(NC)\n"
+	stellar contract invoke \
+		--source $(ADMIN_KEY) \
+		--network $(NETWORK) \
+		--id $(LENDING_YIELD_CONTROLLER_ID) \
+		-- \
+		claim_yield \
+		--simulate
 	@printf "$(GREEN)Yield claiming test complete!$(NC)\n"
 
 # Test yield claiming and distribution

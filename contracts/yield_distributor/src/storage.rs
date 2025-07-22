@@ -181,12 +181,6 @@ pub fn record_distribution(e: &Env, total: i128, treasury_amount: i128, member_a
     write_distribution(e, epoch, distribution);
     write_total_distributed(e, total);
 
-    let mut distributions: Vec<u64> = read_all_epoch_distributions(e);
-    
-    distributions.push_back(epoch);
-
-    write_distributions(e, distributions);
-
     // Increment epoch after distribution
     let next_epoch = epoch + 1;
     write_epoch(e, next_epoch);
@@ -320,30 +314,21 @@ pub fn check_distribution_availability(e: &Env) -> bool {
 
 pub fn read_distribution_history(e: &Env) -> Vec<Distribution> {
     extend_instance(e);
-    let distributions = read_all_epoch_distributions(e);
+    let current_epoch = read_epoch_current(e);
     let mut distributions_vec = Vec::new(e);
-    for epoch in distributions.iter() {
-        distributions_vec.push_back(read_distribution(e, epoch));
+    
+    // Iterate through all epochs from 0 to current, but only include processed distributions
+    for epoch in 0..=current_epoch {
+        if e.storage().persistent().has(&DataKey::Distribution(epoch)) {
+            let distribution = read_distribution(e, epoch);
+            if distribution.is_processed {
+                distributions_vec.push_back(distribution);
+            }
+        }
     }
     distributions_vec
 }
 
-fn read_all_epoch_distributions(e: &Env) -> Vec<u64> {
-    match e.storage().persistent().get(&DataKey::Distributions) {
-        Some(existing) => {
-            extend_persistent(e, &DataKey::Distributions);
-            existing
-        },
-        None => Vec::new(e),
-    }
-}
-
-fn write_distributions(e: &Env, distributions: Vec<u64>) {
-    e.storage()
-        .persistent()
-        .set(&DataKey::Distributions, &distributions);
-    extend_persistent(e, &DataKey::Distributions);
-}
 
 fn write_distribution(e: &Env, epoch: u64, distribution: Distribution) {
     e.storage()
