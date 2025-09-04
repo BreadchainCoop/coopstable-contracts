@@ -792,6 +792,7 @@ test-claim-yield:
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
 		--id $(LENDING_YIELD_CONTROLLER_ID) \
+		--fee 331250 \
 		-- \
 		get_yield
 	@printf "$(YELLOW)Step 2: Claiming yield and triggering distribution:$(NC)\n"
@@ -1045,6 +1046,24 @@ add-member:
 		--fee 1100 \
 		-- \
 		add_member \
+		--member $(MEMBER)
+	@printf "$(GREEN)$(MEMBER) added as community member!$(NC)\n"
+
+# distributor
+.PHONY: remove-member
+remove-member:
+	@printf "$(YELLOW)Adding $(MEMBER) as community member for yield distribution...$(NC)\n"
+	@if [ -z "$(YIELD_DISTRIBUTOR_ID)" ]; then \
+		printf "$(RED)Error: Yield Distributor ID not set.$(NC)\n"; \
+		exit 1; \
+	fi
+	stellar contract invoke \
+		--source $(ADMIN_KEY) \
+		--network $(NETWORK) \
+		--id $(YIELD_DISTRIBUTOR_ID) \
+		--fee 1100 \
+		-- \
+		remove_member \
 		--member $(MEMBER)
 	@printf "$(GREEN)$(MEMBER) added as community member!$(NC)\n"
 
