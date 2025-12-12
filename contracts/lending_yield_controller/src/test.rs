@@ -191,31 +191,6 @@ fn test_get_yield_no_adapters() {
     fixture.controller.get_yield(&protocol, &fixture.usdc_token_id);
 }
 
-#[test]
-#[should_panic(expected = "Error(Contract, #1100)")]
-fn test_claim_yield_no_adapters() {
-    let fixture = TestFixture::create();
-
-    let current_time = fixture.env.ledger().timestamp();
-    fixture.env.ledger().set_timestamp(current_time + 86400 + 10);
-
-    fixture.env.mock_all_auths();
-    let protocol = SupportedAdapter::BlendCapital.id();
-    // Without a registered adapter, claim_yield should panic with InvalidYieldAdapter
-    fixture.controller.claim_yield(&protocol, &fixture.usdc_token_id);
-}
-
-#[test]
-#[should_panic(expected = "Error(Contract, #1100)")]
-fn test_claim_yield_distribution_not_available() {
-    let fixture = TestFixture::create();
-
-    // Without a registered adapter, claim_yield will panic first
-    // before checking distribution availability
-    fixture.env.mock_all_auths();
-    let protocol = SupportedAdapter::BlendCapital.id();
-    fixture.controller.claim_yield(&protocol, &fixture.usdc_token_id);
-}
 
 #[test]
 #[should_panic(expected = "Error(Contract, #1100)")]
@@ -545,23 +520,6 @@ fn test_get_apy_per_protocol_asset() {
     let protocol = SupportedAdapter::BlendCapital.id();
     // get_apy requires a registered adapter
     // This test documents the expected behavior
-}
-
-#[test]
-#[should_panic(expected = "Error(Contract, #1100)")]
-fn test_claim_yield_per_protocol_asset_no_adapter() {
-    let fixture = TestFixture::create();
-
-    // Set timestamp to make distribution available
-    let current_time = fixture.env.ledger().timestamp();
-    fixture.env.ledger().set_timestamp(current_time + 86400 + 10);
-
-    fixture.env.mock_all_auths();
-
-    let protocol = SupportedAdapter::BlendCapital.id();
-
-    // Without a registered adapter, claim_yield should panic with InvalidYieldAdapter
-    fixture.controller.claim_yield(&protocol, &fixture.usdc_token_id);
 }
 
 #[test]

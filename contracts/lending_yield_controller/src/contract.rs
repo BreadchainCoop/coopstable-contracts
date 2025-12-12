@@ -133,10 +133,6 @@ pub trait LendingYieldControllerTrait {
     /// * `protocol` - The symbol identifier of the lending protocol
     /// * `asset` - The address of the asset to claim yield for
     ///
-    /// ### Panics
-    /// If no yield is available to claim
-    /// If distribution is not available from the yield distributor
-    fn claim_yield(e: &Env, protocol: Symbol, asset: Address) -> i128;
 
     // =========================================================================
     // Multi-stage yield claiming (Admin only)
@@ -299,30 +295,6 @@ impl LendingYieldControllerTrait for LendingYieldController {
 
     fn get_yield(e: &Env, protocol: Symbol, asset: Address) -> i128 {
         controls::read_yield(e, &protocol, asset)
-    }
-
-    fn claim_yield(e: &Env, protocol: Symbol, asset: Address) -> i128 {
-        let yield_amount = controls::read_yield(e, &protocol, asset.clone());
-
-        if yield_amount <= 0 {
-            return 0;
-        }
-
-        let distributor = storage::distributor_client(e);
-        if !distributor.is_distribution_available() {
-            panic_with_error!(e, LendingYieldControllerError::YieldUnavailable);
-        }
-
-        let claimed = controls::process_claim_and_distribute_yield(e, &protocol, asset.clone());
-
-        LendingYieldControllerEvents::claim_yield(
-            &e,
-            e.current_contract_address(),
-            asset,
-            claimed,
-        );
-
-        claimed
     }
 
     fn get_emissions(e: &Env, protocol: Symbol, asset: Address) -> i128 {

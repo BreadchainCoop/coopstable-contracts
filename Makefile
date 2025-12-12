@@ -714,9 +714,9 @@ register-blend-adapter:
 # ========== PROTOCOL TESTING TARGETS ==========
 
 # Test amount for operations (1 USDC = 10000000 stroops)
-# TEST_AMOUNT ?= 10_00_000_000
+# TEST_AMOUNT ?= 100_000_000
 # TEST_AMOUNT ?= 1000000000
-TEST_AMOUNT ?= 1000000000
+TEST_AMOUNT ?= 9000000000
 
 # Read current yield from all protocols
 .PHONY: test-read-yield
