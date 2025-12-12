@@ -1,7 +1,8 @@
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{Address, Env, Symbol};
 use crate::storage_types::{
     DataKey,
-    INSTANCE_BUMP_AMOUNT, 
+    PendingHarvest,
+    INSTANCE_BUMP_AMOUNT,
     INSTANCE_LIFETIME_THRESHOLD,
 };
 use crate::cusd_manager::Client as CUSDManagerClient;
@@ -46,7 +47,31 @@ pub fn distributor_client(e: &Env) -> YieldDistributorClient {
 }
 pub fn cusd_manager_client(e: &Env) -> CUSDManagerClient {
     CUSDManagerClient::new(
-        e, 
+        e,
         &get_cusd_manager(&e)
     )
+}
+
+// Pending harvest storage functions
+pub fn get_pending_harvest(e: &Env, protocol: &Symbol, asset: &Address) -> Option<PendingHarvest> {
+    extend_instance(e);
+    e.storage().instance().get(&DataKey::PendingHarvest(protocol.clone(), asset.clone()))
+}
+
+pub fn set_pending_harvest(e: &Env, harvest: &PendingHarvest) {
+    extend_instance(e);
+    e.storage().instance().set(
+        &DataKey::PendingHarvest(harvest.protocol.clone(), harvest.asset.clone()),
+        harvest
+    );
+}
+
+pub fn remove_pending_harvest(e: &Env, protocol: &Symbol, asset: &Address) {
+    extend_instance(e);
+    e.storage().instance().remove(&DataKey::PendingHarvest(protocol.clone(), asset.clone()));
+}
+
+pub fn has_pending_harvest(e: &Env, protocol: &Symbol, asset: &Address) -> bool {
+    extend_instance(e);
+    e.storage().instance().has(&DataKey::PendingHarvest(protocol.clone(), asset.clone()))
 }

@@ -37,8 +37,28 @@ impl LendingYieldControllerEvents {
         e.events().publish(topics,  cusd_manager.clone());
     }
     
-    pub fn set_admin(e: &Env, new_admin: Address) { 
+    pub fn set_admin(e: &Env, new_admin: Address) {
         let topics = (Symbol::new(e, "set_admin"), );
         e.events().publish(topics,  new_admin.clone());
+    }
+
+    pub fn harvest_yield(e: &Env, protocol: Symbol, asset: Address, amount: i128) {
+        let topics = (Symbol::new(e, "harvest_yield"), protocol);
+        e.events().publish(topics, (asset, amount));
+    }
+
+    pub fn recompound_yield(e: &Env, protocol: Symbol, asset: Address, amount: i128) {
+        let topics = (Symbol::new(e, "recompound_yield"), protocol);
+        e.events().publish(topics, (asset, amount));
+    }
+
+    pub fn finalize_distribution(e: &Env, protocol: Symbol, asset: Address, amount: i128) {
+        let topics = (Symbol::new(e, "finalize_distribution"), protocol);
+        e.events().publish(topics, (asset, amount));
+    }
+
+    pub fn cancel_harvest(e: &Env, protocol: Symbol, asset: Address) {
+        let topics = (Symbol::new(e, "cancel_harvest"), protocol);
+        e.events().publish(topics, asset);
     }
 }

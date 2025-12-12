@@ -1,4 +1,4 @@
-use soroban_sdk::{ contract, contractimpl, contractmeta, panic_with_error, Address, Env, Symbol};
+use soroban_sdk::{ contract, contractimpl, contractmeta, panic_with_error, Address, BytesN, Env, Symbol};
 use crate::error::LendingYieldControllerError;
 use crate::events::LendingYieldControllerEvents;
 use crate::{storage, controls};
@@ -116,18 +116,97 @@ pub trait LendingYieldControllerTrait {
         amount: i128,
     ) -> i128;
     
-    /// Fetch the accumulated yield available for distribution
-    fn get_yield(e: &Env) -> i128;
-    
-    /// Claim accumulated yield and distribute it through the yield distributor
+    /// Fetch the accumulated yield for a specific protocol and asset
     ///
-    /// Returns the total amount of yield claimed and distributed
+    /// ### Arguments
+    /// * `protocol` - The symbol identifier of the lending protocol
+    /// * `asset` - The address of the asset to check yield for
+    fn get_yield(e: &Env, protocol: Symbol, asset: Address) -> i128;
+
+    /// Claim accumulated yield for a specific protocol and asset, and distribute it
+    /// NOTE: This is a single-transaction version that may fail on budget limits.
+    /// For large operations, use the 3-stage process: harvest_yield -> recompound_yield -> finalize_distribution
+    ///
+    /// Returns the amount of yield claimed and distributed
+    ///
+    /// ### Arguments
+    /// * `protocol` - The symbol identifier of the lending protocol
+    /// * `asset` - The address of the asset to claim yield for
     ///
     /// ### Panics
     /// If no yield is available to claim
     /// If distribution is not available from the yield distributor
-    fn claim_yield(e: &Env) -> i128;
-    
+    fn claim_yield(e: &Env, protocol: Symbol, asset: Address) -> i128;
+
+    // =========================================================================
+    // Multi-stage yield claiming (Admin only)
+    // Use these functions when claim_yield exceeds budget limits
+    // =========================================================================
+
+    /// (Admin only) Stage 1: Harvest yield from the lending protocol
+    /// Withdraws accumulated yield from the protocol and stores it for later processing.
+    ///
+    /// Returns the amount of yield harvested
+    ///
+    /// ### Arguments
+    /// * `protocol` - The symbol identifier of the lending protocol
+    /// * `asset` - The address of the asset to harvest yield for
+    ///
+    /// ### Panics
+    /// If caller is not admin
+    /// If no yield is available to harvest
+    /// If a harvest is already in progress for this protocol/asset
+    fn harvest_yield(e: &Env, protocol: Symbol, asset: Address) -> i128;
+
+    /// (Admin only) Stage 2: Recompound harvested yield back into the protocol
+    /// Re-deposits the harvested yield to continue earning interest.
+    ///
+    /// Returns the amount recompounded
+    ///
+    /// ### Arguments
+    /// * `protocol` - The symbol identifier of the lending protocol
+    /// * `asset` - The address of the asset to recompound
+    ///
+    /// ### Panics
+    /// If caller is not admin
+    /// If no pending harvest exists
+    /// If harvest is not in correct state
+    fn recompound_yield(e: &Env, protocol: Symbol, asset: Address) -> i128;
+
+    /// (Admin only) Stage 3: Finalize distribution of yield to members
+    /// Issues cUSD and distributes to treasury and members.
+    ///
+    /// Returns the amount distributed
+    ///
+    /// ### Arguments
+    /// * `protocol` - The symbol identifier of the lending protocol
+    /// * `asset` - The address of the asset to finalize distribution for
+    ///
+    /// ### Panics
+    /// If caller is not admin
+    /// If no pending harvest exists
+    /// If harvest is not in correct state (must be recompounded)
+    /// If distribution is not available
+    fn finalize_distribution(e: &Env, protocol: Symbol, asset: Address) -> i128;
+
+    /// Fetch the pending harvest state for a protocol/asset pair
+    ///
+    /// ### Arguments
+    /// * `protocol` - The symbol identifier of the lending protocol
+    /// * `asset` - The address of the asset
+    fn get_pending_harvest(e: &Env, protocol: Symbol, asset: Address) -> Option<crate::storage_types::PendingHarvest>;
+
+    /// (Admin only) Cancel a pending harvest operation
+    /// Use this to reset state if something goes wrong during multi-stage process.
+    ///
+    /// ### Arguments
+    /// * `protocol` - The symbol identifier of the lending protocol
+    /// * `asset` - The address of the asset
+    ///
+    /// ### Panics
+    /// If caller is not admin
+    fn cancel_harvest(e: &Env, protocol: Symbol, asset: Address);
+
     /// Claim emissions rewards from a specific protocol for an asset
     ///
     /// Returns the total amount of emissions claimed
@@ -136,22 +215,29 @@ pub trait LendingYieldControllerTrait {
     /// * `protocol` - The symbol identifier of the lending protocol
     /// * `asset` - The address of the asset for which to claim emissions
     fn claim_emissions(e: &Env, protocol: Symbol, asset: Address) -> i128;
-    
+
     /// Fetch the accumulated emissions rewards for a specific protocol and asset
     ///
     /// ### Arguments
     /// * `protocol` - The symbol identifier of the lending protocol
     /// * `asset` - The address of the asset to check emissions for
     fn get_emissions(e: &Env, protocol: Symbol, asset: Address) -> i128;
-    
-    /// Fetch the total APY across all protocols for a specific asset
+
+    /// Fetch the APY for a specific protocol and asset
     ///
     /// ### Arguments
+    /// * `protocol` - The symbol identifier of the lending protocol
     /// * `asset` - The address of the asset to check APY for
-    fn get_total_apy(e: &Env, asset: Address) -> u32;
-    
-    /// Fetch the weighted average APY across all assets and protocols
-    fn get_weighted_total_apy(e: &Env) -> u32;
+    fn get_apy(e: &Env, protocol: Symbol, asset: Address) -> u32;
+
+    /// (Owner only) Upgrade the contract to a new WASM bytecode
+    ///
+    /// ### Arguments
+    /// * `new_wasm_hash` - The hash of the new WASM bytecode (must be uploaded first)
+    ///
+    /// ### Panics
+    /// If the caller is not the owner
+    fn upgrade(e: &Env, new_wasm_hash: BytesN<32>);
 }
 
 
@@ -211,39 +297,39 @@ impl LendingYieldControllerTrait for LendingYieldController {
         withdrawn
     }
 
-    fn get_yield(e: &Env) -> i128 { controls::read_yield(e) }
+    fn get_yield(e: &Env, protocol: Symbol, asset: Address) -> i128 {
+        controls::read_yield(e, &protocol, asset)
+    }
 
-    fn claim_yield(e: &Env) -> i128 {
-        
-        if controls::read_yield(e) <= 0 {
+    fn claim_yield(e: &Env, protocol: Symbol, asset: Address) -> i128 {
+        let yield_amount = controls::read_yield(e, &protocol, asset.clone());
+
+        if yield_amount <= 0 {
             return 0;
         }
-        
+
         let distributor = storage::distributor_client(e);
         if !distributor.is_distribution_available() {
             panic_with_error!(e, LendingYieldControllerError::YieldUnavailable);
         }
 
-        let claimed_total = controls::process_claim_and_distribute_yield(e);
-        
-        let cusd_manager = storage::cusd_manager_client(e);
+        let claimed = controls::process_claim_and_distribute_yield(e, &protocol, asset.clone());
 
         LendingYieldControllerEvents::claim_yield(
             &e,
             e.current_contract_address(),
-            cusd_manager.get_cusd_id(),
-            claimed_total,
+            asset,
+            claimed,
         );
 
-        claimed_total
+        claimed
     }
 
     fn get_emissions(e: &Env, protocol: Symbol, asset: Address) -> i128 {
-        controls::read_emissions(e, &protocol, asset.clone())
+        controls::read_emissions(e, &protocol, asset)
     }
 
     fn claim_emissions(e: &Env, protocol: Symbol, asset: Address) -> i128 {
-        
         let claimed_total = controls::process_claim_emissions(e, &protocol, asset.clone());
 
         LendingYieldControllerEvents::claim_emissions(
@@ -291,12 +377,63 @@ impl LendingYieldControllerTrait for LendingYieldController {
         storage::write_admin(e, new_admin.clone());
         LendingYieldControllerEvents::set_admin(e, new_admin);
     }
-    
-    fn get_total_apy(e: &Env, asset: Address) -> u32 {
-        controls::calculate_asset_weighted_apy(e, asset)
+
+    fn get_apy(e: &Env, protocol: Symbol, asset: Address) -> u32 {
+        controls::read_apy(e, &protocol, asset)
     }
-    
-    fn get_weighted_total_apy(e: &Env) -> u32 {
-        controls::calculate_portfolio_weighted_apy(e)
+
+    fn upgrade(e: &Env, new_wasm_hash: BytesN<32>) {
+        require_owner(e);
+        e.deployer().update_current_contract_wasm(new_wasm_hash);
+    }
+
+    // =========================================================================
+    // Multi-stage yield claiming (Admin only)
+    // =========================================================================
+
+    fn harvest_yield(e: &Env, protocol: Symbol, asset: Address) -> i128 {
+        require_admin(e);
+
+        let harvested = controls::process_harvest_yield(e, &protocol, asset.clone());
+
+        harvested
+    }
+
+    fn recompound_yield(e: &Env, protocol: Symbol, asset: Address) -> i128 {
+        require_admin(e);
+
+        let recompounded = controls::process_recompound_yield(e, &protocol, asset.clone());
+
+        recompounded
+    }
+
+    fn finalize_distribution(e: &Env, protocol: Symbol, asset: Address) -> i128 {
+        require_admin(e);
+
+        let distributor = storage::distributor_client(e);
+        if !distributor.is_distribution_available() {
+            panic_with_error!(e, LendingYieldControllerError::YieldUnavailable);
+        }
+
+        let distributed = controls::process_finalize_distribution(e, &protocol, asset.clone());
+
+        LendingYieldControllerEvents::claim_yield(
+            e,
+            e.current_contract_address(),
+            asset,
+            distributed,
+        );
+
+        distributed
+    }
+
+    fn get_pending_harvest(e: &Env, protocol: Symbol, asset: Address) -> Option<crate::storage_types::PendingHarvest> {
+        storage::get_pending_harvest(e, &protocol, &asset)
+    }
+
+    fn cancel_harvest(e: &Env, protocol: Symbol, asset: Address) {
+        require_admin(e);
+
+        controls::process_cancel_harvest(e, &protocol, asset);
     }
 }

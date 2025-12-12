@@ -3,7 +3,7 @@ use crate::{
     error::YieldAdapterRegistryError,
     storage
 };
-use soroban_sdk::{contract, contractimpl, contractmeta, panic_with_error, Address, Env, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, contractmeta, panic_with_error, Address, BytesN, Env, Symbol, Vec};
 
 contractmeta!(
     key = "Description",
@@ -124,6 +124,15 @@ pub trait YieldAdapterRegistryTrait {
         protocol: Symbol,
         asset_address: Address,
     ) -> bool;
+
+    /// (Owner only) Upgrade the contract to a new WASM bytecode
+    ///
+    /// ### Arguments
+    /// * `new_wasm_hash` - The hash of the new WASM bytecode (must be uploaded first)
+    ///
+    /// ### Panics
+    /// If the caller is not the owner
+    fn upgrade(e: &Env, new_wasm_hash: BytesN<32>);
 }
 
 /// ### YieldAdapterRegistry
@@ -227,5 +236,10 @@ impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
 
     fn get_adapters_with_assets(e: &Env, yield_type: Symbol) -> Vec<(Address, Vec<Address>)> {
         storage::get_yield_adapters_with_assets(e, yield_type)
+    }
+
+    fn upgrade(e: &Env, new_wasm_hash: BytesN<32>) {
+        require_owner(e);
+        e.deployer().update_current_contract_wasm(new_wasm_hash);
     }
 }

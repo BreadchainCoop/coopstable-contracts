@@ -92,13 +92,25 @@ help:
 	@printf "  $(GREEN)make test-read-yield$(NC)    - Read current yield from protocols\n"
 	@printf "  $(GREEN)make test-deposit$(NC)       - Test collateral deposit operation\n"
 	@printf "  $(GREEN)make test-withdraw$(NC)      - Test collateral withdrawal\n"
-	@printf "  $(GREEN)make test-claim-yield$(NC)   - Test yield claiming and distribution\n"
+	@printf "  $(GREEN)make test-claim-yield$(NC)   - Test 3-stage yield claiming and distribution\n"
 	@printf "  $(GREEN)make test-full-cycle$(NC)    - Test complete deposit->yield->withdraw cycle\n"
+	@printf "\n"
+	@printf "$(YELLOW)Multi-Stage Yield Claiming (Admin only):$(NC)\n"
+	@printf "  $(GREEN)make harvest-yield$(NC)      - Stage 1: Harvest yield from protocol\n"
+	@printf "  $(GREEN)make recompound-yield$(NC)   - Stage 2: Recompound yield back to protocol\n"
+	@printf "  $(GREEN)make finalize-distribution$(NC) - Stage 3: Finalize cUSD distribution\n"
+	@printf "  $(GREEN)make get-pending-harvest$(NC) - Check pending harvest state\n"
+	@printf "  $(GREEN)make cancel-harvest$(NC)     - Cancel a pending harvest operation\n"
 	@printf "\n"
 	@printf "$(YELLOW)Configuration:$(NC)\n"
 	@printf "  $(GREEN)make configure-cusd$(NC)\n"
 	@printf "  $(GREEN)make configure-distributor$(NC)\n"
 	@printf "  $(GREEN)make register-blend-adapter$(NC)\n"
+	@printf "\n"
+	@printf "$(YELLOW)Upgrades:$(NC)\n"
+	@printf "  $(GREEN)make get-wasm-hashes$(NC)    - Get WASM hashes for all contracts\n"
+	@printf "  $(GREEN)make upload-wasm CONTRACT=name$(NC) - Upload and get hash for one contract\n"
+	@printf "  $(GREEN)make upgrade-contract CONTRACT_ID=... WASM_HASH=...$(NC) - Upgrade a contract\n"
 	@printf "\n"
 	@printf "$(YELLOW)Utilities:$(NC)\n"
 	@printf "  $(GREEN)make show-addresses$(NC)     - Show deployed addresses\n"
@@ -679,7 +691,9 @@ register-blend-adapter:
 # ========== PROTOCOL TESTING TARGETS ==========
 
 # Test amount for operations (1 USDC = 10000000 stroops)
-TEST_AMOUNT ?= 500
+# TEST_AMOUNT ?= 10_00_000_000
+# TEST_AMOUNT ?= 1000000000
+TEST_AMOUNT ?= 1000000000
 
 # Read current yield from all protocols
 .PHONY: test-read-yield
@@ -695,7 +709,9 @@ test-read-yield:
 		--network $(NETWORK) \
 		--id $(LENDING_YIELD_CONTROLLER_ID) \
 		-- \
-		get_yield
+		get_yield \
+		--protocol "BC_LA" \
+		--asset $(USDC_ID)
 	@printf "$(YELLOW)Getting yield from Blend Capital adapter directly:$(NC)\n"
 	@if [ ! -z "$(BLEND_CAPITAL_ADAPTER_ID)" ]; then \
 		stellar contract invoke \
@@ -779,10 +795,11 @@ withdraw:
 		--id $(ACCOUNT))
 	@printf "$(GREEN)Withdrawal test complete! User should have received USDC and burned cUSD.$(NC)\n"
 
-# Test yield claiming and distribution - NOW WITH HIGHER FEE
+# Test yield claiming and distribution - 3 STAGE PROCESS
+# Use this when single-transaction claim_yield exceeds budget limits
 .PHONY: test-claim-yield
 test-claim-yield:
-	@printf "$(YELLOW)Testing yield claiming and distribution...$(NC)\n"
+	@printf "$(YELLOW)Testing 3-stage yield claiming and distribution...$(NC)\n"
 	@if [ -z "$(LENDING_YIELD_CONTROLLER_ID)" ]; then \
 		printf "$(RED)Error: Lending Yield Controller ID not set.$(NC)\n"; \
 		exit 1; \
@@ -792,18 +809,38 @@ test-claim-yield:
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
 		--id $(LENDING_YIELD_CONTROLLER_ID) \
-		--fee 331250 \
 		-- \
-		get_yield
-	@printf "$(YELLOW)Step 2: Claiming yield and triggering distribution:$(NC)\n"
+		get_yield \
+		--protocol "BC_LA" \
+		--asset $(USDC_ID)
+	@printf "$(YELLOW)Step 2: Harvest yield (withdraw from protocol):$(NC)\n"
 	stellar contract invoke \
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
 		--id $(LENDING_YIELD_CONTROLLER_ID) \
-		--fee 1100 \
 		-- \
-		claim_yield
-	@printf "$(YELLOW)Step 3: Checking if distribution occurred:$(NC)\n"
+		harvest_yield \
+		--protocol "BC_LA" \
+		--asset $(USDC_ID)
+	@printf "$(YELLOW)Step 3: Recompound yield (re-deposit to protocol):$(NC)\n"
+	stellar contract invoke \
+		--source $(ADMIN_KEY) \
+		--network $(NETWORK) \
+		--id $(LENDING_YIELD_CONTROLLER_ID) \
+		-- \
+		recompound_yield \
+		--protocol "BC_LA" \
+		--asset $(USDC_ID)
+	@printf "$(YELLOW)Step 4: Finalize distribution (issue cUSD and distribute):$(NC)\n"
+	stellar contract invoke \
+		--source $(ADMIN_KEY) \
+		--network $(NETWORK) \
+		--id $(LENDING_YIELD_CONTROLLER_ID) \
+		-- \
+		finalize_distribution \
+		--protocol "BC_LA" \
+		--asset $(USDC_ID)
+	@printf "$(YELLOW)Step 5: Checking distribution status:$(NC)\n"
 	@if [ ! -z "$(YIELD_DISTRIBUTOR_ID)" ]; then \
 		stellar contract invoke \
 			--source $(ADMIN_KEY) \
@@ -812,7 +849,93 @@ test-claim-yield:
 			-- \
 			is_distribution_available; \
 	fi
-	@printf "$(GREEN)Yield claiming test complete!$(NC)\n"
+	@printf "$(GREEN)3-stage yield claiming complete!$(NC)\n"
+
+# Individual stage targets for manual control
+.PHONY: harvest-yield
+harvest-yield:
+	@printf "$(YELLOW)Stage 1: Harvesting yield from protocol...$(NC)\n"
+	@if [ -z "$(LENDING_YIELD_CONTROLLER_ID)" ]; then \
+		printf "$(RED)Error: Lending Yield Controller ID not set.$(NC)\n"; \
+		exit 1; \
+	fi
+	stellar contract invoke \
+		--source $(ADMIN_KEY) \
+		--network $(NETWORK) \
+		--id $(LENDING_YIELD_CONTROLLER_ID) \
+		-- \
+		harvest_yield \
+		--protocol "BC_LA" \
+		--asset $(USDC_ID)
+	@printf "$(GREEN)Harvest complete!$(NC)\n"
+
+.PHONY: recompound-yield
+recompound-yield:
+	@printf "$(YELLOW)Stage 2: Recompounding yield...$(NC)\n"
+	@if [ -z "$(LENDING_YIELD_CONTROLLER_ID)" ]; then \
+		printf "$(RED)Error: Lending Yield Controller ID not set.$(NC)\n"; \
+		exit 1; \
+	fi
+	stellar contract invoke \
+		--source $(ADMIN_KEY) \
+		--network $(NETWORK) \
+		--id $(LENDING_YIELD_CONTROLLER_ID) \
+		-- \
+		recompound_yield \
+		--protocol "BC_LA" \
+		--asset $(USDC_ID)
+	@printf "$(GREEN)Recompound complete!$(NC)\n"
+
+.PHONY: finalize-distribution
+finalize-distribution:
+	@printf "$(YELLOW)Stage 3: Finalizing distribution...$(NC)\n"
+	@if [ -z "$(LENDING_YIELD_CONTROLLER_ID)" ]; then \
+		printf "$(RED)Error: Lending Yield Controller ID not set.$(NC)\n"; \
+		exit 1; \
+	fi
+	stellar contract invoke \
+		--source $(ADMIN_KEY) \
+		--network $(NETWORK) \
+		--id $(LENDING_YIELD_CONTROLLER_ID) \
+		-- \
+		finalize_distribution \
+		--protocol "BC_LA" \
+		--asset $(USDC_ID)
+	@printf "$(GREEN)Distribution finalized!$(NC)\n"
+
+.PHONY: get-pending-harvest
+get-pending-harvest:
+	@printf "$(YELLOW)Checking pending harvest state...$(NC)\n"
+	@if [ -z "$(LENDING_YIELD_CONTROLLER_ID)" ]; then \
+		printf "$(RED)Error: Lending Yield Controller ID not set.$(NC)\n"; \
+		exit 1; \
+	fi
+	stellar contract invoke \
+		--source $(ADMIN_KEY) \
+		--network $(NETWORK) \
+		--id $(LENDING_YIELD_CONTROLLER_ID) \
+		-- \
+		get_pending_harvest \
+		--protocol "BC_LA" \
+		--asset $(USDC_ID)
+	@printf "$(GREEN)Pending harvest state retrieved!$(NC)\n"
+
+.PHONY: cancel-harvest
+cancel-harvest:
+	@printf "$(YELLOW)Cancelling pending harvest...$(NC)\n"
+	@if [ -z "$(LENDING_YIELD_CONTROLLER_ID)" ]; then \
+		printf "$(RED)Error: Lending Yield Controller ID not set.$(NC)\n"; \
+		exit 1; \
+	fi
+	stellar contract invoke \
+		--source $(ADMIN_KEY) \
+		--network $(NETWORK) \
+		--id $(LENDING_YIELD_CONTROLLER_ID) \
+		-- \
+		cancel_harvest \
+		--protocol "BC_LA" \
+		--asset $(USDC_ID)
+	@printf "$(GREEN)Harvest cancelled!$(NC)\n"
 
 # Test yield claiming and distribution
 .PHONY: test-claim-yield-sim
@@ -1175,7 +1298,7 @@ cusd-check-balance:
 	--id $(CUSD_ID) \
 	-- \
 	balance \
-	--account $(ACCOUNT) || printf "$(RED)Error reading CUSD balance$(NC)\n"
+	--id $(ACCOUNT) || printf "$(RED)Error reading CUSD balance$(NC)\n"
 
 # Burn all cUSD balance for a user
 .PHONY: burn-cusd
@@ -1267,5 +1390,66 @@ redeploy-controller: deploy-controller save-addresses
 .PHONY: redeploy-blend-adapter
 redeploy-blend-adapter: deploy-blend-adapter save-addresses
 	@printf "$(GREEN)Blend adapter redeployed!$(NC)\n"
+
+# ========== WASM HASH TARGETS ==========
+
+# Get WASM hashes for all contracts (for upgrades)
+.PHONY: get-wasm-hashes
+get-wasm-hashes: check-build
+	@printf "$(YELLOW)Getting WASM hashes for all contracts...$(NC)\n"
+	@printf "\n"
+	@for contract in cusd_manager yield_adapter_registry yield_distributor lending_yield_controller blend_capital_adapter; do \
+		printf "$(GREEN)$$contract:$(NC)\n"; \
+		WASM_FILE="$(WASM_DIR)/$$contract.wasm"; \
+		if [ -f "$(WASM_DIR)/$${contract}$(OPTIMIZED_SUFFIX)" ]; then \
+			WASM_FILE="$(WASM_DIR)/$${contract}$(OPTIMIZED_SUFFIX)"; \
+			printf "  (using optimized)\n"; \
+		fi; \
+		HASH=$$(stellar contract install \
+			--source $(OWNER_KEY) \
+			--network $(NETWORK) \
+			--wasm $$WASM_FILE 2>&1); \
+		printf "  $$HASH\n\n"; \
+	done
+	@printf "$(GREEN)Done! Use these hashes with the upgrade function.$(NC)\n"
+
+# Upload and get hash for a specific contract
+# Usage: make upload-wasm CONTRACT=lending_yield_controller
+.PHONY: upload-wasm
+upload-wasm: check-build
+	@if [ -z "$(CONTRACT)" ]; then \
+		printf "$(RED)Error: CONTRACT parameter required. Usage: make upload-wasm CONTRACT=lending_yield_controller$(NC)\n"; \
+		exit 1; \
+	fi
+	@printf "$(YELLOW)Uploading $(CONTRACT) WASM...$(NC)\n"
+	@WASM_FILE="$(WASM_DIR)/$(CONTRACT).wasm"; \
+	if [ -f "$(WASM_DIR)/$(CONTRACT)$(OPTIMIZED_SUFFIX)" ]; then \
+		WASM_FILE="$(WASM_DIR)/$(CONTRACT)$(OPTIMIZED_SUFFIX)"; \
+		printf "$(GREEN)Using optimized WASM file$(NC)\n"; \
+	fi; \
+	HASH=$$(stellar contract install \
+		--source $(OWNER_KEY) \
+		--network $(NETWORK) \
+		--wasm $$WASM_FILE); \
+	printf "$(GREEN)WASM Hash: $$HASH$(NC)\n"
+
+# Upgrade a specific contract
+# Usage: make upgrade-contract CONTRACT_ID=CXXX... WASM_HASH=abc123...
+.PHONY: upgrade-contract
+upgrade-contract:
+	@if [ -z "$(CONTRACT_ID)" ] || [ -z "$(WASM_HASH)" ]; then \
+		printf "$(RED)Error: CONTRACT_ID and WASM_HASH required.$(NC)\n"; \
+		printf "$(RED)Usage: make upgrade-contract CONTRACT_ID=CXXX... WASM_HASH=abc123...$(NC)\n"; \
+		exit 1; \
+	fi
+	@printf "$(YELLOW)Upgrading contract $(CONTRACT_ID)...$(NC)\n"
+	stellar contract invoke \
+		--source $(OWNER_KEY) \
+		--network $(NETWORK) \
+		--id $(CONTRACT_ID) \
+		-- \
+		upgrade \
+		--new_wasm_hash $(WASM_HASH)
+	@printf "$(GREEN)Contract upgraded!$(NC)\n"
 
 .DEFAULT_GOAL := help

@@ -3,7 +3,7 @@ use crate::error::CUSDManagerError;
 use crate::storage_types::DataKey;
 use crate::token;
 use crate::storage;
-use soroban_sdk::{ contract, contractimpl, contractmeta, Address, Env, panic_with_error };
+use soroban_sdk::{ contract, contractimpl, contractmeta, Address, BytesN, Env, panic_with_error };
 
 contractmeta!(
     key = "Description",
@@ -98,6 +98,15 @@ pub trait CUSDManagerTrait {
     /// ### Panics
     /// If the caller is not the admin
     fn set_cusd_issuer(e: &Env, new_issuer: Address);
+
+    /// (Owner only) Upgrade the contract to a new WASM bytecode
+    ///
+    /// ### Arguments
+    /// * `new_wasm_hash` - The hash of the new WASM bytecode (must be uploaded first)
+    ///
+    /// ### Panics
+    /// If the caller is not the owner
+    fn upgrade(e: &Env, new_wasm_hash: BytesN<32>);
 }
 
 #[contractimpl]
@@ -152,4 +161,9 @@ impl CUSDManagerTrait for CUSDManager {
     }
 
     fn cusd_total_supply(e: &Env) -> i128 { storage::read_cusd_total_supply(&e) }
+
+    fn upgrade(e: &Env, new_wasm_hash: BytesN<32>) {
+        require_owner(e);
+        e.deployer().update_current_contract_wasm(new_wasm_hash);
+    }
 }

@@ -1,7 +1,8 @@
-use soroban_sdk::{panic_with_error, vec, Address, Env, IntoVal, Symbol, Vec};
+use soroban_sdk::{panic_with_error, vec, Address, Env, IntoVal, Symbol};
 use yield_adapter::lending_adapter::LendingAdapterClient;
 use crate::error::LendingYieldControllerError;
 use crate::events::LendingYieldControllerEvents;
+use crate::storage_types::{HarvestState, PendingHarvest};
 use crate::utils;
 use crate::{storage, storage_types};
 
@@ -114,33 +115,22 @@ pub fn process_distribute_cusd_yield(e: &Env, asset: Address, amount: i128) {
     distributor.distribute_yield(&asset, &amount); 
 }
 
-pub fn read_yield(e: &Env) -> i128 {
+pub fn read_yield(e: &Env, protocol: &Symbol, asset: Address) -> i128 {
     let registry_client = storage::adapter_registry_client(e);
-    let lend_protocols_with_assets = registry_client.get_adapters_with_assets(&storage_types::YIELD_TYPE.id());
-   
-    lend_protocols_with_assets.iter().fold(
-        0,
-        |adapter_acc, (adapter_address, supported_assets)| {
-            let adapter_client = LendingAdapterClient::new(e, &adapter_address);
-
-            let adapter_total = supported_assets.iter().fold(0, |asset_acc, asset| {
-                let asset_yield = adapter_client.get_yield(&asset);
-                asset_acc + asset_yield
-            });
-            adapter_acc + adapter_total
-        },
-    )
+    let adapter = LendingAdapterClient::new(e, &registry_client.get_adapter(&storage_types::YIELD_TYPE.id(), protocol));
+    adapter.get_yield(&asset)
 }
 
-pub fn process_claim_and_distribute_yield(e: &Env) -> i128 {
-    let mut claimed_total: i128 = 0;
+pub fn read_apy(e: &Env, protocol: &Symbol, asset: Address) -> u32 {
     let registry_client = storage::adapter_registry_client(e);
-    let lend_protocols_with_assets = registry_client.get_adapters_with_assets(&storage_types::YIELD_TYPE.id());
-    
-    for (adapter_address, supported_assets) in lend_protocols_with_assets.iter() {
-        claimed_total += process_claim_yield(e, &adapter_address, supported_assets.clone());
-    }
-    claimed_total
+    let adapter = LendingAdapterClient::new(e, &registry_client.get_adapter(&storage_types::YIELD_TYPE.id(), protocol));
+    adapter.get_apy(&asset)
+}
+
+pub fn process_claim_and_distribute_yield(e: &Env, protocol: &Symbol, asset: Address) -> i128 {
+    let registry_client = storage::adapter_registry_client(e);
+    let adapter_address = registry_client.get_adapter(&storage_types::YIELD_TYPE.id(), protocol);
+    process_claim_yield_for_asset(e, &adapter_address, asset)
 }
 
 pub fn process_claim_emissions(e: &Env, protocol: &Symbol, asset: Address) -> i128 {
@@ -184,63 +174,50 @@ pub fn read_emissions(e: &Env, protocol: &Symbol, asset: Address) -> i128 {
     adapter.get_emissions(&asset)
 }
 
-fn process_claim_yield(e: &Env, adapter_address: &Address, supported_assets: Vec<Address>) -> i128 {
+fn process_claim_yield_for_asset(e: &Env, adapter_address: &Address, asset: Address) -> i128 {
     let distributor = storage::distributor_client(e);
     let cusd_manager = storage::cusd_manager_client(e);
     let adapter = LendingAdapterClient::new(e, adapter_address);
-    let mut adapter_claimed_total: i128 = 0;
-    
-    for asset in supported_assets.iter() {
-        
-        let yield_amount = adapter.get_yield(&asset);
-        
-        if yield_amount > 0 {
 
-            authenticate_for_claim_yield(e, adapter_address, asset.clone(), yield_amount);
+    let yield_amount = adapter.get_yield(&asset);
 
-            let claimed = adapter.claim_yield(&asset, &yield_amount);
-
-            let deposited = process_deposit_for_claim(e, adapter_address.clone(),asset.clone(), claimed);
-            
-            process_cusd_issue(e, distributor.address.clone(), deposited); 
-            
-            process_distribute_cusd_yield(e, cusd_manager.get_cusd_id(), deposited);
-            
-            // Get the current balance AFTER re-depositing yield
-            // This should be the principal for the next epoch
-            let new_principal = adapter.get_balance(&e.current_contract_address(), &asset);
-            
-            // Update epoch principal for the next epoch after successful distribution
-            let distributor = storage::distributor_client(e);
-            let current_epoch = distributor.get_current_epoch();
-            let next_epoch = current_epoch + 1;
-            
-            // Update the epoch principal for the next epoch
-            utils::authenticate_contract(
-                &e, 
-                adapter.address.clone(), 
-                Symbol::new(&e, "update_epoch_principal"),
-                vec![
-                    e,
-                    (&asset).into_val(e),
-                    (&next_epoch).into_val(e),
-                    (&new_principal).into_val(e),
-                ]
-            );
-            adapter.update_epoch_principal(&asset, &next_epoch, &new_principal);
-            
-            adapter_claimed_total += deposited;
-
-            LendingYieldControllerEvents::claim_yield(
-                &e,
-                e.current_contract_address(),
-                asset.clone(),
-                claimed,
-            );
-        }
+    if yield_amount <= 0 {
+        return 0;
     }
-    
-    adapter_claimed_total
+
+    authenticate_for_claim_yield(e, adapter_address, asset.clone(), yield_amount);
+
+    let claimed = adapter.claim_yield(&asset, &yield_amount);
+
+    let deposited = process_deposit_for_claim(e, adapter_address.clone(), asset.clone(), claimed);
+
+    process_cusd_issue(e, distributor.address.clone(), deposited);
+
+    process_distribute_cusd_yield(e, cusd_manager.get_cusd_id(), deposited);
+
+    // Get the current balance AFTER re-depositing yield
+    // This should be the principal for the next epoch
+    let new_principal = adapter.get_balance(&e.current_contract_address(), &asset);
+
+    // Update epoch principal for the next epoch after successful distribution
+    let current_epoch = distributor.get_current_epoch();
+    let next_epoch = current_epoch + 1;
+
+    // Update the epoch principal for the next epoch
+    utils::authenticate_contract(
+        &e,
+        adapter.address.clone(),
+        Symbol::new(&e, "update_epoch_principal"),
+        vec![
+            e,
+            (&asset).into_val(e),
+            (&next_epoch).into_val(e),
+            (&new_principal).into_val(e),
+        ],
+    );
+    adapter.update_epoch_principal(&asset, &next_epoch, &new_principal);
+
+    deposited
 }
 
 fn authenticate_for_claim_yield(e: &Env, adapter_address: &Address, asset: Address, yield_amount: i128) {
@@ -265,22 +242,22 @@ fn authenticate_for_claim_yield(e: &Env, adapter_address: &Address, asset: Addre
     );
 }
 
-fn process_deposit_for_claim(e: &Env, protocol_id: Address, asset: Address, yield_amount: i128) -> i128 { 
-    
+fn process_deposit_for_claim(e: &Env, protocol_id: Address, asset: Address, yield_amount: i128) -> i128 {
+
     let adapter = LendingAdapterClient::new(e, &protocol_id);
 
     if let Some((pool_id, fn_name, args)) = adapter.deposit_auth(&e.current_contract_address(), &asset, &yield_amount) {
         utils::authenticate_contract(
-            &e, 
-            pool_id.clone(), 
-            fn_name,  
+            &e,
+            pool_id.clone(),
+            fn_name,
             args,
         );
 
         utils::authenticate_contract( // authenticate yield controller for depositing withdrewn tokens in the pool
-            &e, 
-            asset.clone(), 
-            Symbol::new(&e, "transfer"), 
+            &e,
+            asset.clone(),
+            Symbol::new(&e, "transfer"),
             vec![
                 e,
                 (&e.current_contract_address()).into_val(e),
@@ -291,8 +268,8 @@ fn process_deposit_for_claim(e: &Env, protocol_id: Address, asset: Address, yiel
     }
 
     utils::authenticate_contract(
-        &e, 
-        adapter.address.clone(), 
+        &e,
+        adapter.address.clone(),
         Symbol::new(&e, "deposit"),
         vec![
             e,
@@ -304,66 +281,149 @@ fn process_deposit_for_claim(e: &Env, protocol_id: Address, asset: Address, yiel
 
     let deposited = adapter.deposit(
         &e.current_contract_address(),
-        &asset, 
+        &asset,
         &yield_amount
     );
 
     deposited
 }
 
-pub fn calculate_asset_weighted_apy(e: &Env, asset: Address) -> u32 {
+// =========================================================================
+// Multi-stage yield claiming functions
+// =========================================================================
+
+/// Stage 1: Harvest yield from the lending protocol
+/// Withdraws accumulated yield and stores it for later processing.
+pub fn process_harvest_yield(e: &Env, protocol: &Symbol, asset: Address) -> i128 {
+    // Check no pending harvest exists
+    if storage::has_pending_harvest(e, protocol, &asset) {
+        panic_with_error!(e, LendingYieldControllerError::HarvestAlreadyInProgress);
+    }
+
     let registry_client = storage::adapter_registry_client(e);
-    let lend_protocols_with_assets = registry_client.get_adapters_with_assets(&storage_types::YIELD_TYPE.id());
-    let mut total_weighted_apy: i128 = 0;
-    let mut total_deposits: i128 = 0;
-    
-    for (adapter_address, supported_assets) in lend_protocols_with_assets.iter() {
-        if supported_assets.contains(&asset) {
-            let adapter_client = LendingAdapterClient::new(e, &adapter_address);
-            
-            let adapter_apy = adapter_client.get_apy(&asset) as i128;
-            
-            let adapter_deposit = adapter_client.get_total_deposited(&asset);
-            
-            if adapter_deposit > 0 {
-                total_weighted_apy += adapter_apy * adapter_deposit;
-                total_deposits += adapter_deposit;
-            }
-        }
+    let adapter_address = registry_client.get_adapter(&storage_types::YIELD_TYPE.id(), protocol);
+    let adapter = LendingAdapterClient::new(e, &adapter_address);
+
+    let yield_amount = adapter.get_yield(&asset);
+    if yield_amount <= 0 {
+        panic_with_error!(e, LendingYieldControllerError::NoYieldToHarvest);
     }
-    
-    if total_deposits == 0 {
-        return 0;
-    }
-    
-    (total_weighted_apy / total_deposits) as u32
+
+    // Authenticate and claim yield from protocol
+    authenticate_for_claim_yield(e, &adapter_address, asset.clone(), yield_amount);
+    let claimed = adapter.claim_yield(&asset, &yield_amount);
+
+    // Store pending harvest
+    let pending = PendingHarvest {
+        protocol: protocol.clone(),
+        asset: asset.clone(),
+        amount: claimed,
+        state: HarvestState::Harvested,
+    };
+    storage::set_pending_harvest(e, &pending);
+
+    LendingYieldControllerEvents::harvest_yield(e, protocol.clone(), asset, claimed);
+
+    claimed
 }
 
-pub fn calculate_portfolio_weighted_apy(e: &Env) -> u32 {
+/// Stage 2: Recompound harvested yield back into the protocol
+/// Re-deposits the harvested yield to continue earning interest.
+pub fn process_recompound_yield(e: &Env, protocol: &Symbol, asset: Address) -> i128 {
+    // Get pending harvest
+    let pending = storage::get_pending_harvest(e, protocol, &asset)
+        .unwrap_or_else(|| panic_with_error!(e, LendingYieldControllerError::NoPendingHarvest));
+
+    // Verify state is Harvested
+    if pending.state != HarvestState::Harvested {
+        panic_with_error!(e, LendingYieldControllerError::InvalidHarvestState);
+    }
+
     let registry_client = storage::adapter_registry_client(e);
-    let lend_protocols_with_assets = registry_client.get_adapters_with_assets(&storage_types::YIELD_TYPE.id());
-    let mut total_weighted_apy: i128 = 0;
-    let mut total_portfolio_value: i128 = 0;
-    
-    for (adapter_address, supported_assets) in lend_protocols_with_assets.iter() {
-        let adapter_client = LendingAdapterClient::new(e, &adapter_address);
-        
-        for asset in supported_assets.iter() {
-            let asset_apy = adapter_client.get_apy(&asset) as i128;
-            
-            let asset_value = adapter_client.get_total_deposited(&asset);
-            
-            if asset_value > 0 {
-                total_weighted_apy += asset_apy * asset_value;
-                total_portfolio_value += asset_value;
-            }
-        }
-    }
-    
-    if total_portfolio_value == 0 {
-        return 0;
-    }
-    
-    (total_weighted_apy / total_portfolio_value) as u32
+    let adapter_address = registry_client.get_adapter(&storage_types::YIELD_TYPE.id(), protocol);
+
+    // Re-deposit the harvested yield
+    let deposited = process_deposit_for_claim(e, adapter_address, asset.clone(), pending.amount);
+
+    // Update state to Recompounded
+    let updated_pending = PendingHarvest {
+        protocol: protocol.clone(),
+        asset: asset.clone(),
+        amount: deposited,
+        state: HarvestState::Recompounded,
+    };
+    storage::set_pending_harvest(e, &updated_pending);
+
+    LendingYieldControllerEvents::recompound_yield(e, protocol.clone(), asset, deposited);
+
+    deposited
 }
 
+/// Stage 3: Finalize distribution of yield to members
+/// Issues cUSD and distributes to treasury and members.
+pub fn process_finalize_distribution(e: &Env, protocol: &Symbol, asset: Address) -> i128 {
+    // Get pending harvest
+    let pending = storage::get_pending_harvest(e, protocol, &asset)
+        .unwrap_or_else(|| panic_with_error!(e, LendingYieldControllerError::NoPendingHarvest));
+
+    // Verify state is Recompounded
+    if pending.state != HarvestState::Recompounded {
+        panic_with_error!(e, LendingYieldControllerError::InvalidHarvestState);
+    }
+
+    let distributor = storage::distributor_client(e);
+    let cusd_manager = storage::cusd_manager_client(e);
+    let registry_client = storage::adapter_registry_client(e);
+    let adapter_address = registry_client.get_adapter(&storage_types::YIELD_TYPE.id(), protocol);
+    let adapter = LendingAdapterClient::new(e, &adapter_address);
+
+    let yield_amount = pending.amount;
+
+    // Issue cUSD for the yield amount
+    process_cusd_issue(e, distributor.address.clone(), yield_amount);
+
+    // Distribute the cUSD yield
+    process_distribute_cusd_yield(e, cusd_manager.get_cusd_id(), yield_amount);
+
+    // Get the current balance AFTER re-depositing yield (done in stage 2)
+    // This should be the principal for the next epoch
+    let new_principal = adapter.get_balance(&e.current_contract_address(), &asset);
+
+    // Update epoch principal for the next epoch after successful distribution
+    let current_epoch = distributor.get_current_epoch();
+    let next_epoch = current_epoch + 1;
+
+    // Update the epoch principal for the next epoch
+    utils::authenticate_contract(
+        e,
+        adapter.address.clone(),
+        Symbol::new(e, "update_epoch_principal"),
+        vec![
+            e,
+            (&asset).into_val(e),
+            (&next_epoch).into_val(e),
+            (&new_principal).into_val(e),
+        ],
+    );
+    adapter.update_epoch_principal(&asset, &next_epoch, &new_principal);
+
+    // Remove pending harvest - operation complete
+    storage::remove_pending_harvest(e, protocol, &asset);
+
+    LendingYieldControllerEvents::finalize_distribution(e, protocol.clone(), asset, yield_amount);
+
+    yield_amount
+}
+
+/// Cancel a pending harvest operation
+pub fn process_cancel_harvest(e: &Env, protocol: &Symbol, asset: Address) {
+    // Verify a pending harvest exists
+    if !storage::has_pending_harvest(e, protocol, &asset) {
+        panic_with_error!(e, LendingYieldControllerError::NoPendingHarvest);
+    }
+
+    // Remove the pending harvest
+    storage::remove_pending_harvest(e, protocol, &asset);
+
+    LendingYieldControllerEvents::cancel_harvest(e, protocol.clone(), asset);
+}

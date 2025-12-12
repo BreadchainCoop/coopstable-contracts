@@ -1,4 +1,4 @@
-use soroban_sdk::{vec, IntoVal, Symbol, contract, contractimpl, contractmeta, token::TokenClient, Address, Env, Vec, panic_with_error};
+use soroban_sdk::{vec, IntoVal, Symbol, contract, contractimpl, contractmeta, token::TokenClient, Address, BytesN, Env, Vec, panic_with_error};
 use crate::events::YieldDistributorEvents;
 use crate::error::YieldDistributorError;
 use crate::storage_types::Distribution;
@@ -149,7 +149,15 @@ pub trait YieldDistributorTrait {
     /// ### Panics
     /// If the caller is not the owner
     fn set_admin(e: &Env, new_admin: Address);
-    
+
+    /// (Owner only) Upgrade the contract to a new WASM bytecode
+    ///
+    /// ### Arguments
+    /// * `new_wasm_hash` - The hash of the new WASM bytecode (must be uploaded first)
+    ///
+    /// ### Panics
+    /// If the caller is not the owner
+    fn upgrade(e: &Env, new_wasm_hash: BytesN<32>);
 }
 
 /// ### YieldDistributor
@@ -371,4 +379,9 @@ impl YieldDistributorTrait for YieldDistributor {
     fn get_yield_controller(e: &Env) -> Address { storage::get_yield_controller(e) }
 
     fn get_total_distributed(e: &Env) -> i128 { storage::read_total_distributed(e) }
+
+    fn upgrade(e: &Env, new_wasm_hash: BytesN<32>) {
+        require_owner(e);
+        e.deployer().update_current_contract_wasm(new_wasm_hash);
+    }
 }
