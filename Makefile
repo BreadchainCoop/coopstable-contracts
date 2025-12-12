@@ -291,6 +291,29 @@ redeploy-protocol:
 	@$(MAKE) deploy-protocol
 	@printf "$(GREEN)Protocol redeployment complete!$(NC)\n"
 
+# Redeploy entire protocol (clean deployment)
+.PHONY: redeploy-optimized
+redeploy-optimized: check-optimized
+	@printf "$(YELLOW)Starting protocol redeployment...$(NC)\n"
+	@# Transfer CUSD issuer back to owner before clean if CUSD Manager exists
+	@if [ -f deployed_addresses.mk ] && grep -q "CUSD_MANAGER_ID" deployed_addresses.mk; then \
+		CUSD_MANAGER_ID=$$(grep '^CUSD_MANAGER_ID' deployed_addresses.mk | cut -d'=' -f2 | tr -d ' '); \
+		if [ ! -z "$$CUSD_MANAGER_ID" ]; then \
+			printf "$(YELLOW)Transferring CUSD issuer role back to owner...$(NC)\n"; \
+			stellar contract invoke \
+				--source $(ADMIN_KEY) \
+				--network $(NETWORK) \
+				--id $$CUSD_MANAGER_ID \
+				-- \
+				set_cusd_issuer \
+				--new_issuer $(OWNER) || printf "$(RED)Warning: Failed to transfer issuer role$(NC)\n"; \
+		fi \
+	fi
+	@$(MAKE) clean
+	@$(MAKE) build
+	@$(MAKE) deploy-protocol
+	@printf "$(GREEN)Protocol redeployment complete!$(NC)\n"
+
 # Quick deployment with build
 .PHONY: quick-deploy
 quick-deploy:
