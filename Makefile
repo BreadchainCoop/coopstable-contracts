@@ -9,26 +9,26 @@ BINDINGS_BASE_DIR := ./ts
 BUILD_FLAGS ?=
 
 # Deployment configuration
-NETWORK ?= testnet
+NETWORK ?= mainnet
 WASM_DIR = ./target/wasm32v1-none/release
 OPTIMIZED_SUFFIX = .optimized.wasm
 
 # Account keys (set these as environment variables or override them)
-OWNER_KEY ?= owner
-ADMIN_KEY ?= admin
+OWNER_KEY ?= owner-mainnet
+ADMIN_KEY ?= admin-mainnet
 TREASURY_KEY ?= treasury
 CUSD_CODE ?= CUSD
 
 # Get public keys from stellar keys
 OWNER := $(shell stellar keys public-key $(OWNER_KEY))
 ADMIN := $(shell stellar keys public-key $(ADMIN_KEY))
-TREASURY := $(shell stellar keys public-key $(TREASURY_KEY))
-# TREASURY := GCEUSAY6FKAYIAFNYZUKSO5GIPWGUWPKVVPYOL5MFXBKSDOVGMLZNQTN
+# TREASURY := $(shell stellar keys public-key $(TREASURY_KEY))
+TREASURY := GCEUSAY6FKAYIAFNYZUKSO5GIPWGUWPKVVPYOL5MFXBKSDOVGMLZNQTN
 
 # External Contract IDs (pre-deployed on testnet)
-BLEND_POOL_ID = CDDG7DLOWSHRYQ2HWGZEZ4UTR7LPTKFFHN3QUCSZEXOWOPARMONX6T65
-BLEND_TOKEN_ID = CB22KRA3YZVCNCQI64JQ5WE7UY2VAV7WFLK6A2JN3HEX56T2EDAFO7QF
-USDC_ID = CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU
+BLEND_POOL_ID = CCCCIQSDILITHMM7PBSLVDT5MISSY7R26MNZXCX4H7J5JQ5FPIYOGYFS
+BLEND_TOKEN_ID = CD25MNVTZDL4Y3XBCPCJXGXATV5WUHHOWMYFF4YBEGU5FCPGMYTVG5JY
+USDC_ID = CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75
 CUSD_ADDRESS = $(CUSD_CODE):$(OWNER)
 
 # Contract addresses (will be set after deployment or loaded from file)
@@ -36,8 +36,8 @@ CUSD_ADDRESS = $(CUSD_CODE):$(OWNER)
 
 # Default values
 TREASURY_SHARE_BPS ?= 1000
-DISTRIBUTION_PERIOD ?= 60
-# DISTRIBUTION_PERIOD ?= 2592000 # 30 days
+# DISTRIBUTION_PERIOD ?= 60
+DISTRIBUTION_PERIOD ?= 2592000 # 30 days
 
 # Colors for output - using printf for proper color rendering
 GREEN := \033[0;32m
@@ -310,7 +310,7 @@ redeploy-optimized: check-optimized
 		fi \
 	fi
 	@$(MAKE) clean
-	@$(MAKE) build
+	@$(MAKE) build-optimized
 	@$(MAKE) deploy-protocol
 	@printf "$(GREEN)Protocol redeployment complete!$(NC)\n"
 
@@ -461,6 +461,7 @@ deploy-cusd-manager: check-build
 			--wasm $$WASM_FILE \
 			--source $(OWNER_KEY) \
 			--network $(NETWORK) \
+			--fee 1200 \
 			-- \
 			--cusd_id $$CUSD_ID \
 			--owner $(OWNER) \
@@ -487,7 +488,7 @@ deploy-registry: check-build
 		--wasm $$WASM_FILE \
 		--source-account $(OWNER_KEY) \
 		--network $(NETWORK) \
-		--fee 1100 \
+		--fee 1500 \
 		-- \
 		--admin $(ADMIN) \
 		--owner $(OWNER)); \
@@ -509,7 +510,7 @@ deploy-distributor: check-build
 		--wasm $$WASM_FILE \
 		--source-account $(OWNER_KEY) \
 		--network $(NETWORK) \
-		--fee 500 \
+		--fee 3500 \
 		-- \
 		--treasury $(TREASURY) \
 		--treasury_share_bps $(TREASURY_SHARE_BPS) \
@@ -539,7 +540,7 @@ deploy-controller: check-build
 		--wasm $$WASM_FILE \
 		--source $(OWNER_KEY) \
 		--network $(NETWORK) \
-		--fee 1100 \
+		--fee 3500 \
 		-- \
 		--yield_distributor $(YIELD_DISTRIBUTOR_ID) \
 		--adapter_registry $(YIELD_ADAPTER_REGISTRY_ID) \
@@ -568,7 +569,7 @@ deploy-blend-adapter: check-build
 		--wasm $$WASM_FILE \
 		--source $(OWNER_KEY) \
 		--network $(NETWORK) \
-		--fee 1100 \
+		--fee 3500 \
 		-- \
 		--yield_controller $(LENDING_YIELD_CONTROLLER_ID) \
 		--blend_pool_id $(BLEND_POOL_ID) \
@@ -612,6 +613,7 @@ cusd-manager-set-controller:
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
 		--id $$CUSD_MANAGER_ID \
+		--fee 3500 \
 		-- \
 		set_yield_controller \
 		--new_controller $$LENDING_YIELD_CONTROLLER_ID
@@ -674,6 +676,7 @@ configure-distributor:
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
 		--id $$DISTRIBUTOR_ID \
+		--fee 3500 \
 		-- \
 		set_yield_controller \
 		--yield_controller $$CONTROLLER_ID
@@ -721,6 +724,36 @@ TEST_AMOUNT ?= 9000000000
 # Read current yield from all protocols
 .PHONY: test-read-yield
 test-read-yield:
+	@printf "$(YELLOW)Reading current yield from protocols...$(NC)\n"
+	@if [ -z "$(LENDING_YIELD_CONTROLLER_ID)" ]; then \
+		printf "$(RED)Error: Lending Yield Controller ID not set.$(NC)\n"; \
+		exit 1; \
+	fi
+	@printf "$(YELLOW)Getting total yield across all protocols:$(NC)\n"
+	stellar contract invoke \
+		--source $(ADMIN_KEY) \
+		--network $(NETWORK) \
+		--id $(LENDING_YIELD_CONTROLLER_ID) \
+		-- \
+		get_yield \
+		--protocol "BC_LA" \
+		--asset $(USDC_ID)
+	@printf "$(YELLOW)Getting yield from Blend Capital adapter directly:$(NC)\n"
+	@if [ ! -z "$(BLEND_CAPITAL_ADAPTER_ID)" ]; then \
+		stellar contract invoke \
+			--source $(ADMIN_KEY) \
+			--network $(NETWORK) \
+			--id $(BLEND_CAPITAL_ADAPTER_ID) \
+			-- \
+			get_yield \
+			--asset $(USDC_ID); \
+	else \
+		printf "$(RED)Blend Capital Adapter not deployed$(NC)\n"; \
+	fi
+	@printf "$(GREEN)Yield reading complete!$(NC)\n"
+
+.PHONY: test-read-apy
+test-read-apy:
 	@printf "$(YELLOW)Reading current yield from protocols...$(NC)\n"
 	@if [ -z "$(LENDING_YIELD_CONTROLLER_ID)" ]; then \
 		printf "$(RED)Error: Lending Yield Controller ID not set.$(NC)\n"; \
