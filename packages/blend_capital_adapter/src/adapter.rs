@@ -35,7 +35,6 @@ pub fn supply_collateral(
     );
     storage::store_deposit(e, &yield_controller, &asset, amount);
     
-    // Update epoch principal when new deposits are made
     storage::add_epoch_deposit(e, &asset, amount);
     
     amount
@@ -107,12 +106,8 @@ pub fn withdraw_collateral_auth(e: &Env, user: Address, asset: Address, amount: 
 pub fn get_balance(e: &Env, user: Address, asset: Address) -> i128 {
     let pool_id: Address = storage::read_lend_pool_id(e);
     let pool_client = PoolClient::new(e, &pool_id);
-
-    // Get the user's positions and the reserve from the pool
     let positions = pool_client.get_positions(&user);
     let reserve = pool_client.get_reserve(&asset);
-
-    // Find the reserve index for the asset
     let reserve_list = pool_client.get_reserve_list();
     let mut reserve_index = None;
 

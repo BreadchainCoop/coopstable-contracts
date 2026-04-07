@@ -594,3 +594,109 @@ fn test_large_amount_distribution() {
     let treasury_share = (large_amount * fixture.treasury_share_bps as i128) / 10000;
     assert_eq!(fixture.token_client().balance(&fixture.treasury), treasury_share);
 }
+
+// ============================================================================
+// advance_epoch tests
+// ============================================================================
+
+#[test]
+fn test_advance_epoch_at_epoch_zero() {
+    let fixture = TestFixture::create();
+    fixture.env.mock_all_auths();
+
+    assert_eq!(fixture.distributor.get_current_epoch(), 0);
+    assert!(fixture.distributor.is_distribution_available());
+
+    // Advance with 0 yield
+    fixture.distributor.advance_epoch();
+
+    // Should now be at epoch 1
+    assert_eq!(fixture.distributor.get_current_epoch(), 1);
+    assert_eq!(fixture.distributor.get_total_distributed(), 0);
+
+    // Epoch 0 should be recorded as processed with 0 amounts
+    let history = fixture.distributor.get_distribution_history();
+    assert_eq!(history.len(), 1);
+    let epoch0 = history.get(0).unwrap();
+    assert_eq!(epoch0.epoch, 0);
+    assert!(epoch0.is_processed);
+    assert_eq!(epoch0.distribution_total, 0);
+    assert_eq!(epoch0.distribution_treasury, 0);
+    assert_eq!(epoch0.distribution_member, 0);
+}
+
+#[test]
+fn test_advance_epoch_then_normal_distribution() {
+    let fixture = TestFixture::create();
+    fixture.add_members();
+    fixture.env.mock_all_auths_allowing_non_root_auth();
+
+    // Advance epoch 0 with no yield
+    fixture.distributor.advance_epoch();
+    assert_eq!(fixture.distributor.get_current_epoch(), 1);
+
+    // Wait for distribution period to elapse
+    let current_time = fixture.env.ledger().timestamp();
+    fixture.env.ledger().set_timestamp(current_time + 86400 + 1);
+
+    // Now distribute real yield at epoch 1
+    let amount = 10000i128;
+    fixture.mint_tokens_to_distributor(amount);
+    let result = fixture.distributor.distribute_yield(&fixture.token_id, &amount);
+    assert_eq!(result, amount);
+    assert_eq!(fixture.distributor.get_current_epoch(), 2);
+    assert_eq!(fixture.distributor.get_total_distributed(), amount);
+}
+
+#[test]
+fn test_advance_epoch_multiple_consecutive() {
+    let fixture = TestFixture::create();
+    fixture.env.mock_all_auths();
+
+    // Advance epoch 0
+    fixture.distributor.advance_epoch();
+    assert_eq!(fixture.distributor.get_current_epoch(), 1);
+
+    // Wait and advance epoch 1
+    let current_time = fixture.env.ledger().timestamp();
+    fixture.env.ledger().set_timestamp(current_time + 86400 + 1);
+    fixture.distributor.advance_epoch();
+    assert_eq!(fixture.distributor.get_current_epoch(), 2);
+
+    // Wait and advance epoch 2
+    let current_time = fixture.env.ledger().timestamp();
+    fixture.env.ledger().set_timestamp(current_time + 86400 + 1);
+    fixture.distributor.advance_epoch();
+    assert_eq!(fixture.distributor.get_current_epoch(), 3);
+
+    // All 3 epochs should be in history with 0 amounts
+    let history = fixture.distributor.get_distribution_history();
+    assert_eq!(history.len(), 3);
+    for dist in history.iter() {
+        assert!(dist.is_processed);
+        assert_eq!(dist.distribution_total, 0);
+    }
+    assert_eq!(fixture.distributor.get_total_distributed(), 0);
+}
+
+#[test]
+#[should_panic]
+fn test_advance_epoch_not_available() {
+    let fixture = TestFixture::create();
+    fixture.env.mock_all_auths();
+
+    // First advance succeeds (epoch 0 is immediately available)
+    fixture.distributor.advance_epoch();
+
+    // Second advance should fail — distribution period hasn't elapsed
+    fixture.distributor.advance_epoch();
+}
+
+#[test]
+#[should_panic(expected = "Error(Auth, InvalidAction)")]
+fn test_advance_epoch_unauthorized() {
+    let fixture = TestFixture::create();
+    fixture.env.mock_auths(&[]);
+
+    fixture.distributor.advance_epoch();
+}

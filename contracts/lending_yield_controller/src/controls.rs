@@ -127,12 +127,6 @@ pub fn read_apy(e: &Env, protocol: &Symbol, asset: Address) -> u32 {
     adapter.get_apy(&asset)
 }
 
-pub fn process_claim_and_distribute_yield(e: &Env, protocol: &Symbol, asset: Address) -> i128 {
-    let registry_client = storage::adapter_registry_client(e);
-    let adapter_address = registry_client.get_adapter(&storage_types::YIELD_TYPE.id(), protocol);
-    process_claim_yield_for_asset(e, &adapter_address, asset)
-}
-
 pub fn process_claim_emissions(e: &Env, protocol: &Symbol, asset: Address) -> i128 {
     let registry_client = storage::adapter_registry_client(e);
     let adapter = LendingAdapterClient::new(e, &registry_client.get_adapter(&storage_types::YIELD_TYPE.id(), &protocol));
@@ -174,51 +168,6 @@ pub fn read_emissions(e: &Env, protocol: &Symbol, asset: Address) -> i128 {
     adapter.get_emissions(&asset)
 }
 
-fn process_claim_yield_for_asset(e: &Env, adapter_address: &Address, asset: Address) -> i128 {
-    let distributor = storage::distributor_client(e);
-    let cusd_manager = storage::cusd_manager_client(e);
-    let adapter = LendingAdapterClient::new(e, adapter_address);
-
-    let yield_amount = adapter.get_yield(&asset);
-
-    if yield_amount <= 0 {
-        return 0;
-    }
-
-    authenticate_for_claim_yield(e, adapter_address, asset.clone(), yield_amount);
-
-    let claimed = adapter.claim_yield(&asset, &yield_amount);
-
-    let deposited = process_deposit_for_claim(e, adapter_address.clone(), asset.clone(), claimed);
-
-    process_cusd_issue(e, distributor.address.clone(), deposited);
-
-    process_distribute_cusd_yield(e, cusd_manager.get_cusd_id(), deposited);
-
-    // Get the current balance AFTER re-depositing yield
-    // This should be the principal for the next epoch
-    let new_principal = adapter.get_balance(&e.current_contract_address(), &asset);
-
-    // Update epoch principal for the next epoch after successful distribution
-    let current_epoch = distributor.get_current_epoch();
-    let next_epoch = current_epoch + 1;
-
-    // Update the epoch principal for the next epoch
-    utils::authenticate_contract(
-        &e,
-        adapter.address.clone(),
-        Symbol::new(&e, "update_epoch_principal"),
-        vec![
-            e,
-            (&asset).into_val(e),
-            (&next_epoch).into_val(e),
-            (&new_principal).into_val(e),
-        ],
-    );
-    adapter.update_epoch_principal(&asset, &next_epoch, &new_principal);
-
-    deposited
-}
 
 fn authenticate_for_claim_yield(e: &Env, adapter_address: &Address, asset: Address, yield_amount: i128) {
     let adapter = LendingAdapterClient::new(e, &adapter_address);
@@ -306,7 +255,37 @@ pub fn process_harvest_yield(e: &Env, protocol: &Symbol, asset: Address) -> i128
 
     let yield_amount = adapter.get_yield(&asset);
     if yield_amount <= 0 {
-        panic_with_error!(e, LendingYieldControllerError::NoYieldToHarvest);
+        // No yield available — advance epoch if distribution is due, so the system doesn't stall
+        let distributor = storage::distributor_client(e);
+        if distributor.is_distribution_available() {
+            // Advance epoch with 0-distribution
+            utils::authenticate_contract(
+                e,
+                distributor.address.clone(),
+                Symbol::new(e, "advance_epoch"),
+                vec![e],
+            );
+            distributor.advance_epoch();
+
+            // Update adapter epoch principal for next epoch (balance unchanged, reset counters)
+            let new_principal = adapter.get_balance(&e.current_contract_address(), &asset);
+            let next_epoch = distributor.get_current_epoch();
+            utils::authenticate_contract(
+                e,
+                adapter.address.clone(),
+                Symbol::new(e, "update_epoch_principal"),
+                vec![
+                    e,
+                    (&asset).into_val(e),
+                    (&next_epoch).into_val(e),
+                    (&new_principal).into_val(e),
+                ],
+            );
+            adapter.update_epoch_principal(&asset, &next_epoch, &new_principal);
+
+            LendingYieldControllerEvents::harvest_yield(e, protocol.clone(), asset, 0);
+        }
+        return 0;
     }
 
     // Authenticate and claim yield from protocol

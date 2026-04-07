@@ -38,6 +38,11 @@ impl YieldDistributorEvents {
         e.events().publish(topics, new_admin);
     }
     
+    pub fn advance_epoch(e: &Env, epoch: u64) {
+        let topics = (Symbol::new(e, "advance_epoch"),);
+        e.events().publish(topics, epoch);
+    }
+
     pub fn distribute_yield(
         e: &Env,
         asset: Address,

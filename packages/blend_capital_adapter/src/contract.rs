@@ -14,6 +14,7 @@ pub struct BlendCapitalAdapter;
 
 #[contractimpl]
 impl LendingAdapter for BlendCapitalAdapter {
+    
     fn __constructor(e: Env, yield_controller: Address, blend_pool_id: Address, blend_token_id: Address) {
         e.storage()
             .instance()
@@ -81,7 +82,7 @@ impl LendingAdapter for BlendCapitalAdapter {
     }
 
     fn claim_yield_auth(e: &Env, asset: Address, amount: i128) -> Option<(Address, Symbol, Vec<Val>)> {
-
+        
         Some( adapter::withdraw_collateral_auth(e, storage::get_yield_controller(e), asset.clone(), amount) )
     }
     
@@ -104,20 +105,13 @@ impl LendingAdapter for BlendCapitalAdapter {
 
     fn get_emissions(e: &Env, asset: Address) -> i128 { adapter::get_user_emissions(e, storage::get_yield_controller(e), asset.clone()) }
 
-    fn protocol_token(e: &Env) -> Address {
-
-        storage::read_blend_token_id(e)
-    }
+    fn protocol_token(e: &Env) -> Address { storage::read_blend_token_id(e) }
 
     fn get_total_deposited(e: &Env, asset: Address) -> i128 { storage::read_deposit(e, &storage::get_yield_controller(e), &asset) }
     
-    fn get_balance(e: &Env, user: Address, asset: Address) -> i128 {
-        adapter::get_balance(e, user, asset)
-    }
+    fn get_balance(e: &Env, user: Address, asset: Address) -> i128 { adapter::get_balance(e, user, asset) }
     
-    fn get_apy(env: &Env, asset: Address) -> u32 {
-        adapter::get_apy(env, asset)
-    }
+    fn get_apy(env: &Env, asset: Address) -> u32 { adapter::get_apy(env, asset) }
     
     fn update_epoch_principal(env: &Env, asset: Address, epoch: u64, principal: i128) {
         storage::require_yield_controller(env);
