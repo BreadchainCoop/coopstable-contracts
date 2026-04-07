@@ -43,6 +43,7 @@ fn read_cusd_supply(e: &Env) -> i128 {
     extend_persistent(e, &DataKey::CusdSupply);
     e.storage().persistent().get(&DataKey::CusdSupply).unwrap() // no need to handle if no key set since we initialize it to 0
 }
+
 fn write_cusd_supply(e: &Env, amount: i128) {
     extend_persistent(e, &DataKey::CusdSupply);
     e.storage().persistent().set(&DataKey::CusdSupply, &amount);

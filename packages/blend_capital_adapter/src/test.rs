@@ -496,3 +496,115 @@ fn test_epoch_transition_compound_effect() {
 
     assert_eq!(epoch_2_principal, initial_deposit + epoch_0_yield + epoch_1_yield);
 }
+
+// ============================================================================
+// Zero-yield epoch advancement tests
+// ============================================================================
+
+#[test]
+fn test_zero_yield_epoch_advancement() {
+    let fixture = TestFixture::create();
+    let client = fixture.lending_adapter_client();
+
+    fixture.env.mock_all_auths();
+
+    // Deposit initial funds
+    let deposit_amount = 1000_0000000;
+    client.deposit(&fixture.user1, &fixture.usdc_token_id, &deposit_amount);
+
+    // No yield accrued — get_yield returns 0
+    let yield_amount = client.get_yield(&fixture.usdc_token_id);
+    assert_eq!(yield_amount, 0);
+
+    // Advance epoch with same principal (0 yield scenario)
+    let epoch_1 = 1u64;
+    client.update_epoch_principal(&fixture.usdc_token_id, &epoch_1, &deposit_amount);
+
+    // Yield should still be 0 after epoch advance
+    let yield_after = client.get_yield(&fixture.usdc_token_id);
+    assert_eq!(yield_after, 0);
+
+    // Balance unchanged
+    let balance = client.get_balance(&fixture.yield_controller, &fixture.usdc_token_id);
+    assert_eq!(balance, deposit_amount);
+
+    // Now yield accrues in epoch 1
+    let epoch_1_yield = 50_0000000;
+    fixture.pool.add_yield(&fixture.usdc_token_id, &epoch_1_yield);
+    let current_yield = client.get_yield(&fixture.usdc_token_id);
+    assert_eq!(current_yield, epoch_1_yield);
+}
+
+#[test]
+fn test_multiple_zero_yield_epochs_then_yield() {
+    let fixture = TestFixture::create();
+    let client = fixture.lending_adapter_client();
+
+    fixture.env.mock_all_auths();
+
+    let deposit_amount = 1000_0000000;
+    client.deposit(&fixture.user1, &fixture.usdc_token_id, &deposit_amount);
+
+    // Advance through 3 epochs with 0 yield each time
+    for epoch in 1..=3u64 {
+        assert_eq!(client.get_yield(&fixture.usdc_token_id), 0);
+        client.update_epoch_principal(&fixture.usdc_token_id, &epoch, &deposit_amount);
+    }
+
+    // Principal should still be the original deposit
+    let balance = client.get_balance(&fixture.yield_controller, &fixture.usdc_token_id);
+    assert_eq!(balance, deposit_amount);
+
+    // Yield finally accrues in epoch 4
+    let yield_amount = 100_0000000;
+    fixture.pool.add_yield(&fixture.usdc_token_id, &yield_amount);
+    let current_yield = client.get_yield(&fixture.usdc_token_id);
+    assert_eq!(current_yield, yield_amount);
+
+    // Normal epoch transition works after zero-yield epochs
+    let epoch_4 = 4u64;
+    let new_principal = deposit_amount + yield_amount;
+    client.update_epoch_principal(&fixture.usdc_token_id, &epoch_4, &new_principal);
+    assert_eq!(client.get_yield(&fixture.usdc_token_id), 0);
+}
+
+#[test]
+fn test_zero_yield_with_deposits_and_withdrawals() {
+    let fixture = TestFixture::create();
+    let client = fixture.lending_adapter_client();
+
+    fixture.env.mock_all_auths();
+
+    // Initial deposit
+    let deposit_amount = 1000_0000000;
+    client.deposit(&fixture.user1, &fixture.usdc_token_id, &deposit_amount);
+
+    // Additional deposit during epoch 0 (no yield accrued)
+    let additional = 500_0000000;
+    client.deposit(&fixture.user1, &fixture.usdc_token_id, &additional);
+
+    // Yield should be 0 despite balance being higher, because deposits_in_epoch tracks it
+    let yield_amount = client.get_yield(&fixture.usdc_token_id);
+    assert_eq!(yield_amount, 0);
+
+    // Advance to epoch 1 with current balance as new principal
+    let total_deposited = deposit_amount + additional;
+    let epoch_1 = 1u64;
+    client.update_epoch_principal(&fixture.usdc_token_id, &epoch_1, &total_deposited);
+
+    // Still 0 yield
+    assert_eq!(client.get_yield(&fixture.usdc_token_id), 0);
+
+    // Withdrawal during epoch 1 (still no yield)
+    let withdraw = 200_0000000;
+    client.withdraw(&fixture.user1, &fixture.usdc_token_id, &withdraw);
+
+    // Yield should still be 0 (balance went down due to withdrawal, not yield)
+    assert_eq!(client.get_yield(&fixture.usdc_token_id), 0);
+
+    // Advance to epoch 2 with current balance
+    let current_balance = total_deposited - withdraw;
+    let epoch_2 = 2u64;
+    client.update_epoch_principal(&fixture.usdc_token_id, &epoch_2, &current_balance);
+    assert_eq!(client.get_yield(&fixture.usdc_token_id), 0);
+}

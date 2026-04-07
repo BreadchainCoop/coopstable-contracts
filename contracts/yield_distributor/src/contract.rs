@@ -150,6 +150,16 @@ pub trait YieldDistributorTrait {
     /// If the caller is not the owner
     fn set_admin(e: &Env, new_admin: Address);
 
+    /// (Yield Controller only) Advance to the next epoch with a zero-amount distribution
+    ///
+    /// Used when there is no yield to distribute but the epoch should still advance.
+    /// Records a 0-amount distribution and increments the epoch counter.
+    ///
+    /// ### Panics
+    /// If the caller is not the yield controller
+    /// If distribution is not yet available
+    fn advance_epoch(e: &Env);
+
     /// (Owner only) Upgrade the contract to a new WASM bytecode
     ///
     /// ### Arguments
@@ -379,6 +389,20 @@ impl YieldDistributorTrait for YieldDistributor {
     fn get_yield_controller(e: &Env) -> Address { storage::get_yield_controller(e) }
 
     fn get_total_distributed(e: &Env) -> i128 { storage::read_total_distributed(e) }
+
+    fn advance_epoch(e: &Env) {
+        require_yield_controller(e);
+
+        if !storage::check_distribution_availability(e) {
+            panic_with_error!(e, YieldDistributorError::InternalError);
+        }
+
+        // Record a zero-amount distribution and advance to next epoch
+        storage::record_distribution(e, 0, 0, 0);
+
+        let new_epoch = storage::read_epoch_current(e);
+        YieldDistributorEvents::advance_epoch(e, new_epoch);
+    }
 
     fn upgrade(e: &Env, new_wasm_hash: BytesN<32>) {
         require_owner(e);
