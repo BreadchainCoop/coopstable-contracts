@@ -3,7 +3,7 @@ extern crate std;
 
 use pretty_assertions::assert_eq;
 use soroban_sdk::{
-    log, symbol_short,
+    symbol_short,
     testutils::{Address as _, Events},
     vec, Address, Env, IntoVal, Symbol,
 };
@@ -124,7 +124,7 @@ fn test_set_yield_adapter_admin() {
         .set_yield_adapter_admin(&new_admin);
 
     // Expected event has topic "set_admin" and data is the new admin address
-    let published_event = vec![&fixture.env, fixture.env.events().all().last_unchecked()];
+    let published_event = fixture.env.events().all().filter_by_contract(&fixture.registry.address);
     let expected_event = vec![
         &fixture.env,
         (
@@ -167,8 +167,7 @@ fn test_register_adapter() {
     );
 
     // Verify event emission
-    log!(&fixture.env, "All events: {:?}", fixture.env.events().all());
-    let published_event = vec![&fixture.env, fixture.env.events().all().last_unchecked()];
+    let published_event = fixture.env.events().all().filter_by_contract(&fixture.registry.address);
     let expected_event = vec![
         &fixture.env,
         (
@@ -229,7 +228,7 @@ fn test_remove_adapter() {
         &protocol.id(),
     );
 
-    let published_event = vec![&fixture.env, fixture.env.events().all().last_unchecked()];
+    let published_event = fixture.env.events().all().filter_by_contract(&fixture.registry.address);
     let expected_event = vec![
         &fixture.env,
         (
@@ -308,7 +307,7 @@ fn test_add_support_for_asset() {
     );
 
     // Verify event emission
-    let published_event = vec![&fixture.env, fixture.env.events().all().last_unchecked()];
+    let published_event = fixture.env.events().all().filter_by_contract(&fixture.registry.address);
     let expected_event = vec![
         &fixture.env,
         (
@@ -391,7 +390,7 @@ fn test_remove_support_for_asset() {
         &asset,
     );
 
-    let published_event = vec![&fixture.env, fixture.env.events().all().last_unchecked()];
+    let published_event = fixture.env.events().all().filter_by_contract(&fixture.registry.address);
     let expected_event = vec![
         &fixture.env,
         (

@@ -73,8 +73,8 @@ impl TestFixture {
     #[allow(dead_code)]
     fn assert_event_with_tuple_data(&self, expected_event: (Symbol,), expected_data: (Address, i128)) {
         let events = self.env.events().all();
-        if !events.is_empty() {
-            let published_event = vec![&self.env, events.last_unchecked()];
+        if !events.events().is_empty() {
+            let published_event = events.filter_by_contract(&self.cusd_manager.address);
             let expected = vec![
                 &self.env,
                 (
@@ -90,8 +90,8 @@ impl TestFixture {
     #[allow(dead_code)]
     fn assert_event_with_address_data(&self, expected_event: (Symbol,), expected_data: Address) {
         let events = self.env.events().all();
-        if !events.is_empty() {
-            let published_event = vec![&self.env, events.last_unchecked()];
+        if !events.events().is_empty() {
+            let published_event = events.filter_by_contract(&self.cusd_manager.address);
             let expected = vec![
                 &self.env,
                 (
