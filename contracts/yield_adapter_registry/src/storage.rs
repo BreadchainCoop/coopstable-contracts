@@ -33,12 +33,7 @@ pub fn read_yield_adapter_registry(e: &Env, yield_type: Symbol) -> YieldAdapterR
         .persistent()
         .get::<Symbol, YieldAdapterRegistryMap>(&yield_type)
     {
-        e.storage().persistent().extend_ttl(
-            &yield_type,
-            REGISTRY_LIFETIME_THRESHOLD,
-            REGISTRY_BUMP_AMOUNT,
-        );
-
+        // Read on every member deposit: no TTL extension here, the admin writes and the claimer keep it alive.
         registry_map
     } else {
         YieldAdapterRegistryMap::new(e, yield_type)

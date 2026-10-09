@@ -848,3 +848,19 @@ fn test_claim_yield_returns_zero_when_no_yield() {
     // Note: This will fail without a proper mock adapter that returns 0 yield
     // The test documents expected behavior
 }
+#[test]
+fn test_only_admin_paths_extend_instance_ttl() {
+    use soroban_sdk::testutils::storage::Instance;
+    use crate::storage_types::INSTANCE_BUMP_AMOUNT;
+
+    let fixture = TestFixture::create();
+    let ttl = || fixture.env.as_contract(&fixture.controller.address, || fixture.env.storage().instance().get_ttl());
+
+    let initial = ttl();
+    assert!(initial < INSTANCE_BUMP_AMOUNT);
+    fixture.controller.get_adapter_registry(); // the read every deposit and withdrawal starts with
+    assert_eq!(ttl(), initial);
+
+    fixture.controller.set_yield_distributor(&Address::generate(&fixture.env)); // admin path
+    assert_eq!(ttl(), INSTANCE_BUMP_AMOUNT);
+}

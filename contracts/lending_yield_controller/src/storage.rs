@@ -15,17 +15,17 @@ pub fn adapter_registry_client(e: &Env) -> YieldAdapterRegistryClient<'static> {
         &get_adapter_registry(&e)
     )
 }
+/// Only admin and owner paths extend the shared instance (and code) TTL, so a member's deposit or
+/// withdrawal never pays rent for the protocol.
 pub fn extend_instance(e: &Env) {
     e.storage()
         .instance()
         .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
 }
 fn read_address(e: &Env, key: &DataKey) -> Address {
-    extend_instance(e);
     e.storage().instance().get(key).unwrap()  
 }
 fn write_address(e: &Env, key: &DataKey, address: &Address) {
-    extend_instance(e);    
     e.storage().instance().set(key, address); 
 }
 pub fn read_admin(e: &Env) -> Address { read_address(e, &DataKey::Admin)}
@@ -54,12 +54,10 @@ pub fn cusd_manager_client(e: &Env) -> CUSDManagerClient {
 
 // Pending harvest storage functions
 pub fn get_pending_harvest(e: &Env, protocol: &Symbol, asset: &Address) -> Option<PendingHarvest> {
-    extend_instance(e);
     e.storage().instance().get(&DataKey::PendingHarvest(protocol.clone(), asset.clone()))
 }
 
 pub fn set_pending_harvest(e: &Env, harvest: &PendingHarvest) {
-    extend_instance(e);
     e.storage().instance().set(
         &DataKey::PendingHarvest(harvest.protocol.clone(), harvest.asset.clone()),
         harvest
@@ -67,11 +65,9 @@ pub fn set_pending_harvest(e: &Env, harvest: &PendingHarvest) {
 }
 
 pub fn remove_pending_harvest(e: &Env, protocol: &Symbol, asset: &Address) {
-    extend_instance(e);
     e.storage().instance().remove(&DataKey::PendingHarvest(protocol.clone(), asset.clone()));
 }
 
 pub fn has_pending_harvest(e: &Env, protocol: &Symbol, asset: &Address) -> bool {
-    extend_instance(e);
     e.storage().instance().has(&DataKey::PendingHarvest(protocol.clone(), asset.clone()))
 }

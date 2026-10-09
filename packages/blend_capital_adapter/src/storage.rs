@@ -1,5 +1,5 @@
 use crate::constants::{
-    ASSET_EPOCH_PRINCIPAL, BLEND_TOKEN_ID, LENDING_POOL_ID, USER_DEPOSITS, YIELD_CONTROLLER_ID
+    ASSET_EPOCH_PRINCIPAL, BLEND_TOKEN_ID, LENDING_POOL_ID, OWNER, USER_DEPOSITS, YIELD_CONTROLLER_ID
 };
 use crate::storage_types::AssetEpochPrincipal;
 use soroban_sdk::{
@@ -11,21 +11,28 @@ use yield_adapter::constants::{
     ADAPTER_INSTANCE_LIFETIME_THRESHOLD
 };
 
-pub fn get_yield_controller(e: &Env) -> Address {
+/// Only the yield cycle (claim, emissions, epoch update) and upgrades extend the instance TTL, so a member's
+/// deposit or withdrawal never pays rent for the protocol. Code and instance share this TTL.
+pub fn extend_instance(e: &Env) {
     e.storage().instance().extend_ttl(
         ADAPTER_INSTANCE_LIFETIME_THRESHOLD,
         ADAPTER_INSTANCE_BUMP_AMOUNT,
     );
+}
 
+pub fn get_yield_controller(e: &Env) -> Address {
     e.storage().instance().get(&YIELD_CONTROLLER_ID).unwrap()
 }
 
-pub fn store_deposit(e: &Env, user: &Address, asset: &Address, amount: i128) {
-    e.storage().instance().extend_ttl(
-        ADAPTER_INSTANCE_LIFETIME_THRESHOLD,
-        ADAPTER_INSTANCE_BUMP_AMOUNT,
-    );
+pub fn read_owner(e: &Env) -> Address {
+    e.storage().instance().get(&OWNER).unwrap()
+}
 
+pub fn write_owner(e: &Env, owner: &Address) {
+    e.storage().instance().set(&OWNER, owner);
+}
+
+pub fn store_deposit(e: &Env, user: &Address, asset: &Address, amount: i128) {
     let key = (USER_DEPOSITS, user.clone(), asset.clone());
     let current_amount = e.storage().instance().get(&key).unwrap_or(0_i128);
 
@@ -38,11 +45,6 @@ pub fn read_deposit(e: &Env, user: &Address, asset: &Address) -> i128 {
 }
 
 pub fn remove_deposit(e: &Env, user: &Address, asset: &Address, amount: i128) {
-    e.storage().instance().extend_ttl(
-        ADAPTER_INSTANCE_LIFETIME_THRESHOLD,
-        ADAPTER_INSTANCE_BUMP_AMOUNT,
-    );
-
     let key = (USER_DEPOSITS, user.clone(), asset.clone());
     let current_amount = e.storage().instance().get(&key).unwrap_or(0_i128);
 
@@ -77,11 +79,6 @@ pub fn get_asset_epoch_principal(e: &Env, asset: &Address) -> Option<AssetEpochP
 }
 
 pub fn set_asset_epoch_principal(e: &Env, asset: &Address, epoch: u64, principal: i128) {
-    e.storage().instance().extend_ttl(
-        ADAPTER_INSTANCE_LIFETIME_THRESHOLD,
-        ADAPTER_INSTANCE_BUMP_AMOUNT,
-    );
-
     let key = (ASSET_EPOCH_PRINCIPAL, asset.clone());
     let epoch_data = AssetEpochPrincipal {
         epoch,
@@ -95,11 +92,6 @@ pub fn set_asset_epoch_principal(e: &Env, asset: &Address, epoch: u64, principal
 }
 
 pub fn add_epoch_withdrawal(e: &Env, asset: &Address, amount: i128) {
-    e.storage().instance().extend_ttl(
-        ADAPTER_INSTANCE_LIFETIME_THRESHOLD,
-        ADAPTER_INSTANCE_BUMP_AMOUNT,
-    );
-
     let key = (ASSET_EPOCH_PRINCIPAL, asset.clone());
     if let Some(mut epoch_data) = get_asset_epoch_principal(e, asset) {
         epoch_data.withdrawals += amount;
@@ -109,11 +101,6 @@ pub fn add_epoch_withdrawal(e: &Env, asset: &Address, amount: i128) {
 }
 
 pub fn add_epoch_deposit(e: &Env, asset: &Address, amount: i128) {
-    e.storage().instance().extend_ttl(
-        ADAPTER_INSTANCE_LIFETIME_THRESHOLD,
-        ADAPTER_INSTANCE_BUMP_AMOUNT,
-    );
-
     let key = (ASSET_EPOCH_PRINCIPAL, asset.clone());
     if let Some(mut epoch_data) = get_asset_epoch_principal(e, asset) {
         // Track deposits made within the current epoch

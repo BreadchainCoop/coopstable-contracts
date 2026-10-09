@@ -16,8 +16,8 @@ fn check_nonnegative_amount(e: &Env, amount: i128) {
     }
 }
 
-fn require_admin(e: &Env) { storage::read_admin(e).require_auth(); }
-fn require_owner(e: &Env) { storage::read_owner(e).require_auth(); }
+fn require_admin(e: &Env) { storage::read_admin(e).require_auth(); storage::extend_storage(e); }
+fn require_owner(e: &Env) { storage::read_owner(e).require_auth(); storage::extend_storage(e); }
 
 /// ### CUSDManager
 ///

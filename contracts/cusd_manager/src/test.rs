@@ -26,7 +26,8 @@ impl TestFixture {
     fn create() -> Self {
         let env = Env::default();
         env.ledger().set_sequence_number(100);
-        
+        env.ledger().set_min_persistent_entry_ttl(30 * crate::storage_types::DAY_IN_LEDGERS);
+
         let owner = Address::generate(&env);
         let admin = Address::generate(&env);
         let yield_controller = Address::generate(&env);
@@ -495,4 +496,28 @@ fn test_large_amount_operations() {
     // Burn half (burns directly from user account)
     fixture.cusd_manager.burn_cusd(&fixture.user1, &(large_amount / 2));
     assert_eq!(fixture.token_client().balance(&fixture.user1), large_amount / 2);
+}
+#[test]
+fn test_mint_and_burn_do_not_extend_ttl_but_admin_does() {
+    use soroban_sdk::testutils::storage::{Instance, Persistent};
+    use crate::storage_types::{DataKey, DAY_IN_LEDGERS, INSTANCE_BUMP_AMOUNT, PERSISTENT_BUMP_AMOUNT};
+
+    let fixture = TestFixture::create(); // ends with an admin call, so everything sits at the full bump
+    let ttls = || fixture.env.as_contract(&fixture.cusd_manager.address, || (
+        fixture.env.storage().instance().get_ttl(),
+        fixture.env.storage().persistent().get_ttl(&DataKey::CusdSupply),
+    ));
+    assert_eq!(ttls(), (INSTANCE_BUMP_AMOUNT, PERSISTENT_BUMP_AMOUNT));
+
+    fixture.env.ledger().set_sequence_number(100 + 2 * DAY_IN_LEDGERS);
+    let aged = (INSTANCE_BUMP_AMOUNT - 2 * DAY_IN_LEDGERS, PERSISTENT_BUMP_AMOUNT - 2 * DAY_IN_LEDGERS);
+    assert_eq!(ttls(), aged);
+
+    fixture.env.mock_all_auths_allowing_non_root_auth();
+    fixture.cusd_manager.issue_cusd(&fixture.user1, &1000_0000000);
+    fixture.cusd_manager.burn_cusd(&fixture.user1, &400_0000000);
+    assert_eq!(ttls(), aged, "a member's mint or burn must not pay rent");
+
+    fixture.cusd_manager.set_yield_controller(&fixture.yield_controller); // admin path
+    assert_eq!(ttls(), (INSTANCE_BUMP_AMOUNT, PERSISTENT_BUMP_AMOUNT));
 }

@@ -494,3 +494,32 @@ fn test_is_supported_asset() {
     );
     assert!(!is_supported_non_existent);
 }
+
+#[test]
+fn test_reads_do_not_extend_ttl_but_admin_writes_do() {
+    use soroban_sdk::testutils::{storage::{Instance, Persistent}, Ledger};
+    use crate::storage_types::{DAY_IN_LEDGERS, REGISTRY_BUMP_AMOUNT};
+
+    let fixture = TestFixture::create();
+    let (adapter_address, protocol) = fixture.create_adapter();
+    let yield_type = SupportedYieldType::Lending.id();
+    fixture.env.mock_all_auths();
+    fixture.registry.register_adapter(&yield_type, &protocol.id(), &adapter_address);
+
+    let ttls = || fixture.env.as_contract(&fixture.registry.address, || (
+        fixture.env.storage().instance().get_ttl(),
+        fixture.env.storage().persistent().get_ttl(&yield_type),
+    ));
+    assert_eq!(ttls(), (REGISTRY_BUMP_AMOUNT, REGISTRY_BUMP_AMOUNT));
+
+    let sequence = fixture.env.ledger().sequence();
+    fixture.env.ledger().set_sequence_number(sequence + 2 * DAY_IN_LEDGERS);
+    let aged = (REGISTRY_BUMP_AMOUNT - 2 * DAY_IN_LEDGERS, REGISTRY_BUMP_AMOUNT - 2 * DAY_IN_LEDGERS);
+    assert_eq!(ttls(), aged);
+
+    fixture.registry.get_adapter(&yield_type, &protocol.id()); // the read every member deposit makes
+    assert_eq!(ttls(), aged, "a read must not pay rent");
+
+    fixture.registry.add_support_for_asset(&yield_type, &protocol.id(), &fixture.create_asset()); // admin path
+    assert_eq!(ttls(), (REGISTRY_BUMP_AMOUNT, REGISTRY_BUMP_AMOUNT));
+}

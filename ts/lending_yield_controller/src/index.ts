@@ -1,5 +1,5 @@
 import { Buffer } from "buffer";
-import { Address } from '@stellar/stellar-sdk';
+import { Address } from "@stellar/stellar-sdk";
 import {
   AssembledTransaction,
   Client as ContractClient,
@@ -7,7 +7,7 @@ import {
   MethodOptions,
   Result,
   Spec as ContractSpec,
-} from '@stellar/stellar-sdk/contract';
+} from "@stellar/stellar-sdk/contract";
 import type {
   u32,
   i32,
@@ -18,20 +18,22 @@ import type {
   u256,
   i256,
   Option,
-  Typepoint,
+  Timepoint,
   Duration,
-} from '@stellar/stellar-sdk/contract';
-export * from '@stellar/stellar-sdk'
-export * as contract from '@stellar/stellar-sdk/contract'
-export * as rpc from '@stellar/stellar-sdk/rpc'
+} from "@stellar/stellar-sdk/contract";
+export * from "@stellar/stellar-sdk";
+export * as contract from "@stellar/stellar-sdk/contract";
+export * as rpc from "@stellar/stellar-sdk/rpc";
 
-if (typeof window !== 'undefined') {
+if (typeof window !== "undefined") {
   //@ts-ignore Buffer exists
   window.Buffer = window.Buffer || Buffer;
 }
 
 
 
+
+export type DataKey = {tag: "Owner", values: void} | {tag: "Admin", values: void} | {tag: "CUSDManager", values: void} | {tag: "AdapterRegistry", values: void} | {tag: "YieldDistributor", values: void} | {tag: "PendingHarvest", values: readonly [string, string]};
 
 /**
  * State of a pending harvest operation
@@ -52,8 +54,6 @@ export interface PendingHarvest {
   protocol: string;
   state: HarvestState;
 }
-
-export type DataKey = {tag: "Owner", values: void} | {tag: "Admin", values: void} | {tag: "CUSDManager", values: void} | {tag: "AdapterRegistry", values: void} | {tag: "YieldDistributor", values: void} | {tag: "PendingHarvest", values: readonly [string, string]};
 
 /**
  * Error codes for the cusd_manager contract. Common errors are codes that match up with the built-in
@@ -92,384 +92,99 @@ export type SupportedYieldType = {tag: "Lending", values: void} | {tag: "Liquidi
 
 export interface Client {
   /**
-   * Construct and simulate a deposit_collateral transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   */
-  deposit_collateral: ({protocol, user, asset, amount}: {protocol: string, user: string, asset: string, amount: i128}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<i128>>
-
-  /**
-   * Construct and simulate a withdraw_collateral transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   */
-  withdraw_collateral: ({protocol, user, asset, amount}: {protocol: string, user: string, asset: string, amount: i128}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<i128>>
-
-  /**
-   * Construct and simulate a get_yield transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   */
-  get_yield: ({protocol, asset}: {protocol: string, asset: string}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<i128>>
-
-  /**
-   * Construct and simulate a get_emissions transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   */
-  get_emissions: ({protocol, asset}: {protocol: string, asset: string}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<i128>>
-
-  /**
-   * Construct and simulate a claim_emissions transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   */
-  claim_emissions: ({protocol, asset}: {protocol: string, asset: string}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<i128>>
-
-  /**
-   * Construct and simulate a set_yield_distributor transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   */
-  set_yield_distributor: ({yield_distributor}: {yield_distributor: string}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<null>>
-
-  /**
-   * Construct and simulate a set_adapter_registry transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   */
-  set_adapter_registry: ({adapter_registry}: {adapter_registry: string}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<null>>
-
-  /**
-   * Construct and simulate a set_cusd_manager transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   */
-  set_cusd_manager: ({cusd_manager}: {cusd_manager: string}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<null>>
-
-  /**
-   * Construct and simulate a get_yield_distributor transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   */
-  get_yield_distributor: (options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<string>>
-
-  /**
-   * Construct and simulate a get_adapter_registry transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   */
-  get_adapter_registry: (options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<string>>
-
-  /**
-   * Construct and simulate a get_cusd_manager transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   */
-  get_cusd_manager: (options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<string>>
-
-  /**
-   * Construct and simulate a set_admin transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   */
-  set_admin: ({new_admin}: {new_admin: string}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<null>>
-
-  /**
    * Construct and simulate a get_apy transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    */
-  get_apy: ({protocol, asset}: {protocol: string, asset: string}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<u32>>
+  get_apy: ({protocol, asset}: {protocol: string, asset: string}, options?: MethodOptions) => Promise<AssembledTransaction<u32>>
 
   /**
    * Construct and simulate a upgrade transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    */
-  upgrade: ({new_wasm_hash}: {new_wasm_hash: Buffer}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
+  upgrade: ({new_wasm_hash}: {new_wasm_hash: Buffer}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
+  /**
+   * Construct and simulate a get_yield transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  get_yield: ({protocol, asset}: {protocol: string, asset: string}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
 
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<null>>
+  /**
+   * Construct and simulate a set_admin transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  set_admin: ({new_admin}: {new_admin: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a get_emissions transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  get_emissions: ({protocol, asset}: {protocol: string, asset: string}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
 
   /**
    * Construct and simulate a harvest_yield transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    */
-  harvest_yield: ({protocol, asset}: {protocol: string, asset: string}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<i128>>
-
-  /**
-   * Construct and simulate a recompound_yield transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   */
-  recompound_yield: ({protocol, asset}: {protocol: string, asset: string}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<i128>>
-
-  /**
-   * Construct and simulate a finalize_distribution transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   */
-  finalize_distribution: ({protocol, asset}: {protocol: string, asset: string}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<i128>>
-
-  /**
-   * Construct and simulate a get_pending_harvest transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   */
-  get_pending_harvest: ({protocol, asset}: {protocol: string, asset: string}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<Option<PendingHarvest>>>
+  harvest_yield: ({protocol, asset}: {protocol: string, asset: string}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
 
   /**
    * Construct and simulate a cancel_harvest transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    */
-  cancel_harvest: ({protocol, asset}: {protocol: string, asset: string}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
+  cancel_harvest: ({protocol, asset}: {protocol: string, asset: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
+  /**
+   * Construct and simulate a claim_emissions transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  claim_emissions: ({protocol, asset}: {protocol: string, asset: string}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
 
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<null>>
+  /**
+   * Construct and simulate a get_cusd_manager transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  get_cusd_manager: (options?: MethodOptions) => Promise<AssembledTransaction<string>>
+
+  /**
+   * Construct and simulate a recompound_yield transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  recompound_yield: ({protocol, asset}: {protocol: string, asset: string}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
+
+  /**
+   * Construct and simulate a set_cusd_manager transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  set_cusd_manager: ({cusd_manager}: {cusd_manager: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a deposit_collateral transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  deposit_collateral: ({protocol, user, asset, amount}: {protocol: string, user: string, asset: string, amount: i128}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
+
+  /**
+   * Construct and simulate a get_pending_harvest transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  get_pending_harvest: ({protocol, asset}: {protocol: string, asset: string}, options?: MethodOptions) => Promise<AssembledTransaction<Option<PendingHarvest>>>
+
+  /**
+   * Construct and simulate a withdraw_collateral transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  withdraw_collateral: ({protocol, user, asset, amount}: {protocol: string, user: string, asset: string, amount: i128}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
+
+  /**
+   * Construct and simulate a get_adapter_registry transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  get_adapter_registry: (options?: MethodOptions) => Promise<AssembledTransaction<string>>
+
+  /**
+   * Construct and simulate a set_adapter_registry transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  set_adapter_registry: ({adapter_registry}: {adapter_registry: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a finalize_distribution transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  finalize_distribution: ({protocol, asset}: {protocol: string, asset: string}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
+
+  /**
+   * Construct and simulate a get_yield_distributor transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  get_yield_distributor: (options?: MethodOptions) => Promise<AssembledTransaction<string>>
+
+  /**
+   * Construct and simulate a set_yield_distributor transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  set_yield_distributor: ({yield_distributor}: {yield_distributor: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
 }
 export class Client extends ContractClient {
@@ -491,54 +206,54 @@ export class Client extends ContractClient {
   }
   constructor(public readonly options: ContractClientOptions) {
     super(
-      new ContractSpec([ "AAAAAwAAACRTdGF0ZSBvZiBhIHBlbmRpbmcgaGFydmVzdCBvcGVyYXRpb24AAAAAAAAADEhhcnZlc3RTdGF0ZQAAAAMAAAASTm8gcGVuZGluZyBoYXJ2ZXN0AAAAAAAETm9uZQAAAAAAAAAyWWllbGQgaGFzIGJlZW4gaGFydmVzdGVkICh3aXRoZHJhd24gZnJvbSBwcm90b2NvbCkAAAAAAAlIYXJ2ZXN0ZWQAAAAAAAABAAAANllpZWxkIGhhcyBiZWVuIHJlY29tcG91bmRlZCAocmUtZGVwb3NpdGVkIHRvIHByb3RvY29sKQAAAAAADFJlY29tcG91bmRlZAAAAAI=",
+      new ContractSpec([ "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAABgAAAAAAAAAAAAAABU93bmVyAAAAAAAAAAAAAAAAAAAFQWRtaW4AAAAAAAAAAAAAAAAAAAtDVVNETWFuYWdlcgAAAAAAAAAAAAAAAA9BZGFwdGVyUmVnaXN0cnkAAAAAAAAAAAAAAAAQWWllbGREaXN0cmlidXRvcgAAAAEAAAAyUGVuZGluZyBoYXJ2ZXN0IGZvciBhIHNwZWNpZmljIHByb3RvY29sL2Fzc2V0IHBhaXIAAAAAAA5QZW5kaW5nSGFydmVzdAAAAAAAAgAAABEAAAAT",
+        "AAAAAwAAACRTdGF0ZSBvZiBhIHBlbmRpbmcgaGFydmVzdCBvcGVyYXRpb24AAAAAAAAADEhhcnZlc3RTdGF0ZQAAAAMAAAASTm8gcGVuZGluZyBoYXJ2ZXN0AAAAAAAETm9uZQAAAAAAAAAyWWllbGQgaGFzIGJlZW4gaGFydmVzdGVkICh3aXRoZHJhd24gZnJvbSBwcm90b2NvbCkAAAAAAAlIYXJ2ZXN0ZWQAAAAAAAABAAAANllpZWxkIGhhcyBiZWVuIHJlY29tcG91bmRlZCAocmUtZGVwb3NpdGVkIHRvIHByb3RvY29sKQAAAAAADFJlY29tcG91bmRlZAAAAAI=",
         "AAAAAQAAADpQZW5kaW5nIGhhcnZlc3QgZGF0YSBzdG9yZWQgYmV0d2VlbiBtdWx0aS1zdGFnZSBvcGVyYXRpb25zAAAAAAAAAAAADlBlbmRpbmdIYXJ2ZXN0AAAAAAAEAAAAAAAAAAZhbW91bnQAAAAAAAsAAAAAAAAABWFzc2V0AAAAAAAAEwAAAAAAAAAIcHJvdG9jb2wAAAARAAAAAAAAAAVzdGF0ZQAAAAAAB9AAAAAMSGFydmVzdFN0YXRl",
-        "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAABgAAAAAAAAAAAAAABU93bmVyAAAAAAAAAAAAAAAAAAAFQWRtaW4AAAAAAAAAAAAAAAAAAAtDVVNETWFuYWdlcgAAAAAAAAAAAAAAAA9BZGFwdGVyUmVnaXN0cnkAAAAAAAAAAAAAAAAQWWllbGREaXN0cmlidXRvcgAAAAEAAAAyUGVuZGluZyBoYXJ2ZXN0IGZvciBhIHNwZWNpZmljIHByb3RvY29sL2Fzc2V0IHBhaXIAAAAAAA5QZW5kaW5nSGFydmVzdAAAAAAAAgAAABEAAAAT",
-        "AAAAAAAAAAAAAAANX19jb25zdHJ1Y3RvcgAAAAAAAAUAAAAAAAAAEXlpZWxkX2Rpc3RyaWJ1dG9yAAAAAAAAEwAAAAAAAAAQYWRhcHRlcl9yZWdpc3RyeQAAABMAAAAAAAAADGN1c2RfbWFuYWdlcgAAABMAAAAAAAAABWFkbWluAAAAAAAAEwAAAAAAAAAFb3duZXIAAAAAAAATAAAAAA==",
-        "AAAAAAAAAAAAAAASZGVwb3NpdF9jb2xsYXRlcmFsAAAAAAAEAAAAAAAAAAhwcm90b2NvbAAAABEAAAAAAAAABHVzZXIAAAATAAAAAAAAAAVhc3NldAAAAAAAABMAAAAAAAAABmFtb3VudAAAAAAACwAAAAEAAAAL",
-        "AAAAAAAAAAAAAAATd2l0aGRyYXdfY29sbGF0ZXJhbAAAAAAEAAAAAAAAAAhwcm90b2NvbAAAABEAAAAAAAAABHVzZXIAAAATAAAAAAAAAAVhc3NldAAAAAAAABMAAAAAAAAABmFtb3VudAAAAAAACwAAAAEAAAAL",
-        "AAAAAAAAAAAAAAAJZ2V0X3lpZWxkAAAAAAAAAgAAAAAAAAAIcHJvdG9jb2wAAAARAAAAAAAAAAVhc3NldAAAAAAAABMAAAABAAAACw==",
-        "AAAAAAAAAAAAAAANZ2V0X2VtaXNzaW9ucwAAAAAAAAIAAAAAAAAACHByb3RvY29sAAAAEQAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAQAAAAs=",
-        "AAAAAAAAAAAAAAAPY2xhaW1fZW1pc3Npb25zAAAAAAIAAAAAAAAACHByb3RvY29sAAAAEQAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAQAAAAs=",
-        "AAAAAAAAAAAAAAAVc2V0X3lpZWxkX2Rpc3RyaWJ1dG9yAAAAAAAAAQAAAAAAAAAReWllbGRfZGlzdHJpYnV0b3IAAAAAAAATAAAAAA==",
-        "AAAAAAAAAAAAAAAUc2V0X2FkYXB0ZXJfcmVnaXN0cnkAAAABAAAAAAAAABBhZGFwdGVyX3JlZ2lzdHJ5AAAAEwAAAAA=",
-        "AAAAAAAAAAAAAAAQc2V0X2N1c2RfbWFuYWdlcgAAAAEAAAAAAAAADGN1c2RfbWFuYWdlcgAAABMAAAAA",
-        "AAAAAAAAAAAAAAAVZ2V0X3lpZWxkX2Rpc3RyaWJ1dG9yAAAAAAAAAAAAAAEAAAAT",
-        "AAAAAAAAAAAAAAAUZ2V0X2FkYXB0ZXJfcmVnaXN0cnkAAAAAAAAAAQAAABM=",
-        "AAAAAAAAAAAAAAAQZ2V0X2N1c2RfbWFuYWdlcgAAAAAAAAABAAAAEw==",
-        "AAAAAAAAAAAAAAAJc2V0X2FkbWluAAAAAAAAAQAAAAAAAAAJbmV3X2FkbWluAAAAAAAAEwAAAAA=",
+        "AAAABAAAALhFcnJvciBjb2RlcyBmb3IgdGhlIGN1c2RfbWFuYWdlciBjb250cmFjdC4gQ29tbW9uIGVycm9ycyBhcmUgY29kZXMgdGhhdCBtYXRjaCB1cCB3aXRoIHRoZSBidWlsdC1pbgpMZW5kaW5nWWllbGRDb250cm9sbGVyRXJyb3IgZXJyb3IgcmVwb3J0aW5nLiBDVVNETWFuYWdlciBzcGVjaWZpYyBlcnJvcnMgc3RhcnQgYXQgMTAwAAAAAAAAABtMZW5kaW5nWWllbGRDb250cm9sbGVyRXJyb3IAAAAADAAAAAAAAAANSW50ZXJuYWxFcnJvcgAAAAAAAAEAAAAAAAAAF0FscmVhZHlJbml0aWFsaXplZEVycm9yAAAAAAMAAAAAAAAAEVVuYXV0aG9yaXplZEVycm9yAAAAAAAABAAAAAAAAAATTmVnYXRpdmVBbW91bnRFcnJvcgAAAAAIAAAAAAAAAAxCYWxhbmNlRXJyb3IAAAAKAAAAAAAAAA1PdmVyZmxvd0Vycm9yAAAAAAAADAAAAAAAAAAQVW5zdXBwb3J0ZWRBc3NldAAAA+gAAAAAAAAAEFlpZWxkVW5hdmFpbGFibGUAAAPpAAAAMU5vIHBlbmRpbmcgaGFydmVzdCBleGlzdHMgZm9yIHRoaXMgcHJvdG9jb2wvYXNzZXQAAAAAAAAQTm9QZW5kaW5nSGFydmVzdAAAA+oAAAA4QSBoYXJ2ZXN0IGlzIGFscmVhZHkgaW4gcHJvZ3Jlc3MgZm9yIHRoaXMgcHJvdG9jb2wvYXNzZXQAAAAYSGFydmVzdEFscmVhZHlJblByb2dyZXNzAAAD6wAAAChJbnZhbGlkIGhhcnZlc3Qgc3RhdGUgZm9yIHRoaXMgb3BlcmF0aW9uAAAAE0ludmFsaWRIYXJ2ZXN0U3RhdGUAAAAD7AAAAB1ObyB5aWVsZCBhdmFpbGFibGUgdG8gaGFydmVzdAAAAAAAABBOb1lpZWxkVG9IYXJ2ZXN0AAAD7Q==",
         "AAAAAAAAAAAAAAAHZ2V0X2FweQAAAAACAAAAAAAAAAhwcm90b2NvbAAAABEAAAAAAAAABWFzc2V0AAAAAAAAEwAAAAEAAAAE",
         "AAAAAAAAAAAAAAAHdXBncmFkZQAAAAABAAAAAAAAAA1uZXdfd2FzbV9oYXNoAAAAAAAD7gAAACAAAAAA",
+        "AAAAAAAAAAAAAAAJZ2V0X3lpZWxkAAAAAAAAAgAAAAAAAAAIcHJvdG9jb2wAAAARAAAAAAAAAAVhc3NldAAAAAAAABMAAAABAAAACw==",
+        "AAAAAAAAAAAAAAAJc2V0X2FkbWluAAAAAAAAAQAAAAAAAAAJbmV3X2FkbWluAAAAAAAAEwAAAAA=",
+        "AAAAAAAAAAAAAAANX19jb25zdHJ1Y3RvcgAAAAAAAAUAAAAAAAAAEXlpZWxkX2Rpc3RyaWJ1dG9yAAAAAAAAEwAAAAAAAAAQYWRhcHRlcl9yZWdpc3RyeQAAABMAAAAAAAAADGN1c2RfbWFuYWdlcgAAABMAAAAAAAAABWFkbWluAAAAAAAAEwAAAAAAAAAFb3duZXIAAAAAAAATAAAAAA==",
+        "AAAAAAAAAAAAAAANZ2V0X2VtaXNzaW9ucwAAAAAAAAIAAAAAAAAACHByb3RvY29sAAAAEQAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAQAAAAs=",
         "AAAAAAAAAAAAAAANaGFydmVzdF95aWVsZAAAAAAAAAIAAAAAAAAACHByb3RvY29sAAAAEQAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAQAAAAs=",
-        "AAAAAAAAAAAAAAAQcmVjb21wb3VuZF95aWVsZAAAAAIAAAAAAAAACHByb3RvY29sAAAAEQAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAQAAAAs=",
-        "AAAAAAAAAAAAAAAVZmluYWxpemVfZGlzdHJpYnV0aW9uAAAAAAAAAgAAAAAAAAAIcHJvdG9jb2wAAAARAAAAAAAAAAVhc3NldAAAAAAAABMAAAABAAAACw==",
-        "AAAAAAAAAAAAAAATZ2V0X3BlbmRpbmdfaGFydmVzdAAAAAACAAAAAAAAAAhwcm90b2NvbAAAABEAAAAAAAAABWFzc2V0AAAAAAAAEwAAAAEAAAPoAAAH0AAAAA5QZW5kaW5nSGFydmVzdAAA",
         "AAAAAAAAAAAAAAAOY2FuY2VsX2hhcnZlc3QAAAAAAAIAAAAAAAAACHByb3RvY29sAAAAEQAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAA==",
-        "AAAABAAAALhFcnJvciBjb2RlcyBmb3IgdGhlIGN1c2RfbWFuYWdlciBjb250cmFjdC4gQ29tbW9uIGVycm9ycyBhcmUgY29kZXMgdGhhdCBtYXRjaCB1cCB3aXRoIHRoZSBidWlsdC1pbgpMZW5kaW5nWWllbGRDb250cm9sbGVyRXJyb3IgZXJyb3IgcmVwb3J0aW5nLiBDVVNETWFuYWdlciBzcGVjaWZpYyBlcnJvcnMgc3RhcnQgYXQgMTAwAAAAAAAAABtMZW5kaW5nWWllbGRDb250cm9sbGVyRXJyb3IAAAAADAAAAAAAAAANSW50ZXJuYWxFcnJvcgAAAAAAAAEAAAAAAAAAF0FscmVhZHlJbml0aWFsaXplZEVycm9yAAAAAAMAAAAAAAAAEVVuYXV0aG9yaXplZEVycm9yAAAAAAAABAAAAAAAAAATTmVnYXRpdmVBbW91bnRFcnJvcgAAAAAIAAAAAAAAAAxCYWxhbmNlRXJyb3IAAAAKAAAAAAAAAA1PdmVyZmxvd0Vycm9yAAAAAAAADAAAAAAAAAAQVW5zdXBwb3J0ZWRBc3NldAAAA+gAAAAAAAAAEFlpZWxkVW5hdmFpbGFibGUAAAPpAAAAMU5vIHBlbmRpbmcgaGFydmVzdCBleGlzdHMgZm9yIHRoaXMgcHJvdG9jb2wvYXNzZXQAAAAAAAAQTm9QZW5kaW5nSGFydmVzdAAAA+oAAAA4QSBoYXJ2ZXN0IGlzIGFscmVhZHkgaW4gcHJvZ3Jlc3MgZm9yIHRoaXMgcHJvdG9jb2wvYXNzZXQAAAAYSGFydmVzdEFscmVhZHlJblByb2dyZXNzAAAD6wAAAChJbnZhbGlkIGhhcnZlc3Qgc3RhdGUgZm9yIHRoaXMgb3BlcmF0aW9uAAAAE0ludmFsaWRIYXJ2ZXN0U3RhdGUAAAAD7AAAAB1ObyB5aWVsZCBhdmFpbGFibGUgdG8gaGFydmVzdAAAAAAAABBOb1lpZWxkVG9IYXJ2ZXN0AAAD7Q==",
+        "AAAAAAAAAAAAAAAPY2xhaW1fZW1pc3Npb25zAAAAAAIAAAAAAAAACHByb3RvY29sAAAAEQAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAQAAAAs=",
+        "AAAAAAAAAAAAAAAQZ2V0X2N1c2RfbWFuYWdlcgAAAAAAAAABAAAAEw==",
+        "AAAAAAAAAAAAAAAQcmVjb21wb3VuZF95aWVsZAAAAAIAAAAAAAAACHByb3RvY29sAAAAEQAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAQAAAAs=",
+        "AAAAAAAAAAAAAAAQc2V0X2N1c2RfbWFuYWdlcgAAAAEAAAAAAAAADGN1c2RfbWFuYWdlcgAAABMAAAAA",
+        "AAAAAAAAAAAAAAASZGVwb3NpdF9jb2xsYXRlcmFsAAAAAAAEAAAAAAAAAAhwcm90b2NvbAAAABEAAAAAAAAABHVzZXIAAAATAAAAAAAAAAVhc3NldAAAAAAAABMAAAAAAAAABmFtb3VudAAAAAAACwAAAAEAAAAL",
+        "AAAAAAAAAAAAAAATZ2V0X3BlbmRpbmdfaGFydmVzdAAAAAACAAAAAAAAAAhwcm90b2NvbAAAABEAAAAAAAAABWFzc2V0AAAAAAAAEwAAAAEAAAPoAAAH0AAAAA5QZW5kaW5nSGFydmVzdAAA",
+        "AAAAAAAAAAAAAAATd2l0aGRyYXdfY29sbGF0ZXJhbAAAAAAEAAAAAAAAAAhwcm90b2NvbAAAABEAAAAAAAAABHVzZXIAAAATAAAAAAAAAAVhc3NldAAAAAAAABMAAAAAAAAABmFtb3VudAAAAAAACwAAAAEAAAAL",
+        "AAAAAAAAAAAAAAAUZ2V0X2FkYXB0ZXJfcmVnaXN0cnkAAAAAAAAAAQAAABM=",
+        "AAAAAAAAAAAAAAAUc2V0X2FkYXB0ZXJfcmVnaXN0cnkAAAABAAAAAAAAABBhZGFwdGVyX3JlZ2lzdHJ5AAAAEwAAAAA=",
+        "AAAAAAAAAAAAAAAVZmluYWxpemVfZGlzdHJpYnV0aW9uAAAAAAAAAgAAAAAAAAAIcHJvdG9jb2wAAAARAAAAAAAAAAVhc3NldAAAAAAAABMAAAABAAAACw==",
+        "AAAAAAAAAAAAAAAVZ2V0X3lpZWxkX2Rpc3RyaWJ1dG9yAAAAAAAAAAAAAAEAAAAT",
+        "AAAAAAAAAAAAAAAVc2V0X3lpZWxkX2Rpc3RyaWJ1dG9yAAAAAAAAAQAAAAAAAAAReWllbGRfZGlzdHJpYnV0b3IAAAAAAAATAAAAAA==",
         "AAAAAgAAAAAAAAAAAAAAEFN1cHBvcnRlZEFkYXB0ZXIAAAACAAAAAAAAAAAAAAAMQmxlbmRDYXBpdGFsAAAAAQAAAAAAAAAGQ3VzdG9tAAAAAAABAAAAEQ==",
         "AAAAAgAAAAAAAAAAAAAAElN1cHBvcnRlZFlpZWxkVHlwZQAAAAAAAwAAAAAAAAAAAAAAB0xlbmRpbmcAAAAAAAAAAAAAAAAJTGlxdWlkaXR5AAAAAAAAAQAAAAAAAAAGQ3VzdG9tAAAAAAABAAAAEQ==" ]),
       options
     )
   }
   public readonly fromJSON = {
-    deposit_collateral: this.txFromJSON<i128>,
-        withdraw_collateral: this.txFromJSON<i128>,
-        get_yield: this.txFromJSON<i128>,
-        get_emissions: this.txFromJSON<i128>,
-        claim_emissions: this.txFromJSON<i128>,
-        set_yield_distributor: this.txFromJSON<null>,
-        set_adapter_registry: this.txFromJSON<null>,
-        set_cusd_manager: this.txFromJSON<null>,
-        get_yield_distributor: this.txFromJSON<string>,
-        get_adapter_registry: this.txFromJSON<string>,
-        get_cusd_manager: this.txFromJSON<string>,
-        set_admin: this.txFromJSON<null>,
-        get_apy: this.txFromJSON<u32>,
+    get_apy: this.txFromJSON<u32>,
         upgrade: this.txFromJSON<null>,
+        get_yield: this.txFromJSON<i128>,
+        set_admin: this.txFromJSON<null>,
+        get_emissions: this.txFromJSON<i128>,
         harvest_yield: this.txFromJSON<i128>,
+        cancel_harvest: this.txFromJSON<null>,
+        claim_emissions: this.txFromJSON<i128>,
+        get_cusd_manager: this.txFromJSON<string>,
         recompound_yield: this.txFromJSON<i128>,
-        finalize_distribution: this.txFromJSON<i128>,
+        set_cusd_manager: this.txFromJSON<null>,
+        deposit_collateral: this.txFromJSON<i128>,
         get_pending_harvest: this.txFromJSON<Option<PendingHarvest>>,
-        cancel_harvest: this.txFromJSON<null>
+        withdraw_collateral: this.txFromJSON<i128>,
+        get_adapter_registry: this.txFromJSON<string>,
+        set_adapter_registry: this.txFromJSON<null>,
+        finalize_distribution: this.txFromJSON<i128>,
+        get_yield_distributor: this.txFromJSON<string>,
+        set_yield_distributor: this.txFromJSON<null>
   }
 }
