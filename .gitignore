@@ -11,3 +11,4 @@ packages/*/test_snapshots/
 # Generated files
 deployed_addresses.mk
 deployed_addresses.sh
+docs/gas-analysis/scripts/out/
