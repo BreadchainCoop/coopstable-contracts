@@ -110,13 +110,17 @@ help:
 	@printf "$(YELLOW)Upgrades:$(NC)\n"
 	@printf "  $(GREEN)make get-wasm-hashes$(NC)    - Get WASM hashes for all contracts\n"
 	@printf "  $(GREEN)make upload-wasm CONTRACT=name$(NC) - Upload and get hash for one contract\n"
+	@printf "  $(GREEN)make upgrade-all$(NC)        - Upload + upgrade manager, registry, distributor, controller in place\n"
 	@printf "  $(GREEN)make upgrade-contract CONTRACT_ID=... WASM_HASH=...$(NC) - Upgrade a contract\n"
 	@printf "\n"
 	@printf "$(YELLOW)Utilities:$(NC)\n"
+	@printf "  $(GREEN)make load-addresses$(NC)     - Regenerate deployed_addresses.mk/.sh from $(NETWORK).contracts.json\n"
 	@printf "  $(GREEN)make show-addresses$(NC)     - Show deployed addresses\n"
 	@printf "  $(GREEN)make save-addresses$(NC)     - Save addresses to file\n"
 	@printf "  $(GREEN)make verify-deployment$(NC)  - Verify deployment status\n"
 	@printf "  $(GREEN)make get-balances$(NC)       - Show token balances\n"
+	@printf "  $(GREEN)make keep-alive$(NC)         - Extend TTL of all Coopstable code + instance entries (restores first if archived)\n"
+	@printf "  $(GREEN)make code-rent$(NC)          - Rent of the deployed code entries and live state size (read-only)\n"
 	@printf "  $(GREEN)make add-all-members$(NC)    - Add all three members to yield distribution\n"
 	@printf "  $(GREEN)make burn-cusd ACC=member_1$(NC) - Burn all cUSD balance for a user\n"
 
@@ -572,7 +576,7 @@ deploy-blend-adapter: check-build
 		-- \
 		--yield_controller $(LENDING_YIELD_CONTROLLER_ID) \
 		--blend_pool_id $(BLEND_POOL_ID) \
-		--blend_token_id $(BLEND_TOKEN_ID)); \
+		--blend_token_id $(BLEND_TOKEN_ID) --owner $(OWNER) --asset $(USDC_ID)); \
 	printf "$(GREEN)Blend Capital Adapter deployed: $$BLEND_CAPITAL_ADAPTER_ID$(NC)\n"; \
 	echo "# Deployed contract addresses - $$(date)" > deployed_addresses.mk.tmp; \
 	echo "BLEND_CAPITAL_ADAPTER_ID = $$BLEND_CAPITAL_ADAPTER_ID" >> deployed_addresses.mk.tmp; \
@@ -730,6 +734,7 @@ test-read-yield:
 	stellar contract invoke \
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
+		--send=no \
 		--id $(LENDING_YIELD_CONTROLLER_ID) \
 		-- \
 		get_yield \
@@ -813,6 +818,7 @@ withdraw:
 		--id $(CUSD_ID) \
 		--source-account $(ACCOUNT_KEY) \
 		--network $(NETWORK) \
+		--send=no \
 		-- \
 		balance \
 		--id $(ACCOUNT))
@@ -831,6 +837,7 @@ test-claim-yield:
 	stellar contract invoke \
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
+		--send=no \
 		--id $(LENDING_YIELD_CONTROLLER_ID) \
 		-- \
 		get_yield \
@@ -936,6 +943,7 @@ get-pending-harvest:
 	stellar contract invoke \
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
+		--send=no \
 		--id $(LENDING_YIELD_CONTROLLER_ID) \
 		-- \
 		get_pending_harvest \
@@ -1001,6 +1009,7 @@ test-read-emissions:
 	stellar contract invoke \
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
+		--send=no \
 		--id $(BLEND_CAPITAL_ADAPTER_ID) \
 		-- \
 		get_emissions \
@@ -1017,6 +1026,7 @@ test-total-supply:
 	stellar contract invoke \
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
+		--send=no \
 		--id $(CUSD_MANAGER_ID) \
 		-- \
 		cusd_total_supply
@@ -1054,6 +1064,7 @@ get-balances:
 	@stellar contract invoke \
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
+		--send=no \
 		--id $(USDC_ID) \
 		-- \
 		balance \
@@ -1062,6 +1073,7 @@ get-balances:
 	@stellar contract invoke \
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
+		--send=no \
 		--id $(CUSD_ID) \
 		-- \
 		balance \
@@ -1072,6 +1084,7 @@ get-balances:
 		stellar contract invoke \
 			--source $(ADMIN_KEY) \
 			--network $(NETWORK) \
+			--send=no \
 			--id $(USDC_ID) \
 			-- \
 			balance \
@@ -1080,6 +1093,7 @@ get-balances:
 		stellar contract invoke \
 			--source $(ADMIN_KEY) \
 			--network $(NETWORK) \
+			--send=no \
 			--id $(CUSD_ID) \
 			-- \
 			balance \
@@ -1231,6 +1245,7 @@ list-members:
 	stellar contract invoke \
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
+		--send=no \
 		--id $(YIELD_DISTRIBUTOR_ID) \
 		-- \
 		list_members 
@@ -1246,6 +1261,7 @@ next-distribution:
 	stellar contract invoke \
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
+		--send=no \
 		--id $(YIELD_DISTRIBUTOR_ID) \
 		-- \
 		get_next_distribution_time 
@@ -1261,6 +1277,7 @@ next-distribution-time-left:
 	stellar contract invoke \
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
+		--send=no \
 		--id $(YIELD_DISTRIBUTOR_ID) \
 		-- \
 		time_before_next_distribution
@@ -1276,6 +1293,7 @@ current-distribution:
 	stellar contract invoke \
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
+		--send=no \
 		--id $(YIELD_DISTRIBUTOR_ID) \
 		-- \
 		get_distribution_info 
@@ -1291,6 +1309,7 @@ distribution-history:
 	stellar contract invoke \
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
+		--send=no \
 		--id $(YIELD_DISTRIBUTOR_ID) \
 		-- \
 		get_distribution_history 
@@ -1306,6 +1325,7 @@ check-distribution-status:
 	stellar contract invoke \
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
+		--send=no \
 		--id $(YIELD_DISTRIBUTOR_ID) \
 		-- \
 		is_distribution_available 
@@ -1339,6 +1359,7 @@ burn-cusd:
 	BALANCE=$$(stellar contract invoke \
 		--source $(ACC) \
 		--network $(NETWORK) \
+		--send=no \
 		--id $(CUSD_ID) \
 		-- \
 		balance \
@@ -1413,6 +1434,85 @@ redeploy-controller: deploy-controller save-addresses
 .PHONY: redeploy-blend-adapter
 redeploy-blend-adapter: deploy-blend-adapter save-addresses
 	@printf "$(GREEN)Blend adapter redeployed!$(NC)\n"
+
+# ========== ADDRESS FILES ==========
+
+# deployed_addresses.mk/.sh are gitignored and overwritten by every deploy target. The tracked source of truth
+# is $(NETWORK).contracts.json; regenerate the files from it to switch between mainnet and testnet.
+ADDRESS_KEYS := CUSD CUSD_MANAGER YIELD_ADAPTER_REGISTRY YIELD_DISTRIBUTOR LENDING_YIELD_CONTROLLER BLEND_CAPITAL_ADAPTER
+
+.PHONY: load-addresses
+load-addresses:
+	@printf "# Deployed contract addresses - loaded from $(NETWORK).contracts.json on $$(date)\n" > deployed_addresses.mk
+	@printf "#!/bin/bash\n# Deployed contract addresses - loaded from $(NETWORK).contracts.json on $$(date)\n" > deployed_addresses.sh
+	@for key in $(ADDRESS_KEYS); do \
+		id=$$(jq -r ".ids.$$key" $(NETWORK).contracts.json); \
+		if [ -z "$$id" ] || [ "$$id" = "null" ]; then printf "$(RED)$$key is empty in $(NETWORK).contracts.json$(NC)\n"; exit 1; fi; \
+		printf "%s_ID = %s\n" $$key $$id >> deployed_addresses.mk; \
+		printf "export %s_ID=%s\n" $$key $$id >> deployed_addresses.sh; \
+	done
+	@chmod +x deployed_addresses.sh && cat deployed_addresses.mk
+
+# ========== TTL / RENT TARGETS ==========
+
+# Every ledger entry pays rent per byte per ledger of TTL (see docs/gas-analysis). The yield-claimer extends
+# the code + instance entries below on every tick; this target is the manual backstop. An archived entry
+# cannot be extended, so it is restored first (same rent, paid as one lump).
+KEEP_ALIVE_LEDGERS ?= 2073600
+KEEP_ALIVE_IDS := $(CUSD_MANAGER_ID) $(YIELD_ADAPTER_REGISTRY_ID) $(YIELD_DISTRIBUTOR_ID) $(LENDING_YIELD_CONTROLLER_ID) $(BLEND_CAPITAL_ADAPTER_ID)
+KEEP_ALIVE_HASHES := $(shell jq -r '.hashes[]' $(NETWORK).contracts.json 2>/dev/null)
+KEEP_ALIVE_ARGS := --source $(ADMIN_KEY) --network $(NETWORK)
+
+# Usage: make keep-alive [KEEP_ALIVE_LEDGERS=3110400]   (120 days by default, 180 days is the network maximum)
+.PHONY: keep-alive
+keep-alive:
+	@printf "$(YELLOW)Extending 5 instances + 5 code entries to $(KEEP_ALIVE_LEDGERS) ledgers...$(NC)\n"
+	@for id in $(KEEP_ALIVE_IDS); do \
+		stellar contract extend $(KEEP_ALIVE_ARGS) --id $$id --ledgers-to-extend $(KEEP_ALIVE_LEDGERS) \
+		|| { stellar contract restore $(KEEP_ALIVE_ARGS) --id $$id \
+		     && stellar contract extend $(KEEP_ALIVE_ARGS) --id $$id --ledgers-to-extend $(KEEP_ALIVE_LEDGERS); }; \
+	done
+	@for hash in $(KEEP_ALIVE_HASHES); do \
+		stellar contract extend $(KEEP_ALIVE_ARGS) --wasm-hash $$hash --ledgers-to-extend $(KEEP_ALIVE_LEDGERS) \
+		|| { stellar contract restore $(KEEP_ALIVE_ARGS) --wasm-hash $$hash \
+		     && stellar contract extend $(KEEP_ALIVE_ARGS) --wasm-hash $$hash --ledgers-to-extend $(KEEP_ALIVE_LEDGERS); }; \
+	done
+	@LEND_KEY=$$(echo '{"symbol":"LEND"}' | stellar xdr encode --type ScVal); \
+	SUPPLY_KEY=$$(echo '{"vec":[{"symbol":"CusdSupply"}]}' | stellar xdr encode --type ScVal); \
+	BALANCE_KEY=$$(echo '{"vec":[{"symbol":"Balance"},{"address":"$(LENDING_YIELD_CONTROLLER_ID)"}]}' | stellar xdr encode --type ScVal); \
+	for spec in "$(YIELD_ADAPTER_REGISTRY_ID) $$LEND_KEY" "$(CUSD_MANAGER_ID) $$SUPPLY_KEY" "$(USDC_ID) $$BALANCE_KEY"; do \
+		set -- $$spec; \
+		stellar contract extend $(KEEP_ALIVE_ARGS) --id $$1 --key-xdr $$2 --durability persistent --ledgers-to-extend $(KEEP_ALIVE_LEDGERS) \
+		|| { stellar contract restore $(KEEP_ALIVE_ARGS) --id $$1 --key-xdr $$2 --durability persistent \
+		     && stellar contract extend $(KEEP_ALIVE_ARGS) --id $$1 --key-xdr $$2 --durability persistent --ledgers-to-extend $(KEEP_ALIVE_LEDGERS); }; \
+	done
+	@stellar contract extend $(KEEP_ALIVE_ARGS) --id $(CUSD_ID) --ledgers-to-extend $(KEEP_ALIVE_LEDGERS) \
+	|| { stellar contract restore $(KEEP_ALIVE_ARGS) --id $(CUSD_ID) \
+	     && stellar contract extend $(KEEP_ALIVE_ARGS) --id $(CUSD_ID) --ledgers-to-extend $(KEEP_ALIVE_LEDGERS); }
+	@printf "$(GREEN)Keep-alive done.$(NC)\n"
+
+# Upload the freshly built WASM of every upgradeable contract and upgrade it in place (owner signs).
+# The adapter deployed before Bundle 2 has no upgrade entrypoint: replace it with deploy-blend-adapter-full.
+# Afterwards copy the printed hashes into $(NETWORK).contracts.json.
+UPGRADEABLE := cusd_manager:CUSD_MANAGER_ID yield_adapter_registry:YIELD_ADAPTER_REGISTRY_ID yield_distributor:YIELD_DISTRIBUTOR_ID lending_yield_controller:LENDING_YIELD_CONTROLLER_ID
+
+.PHONY: upgrade-all
+upgrade-all: check-build
+	@for pair in $(UPGRADEABLE); do \
+		contract=$${pair%%:*}; var=$${pair##*:}; \
+		id=$$(grep "^$$var" deployed_addresses.mk | cut -d'=' -f2 | tr -d ' '); \
+		if [ -z "$$id" ]; then printf "$(RED)$$var is not set in deployed_addresses.mk$(NC)\n"; exit 1; fi; \
+		printf "$(YELLOW)$$contract ($$id)$(NC)\n"; \
+		hash=$$(stellar contract upload --source $(OWNER_KEY) --network $(NETWORK) --wasm $(WASM_DIR)/$$contract.wasm) || exit 1; \
+		printf "  wasm hash: $$hash\n"; \
+		stellar contract invoke --source $(OWNER_KEY) --network $(NETWORK) --id $$id -- upgrade --new_wasm_hash $$hash || exit 1; \
+	done
+	@printf "$(GREEN)Upgraded. Record the hashes above in $(NETWORK).contracts.json.$(NC)\n"
+
+# Rent of the deployed code entries and the live state size that sets the rent rate (read-only)
+.PHONY: code-rent
+code-rent:
+	python3 -I docs/gas-analysis/scripts/code_rent.py --state $(KEEP_ALIVE_HASHES)
 
 # ========== WASM HASH TARGETS ==========
 
