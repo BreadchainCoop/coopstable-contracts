@@ -114,13 +114,22 @@ make code-rent                                                  # what the five 
 ```bash
 make upgrade-all                   # owner: upload + upgrade manager, registry, distributor, controller
 make deploy-blend-adapter-full     # owner: deploy the new adapter (adopts the position); admin: register + support USDC
-source deployed_addresses.sh       # BLEND_CAPITAL_ADAPTER_ID is now the new one
 ```
 
 `upgrade-all` prints one wasm hash per contract and stops at the first failure (nothing after a failed step is
-sent). A simulation error mentioning the fee or `txInsufficientBalance` means the owner balance is short; top
-it up and rerun, it continues with the contract that failed. `deploy-blend-adapter-full` prints the new adapter
-id and rewrites `deployed_addresses.mk`.
+sent). **Do not rerun it after a failure**: it starts again from the first contract and would re-upload and
+re-upgrade the ones already done. Check which code each contract runs (`code_rent.py`, section 3) and finish
+only the failed one by hand (a timed-out upload can simply be resent; on 2026-10-14 the controller's did exactly
+that and landed with the same hash):
+
+```bash
+stellar contract upload --source owner-mainnet --network mainnet --wasm target/wasm32v1-none/release/<contract>.wasm
+stellar contract invoke --source owner-mainnet --network mainnet --id <contract id> -- upgrade --new_wasm_hash <printed hash>
+```
+
+A simulation error mentioning the fee or `txInsufficientBalance` means the owner balance is short; top it up
+first. `deploy-blend-adapter-full` prints the new adapter id and rewrites `deployed_addresses.mk` only;
+`deployed_addresses.sh` keeps the old adapter until it is regenerated from the JSON below.
 
 Record and commit:
 
@@ -128,6 +137,7 @@ Record and commit:
 # mainnet.contracts.json: BLEND_CAPITAL_ADAPTER = new id, keep the old one as BLEND_CAPITAL_ADAPTER_LEGACY_2026_04,
 # hashes = the five printed hashes (adapter: `python3 -I docs/gas-analysis/scripts/code_rent.py $BLEND_CAPITAL_ADAPTER_ID`)
 git add mainnet.contracts.json && git commit -m "chore(mainnet): bundle 2 upgrades and adapter swap"
+make load-addresses NETWORK=mainnet && source deployed_addresses.sh   # BLEND_CAPITAL_ADAPTER_ID is now the new one
 ```
 
 ## 3. Verify on chain
