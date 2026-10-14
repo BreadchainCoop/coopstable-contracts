@@ -112,11 +112,7 @@ pub fn remove_member(e: &Env, address: &Address) {
     if let Some(mut member) = e.storage().persistent().get::<DataKey, Member>(&key) {
         member.active = false;
         e.storage().persistent().set(&key, &member);
-        e.storage().persistent().extend_ttl(
-            &key,
-            INSTANCE_LIFETIME_THRESHOLD,
-            INSTANCE_BUMP_AMOUNT,
-        );
+        extend_persistent(e, &key);
     }
 
     // Update current distribution with new member list

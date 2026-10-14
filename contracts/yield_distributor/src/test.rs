@@ -85,8 +85,8 @@ impl TestFixture {
 
     fn assert_event_with_address_data(&self, expected_event: (Symbol,), expected_data: Address) {
         let events = self.env.events().all();
-        if !events.is_empty() {
-            let published_event = vec![&self.env, events.last_unchecked()];
+        if !events.events().is_empty() {
+            let published_event = events.filter_by_contract(&self.distributor.address);
             let expected = vec![
                 &self.env,
                 (
@@ -101,8 +101,8 @@ impl TestFixture {
 
     fn assert_event_with_u32_data(&self, expected_event: (Symbol,), expected_data: u32) {
         let events = self.env.events().all();
-        if !events.is_empty() {
-            let published_event = vec![&self.env, events.last_unchecked()];
+        if !events.events().is_empty() {
+            let published_event = events.filter_by_contract(&self.distributor.address);
             let expected = vec![
                 &self.env,
                 (
@@ -117,8 +117,8 @@ impl TestFixture {
 
     fn assert_event_with_u64_data(&self, expected_event: (Symbol,), expected_data: u64) {
         let events = self.env.events().all();
-        if !events.is_empty() {
-            let published_event = vec![&self.env, events.last_unchecked()];
+        if !events.events().is_empty() {
+            let published_event = events.filter_by_contract(&self.distributor.address);
             let expected = vec![
                 &self.env,
                 (

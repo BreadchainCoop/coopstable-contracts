@@ -11,3 +11,14 @@ packages/*/test_snapshots/
 # Generated files
 deployed_addresses.mk
 deployed_addresses.sh
+docs/gas-analysis/scripts/out/
+
+# local-only docs
+docs/gas-analysis/
+docs/migration/
+docs/upgradeability.md
+docs/tasks-completed-for-migration.md
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+.gitignore

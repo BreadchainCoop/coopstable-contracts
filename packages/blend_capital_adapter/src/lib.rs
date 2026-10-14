@@ -16,6 +16,7 @@ pub mod artifacts {
         soroban_sdk::contractimport!(file = "./artifacts/backstop.wasm");
     }
 }
+#[cfg(test)]
 pub mod mocks;
 mod test;
 mod utils;

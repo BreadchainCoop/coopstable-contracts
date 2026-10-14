@@ -3,7 +3,7 @@ extern crate std;
 
 use pretty_assertions::assert_eq;
 use soroban_sdk::{
-    log, symbol_short,
+    symbol_short,
     testutils::{Address as _, Events},
     vec, Address, Env, IntoVal, Symbol,
 };
@@ -124,7 +124,7 @@ fn test_set_yield_adapter_admin() {
         .set_yield_adapter_admin(&new_admin);
 
     // Expected event has topic "set_admin" and data is the new admin address
-    let published_event = vec![&fixture.env, fixture.env.events().all().last_unchecked()];
+    let published_event = fixture.env.events().all().filter_by_contract(&fixture.registry.address);
     let expected_event = vec![
         &fixture.env,
         (
@@ -167,8 +167,7 @@ fn test_register_adapter() {
     );
 
     // Verify event emission
-    log!(&fixture.env, "All events: {:?}", fixture.env.events().all());
-    let published_event = vec![&fixture.env, fixture.env.events().all().last_unchecked()];
+    let published_event = fixture.env.events().all().filter_by_contract(&fixture.registry.address);
     let expected_event = vec![
         &fixture.env,
         (
@@ -229,7 +228,7 @@ fn test_remove_adapter() {
         &protocol.id(),
     );
 
-    let published_event = vec![&fixture.env, fixture.env.events().all().last_unchecked()];
+    let published_event = fixture.env.events().all().filter_by_contract(&fixture.registry.address);
     let expected_event = vec![
         &fixture.env,
         (
@@ -308,7 +307,7 @@ fn test_add_support_for_asset() {
     );
 
     // Verify event emission
-    let published_event = vec![&fixture.env, fixture.env.events().all().last_unchecked()];
+    let published_event = fixture.env.events().all().filter_by_contract(&fixture.registry.address);
     let expected_event = vec![
         &fixture.env,
         (
@@ -391,7 +390,7 @@ fn test_remove_support_for_asset() {
         &asset,
     );
 
-    let published_event = vec![&fixture.env, fixture.env.events().all().last_unchecked()];
+    let published_event = fixture.env.events().all().filter_by_contract(&fixture.registry.address);
     let expected_event = vec![
         &fixture.env,
         (
@@ -494,4 +493,33 @@ fn test_is_supported_asset() {
         &asset1,
     );
     assert!(!is_supported_non_existent);
+}
+
+#[test]
+fn test_reads_do_not_extend_ttl_but_admin_writes_do() {
+    use soroban_sdk::testutils::{storage::{Instance, Persistent}, Ledger};
+    use crate::storage_types::{DAY_IN_LEDGERS, REGISTRY_BUMP_AMOUNT};
+
+    let fixture = TestFixture::create();
+    let (adapter_address, protocol) = fixture.create_adapter();
+    let yield_type = SupportedYieldType::Lending.id();
+    fixture.env.mock_all_auths();
+    fixture.registry.register_adapter(&yield_type, &protocol.id(), &adapter_address);
+
+    let ttls = || fixture.env.as_contract(&fixture.registry.address, || (
+        fixture.env.storage().instance().get_ttl(),
+        fixture.env.storage().persistent().get_ttl(&yield_type),
+    ));
+    assert_eq!(ttls(), (REGISTRY_BUMP_AMOUNT, REGISTRY_BUMP_AMOUNT));
+
+    let sequence = fixture.env.ledger().sequence();
+    fixture.env.ledger().set_sequence_number(sequence + 2 * DAY_IN_LEDGERS);
+    let aged = (REGISTRY_BUMP_AMOUNT - 2 * DAY_IN_LEDGERS, REGISTRY_BUMP_AMOUNT - 2 * DAY_IN_LEDGERS);
+    assert_eq!(ttls(), aged);
+
+    fixture.registry.get_adapter(&yield_type, &protocol.id()); // the read every member deposit makes
+    assert_eq!(ttls(), aged, "a read must not pay rent");
+
+    fixture.registry.add_support_for_asset(&yield_type, &protocol.id(), &fixture.create_asset()); // admin path
+    assert_eq!(ttls(), (REGISTRY_BUMP_AMOUNT, REGISTRY_BUMP_AMOUNT));
 }

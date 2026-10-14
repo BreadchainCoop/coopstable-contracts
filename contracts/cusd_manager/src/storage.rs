@@ -4,28 +4,25 @@ use crate::storage_types::{
     INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD, DataKey, PERSISTENT_BUMP_AMOUNT, PERSISTENT_LIFETIME_THRESHOLD
 };
 
-pub fn extend_instance(e: &Env) {
+/// Only admin and owner paths extend the instance (shared with the code) and `CusdSupply`, so a member's
+/// mint or burn never pays rent for the protocol; the yield-claimer keeps these entries alive otherwise.
+pub fn extend_storage(e: &Env) {
     e.storage()
         .instance()
         .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-}
-
-fn extend_persistent(e: &Env, key: &DataKey) {
     e.storage()
         .persistent()
-        .extend_ttl(key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+        .extend_ttl(&DataKey::CusdSupply, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
 }
 
 pub fn read_admin(e: &Env) -> Address { read_address(e, &DataKey::Admin)}
 pub fn read_owner(e: &Env) -> Address { read_address(e, &DataKey::Owner)}
 
 fn read_address(e: &Env, key: &DataKey) -> Address {
-    extend_instance(e);
     e.storage().instance().get(key).unwrap()  
 }
 
 fn write_address(e: &Env, key: &DataKey, address: &Address) {
-    extend_instance(e);
     e.storage().instance().set(key, address); 
 }
 pub fn increase_cusd_supply(e: &Env, amount: &i128) {
@@ -40,12 +37,10 @@ pub fn decrease_cusd_supply(e: &Env, amount: &i128) {
 pub fn read_cusd_total_supply(e: &Env) -> i128 { read_cusd_supply(e) }
 
 fn read_cusd_supply(e: &Env) -> i128 {
-    extend_persistent(e, &DataKey::CusdSupply);
     e.storage().persistent().get(&DataKey::CusdSupply).unwrap() // no need to handle if no key set since we initialize it to 0
 }
 
 fn write_cusd_supply(e: &Env, amount: i128) {
-    extend_persistent(e, &DataKey::CusdSupply);
     e.storage().persistent().set(&DataKey::CusdSupply, &amount);
 }
 
