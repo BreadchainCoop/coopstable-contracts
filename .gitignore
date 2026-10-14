@@ -12,3 +12,9 @@ packages/*/test_snapshots/
 deployed_addresses.mk
 deployed_addresses.sh
 docs/gas-analysis/scripts/out/
+
+# local-only docs
+docs/gas-analysis/
+docs/migration/
+docs/upgradeability.md
+docs/tasks-completed-for-migration.md
