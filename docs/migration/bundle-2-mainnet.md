@@ -2,7 +2,26 @@
 
 The production run of what `bundle-2-testnet.md` rehearsed on 2026-10-09/10. Same commands, no overrides: the
 Makefile defaults are mainnet (`owner-mainnet`, `admin-mainnet`, the live Blend pool and USDC). Read sections 0
-and 1 completely before typing anything; the order and the two decisions in section 1 matter.
+and 1 completely before typing anything; the order and the timing decision in section 1 matter.
+
+> **2026-10-14: the claimer already ran one cycle on the old mainnet contracts.** The new yield-claimer was
+> started against mainnet by mistake (13:30 local, 08:00 UTC) and ran harvest → recompound → finalize, then
+> keep-alive, all signed and paid by `admin-mainnet`:
+>
+> | TX | Step | Fee (XLM) |
+> |---|---|---:|
+> | `ee00e154` | `harvest_yield` (restored the old adapter, controller and distributor) | 46.71 |
+> | `d44a75c9` | `recompound_yield` | 0.00 |
+> | `4037d783` | `finalize_distribution` (3,628,078 stroops = 3.63 USDC distributed, epoch 2 → 3) | 25.80 |
+> | `c21b61fe` | keep-alive: every code, instance and data entry extended to 120 days | 7.66 |
+> | `a30fa13a` | keep-alive top-up (the per-tick bug fixed in the claimer since) | 0.00 |
+> | | **Total** | **80.17** |
+>
+> This is option B of the old Decision 1 (harvest first, then swap), paid by the admin instead of the owner. It
+> changes this runbook in three ways: nothing has to be restored any more (all five code entries, including the
+> old adapter, live until ledger 67,009,429, about 2027-02-11), the owner only pays uploads and the adapter
+> deploy, and the unclaimed-yield decision is gone. Sections 0, 1 and 4 below are updated accordingly; the
+> 2026-10-10 figures they replace are in git history.
 
 ## 0. What happens, what it costs, who pays
 
@@ -12,27 +31,26 @@ and 1 completely before typing anything; the order and the two decisions in sect
 | Blend adapter | new deployment, then `register_adapter` + `add_support_for_asset` | owner, then admin |
 | cUSD token, Blend pool, USDC | untouched | |
 
-Calling `upgrade` executes the *old* code, so every archived contract is restored first (the CLI folds the
-restore into the invoke) and 120 days of rent are paid on code that is replaced in the same transaction. That is
-the price of keeping addresses and state; the alternative, a full redeploy as in April, would lose members,
-epochs and the SAC admin wiring. Actual charges at the floor rent rate (declared fees run ~15% higher and must be
-covered by the balance):
+Calling `upgrade` executes the *old* code, so it needs the old code and instance live. Since 2026-10-14 they
+are (see the note above): the 120 days of rent on code that the upgrade replaces were already paid by the
+accidental claimer run, so the migration itself restores nothing. Keeping addresses and state this way is still
+the point; the alternative, a full redeploy as in April, would lose members, epochs and the SAC admin wiring.
+Charges at the floor rent rate (declared fees run ~15% higher and must be covered by the balance):
 
 | Step | XLM | Paid by |
 |---|---:|---|
-| Restore old controller code + instance (archived) | ~17.8 | owner |
-| Restore old distributor code (instance still live until ~2026-10-26) | ~19.0 | owner |
-| Restore old manager code + instance (archived) | ~6.4 | owner |
-| Restore registry code, only if migrating after ~2026-10-26 | ~8.5 | owner |
+| ~~Restore old controller, distributor, manager, registry~~ | already paid 2026-10-14 (admin) | |
 | Upload new manager, registry, distributor, controller (4,236 / 5,792 / 13,709 / 13,825 B) | ~51.4 | owner |
 | Deploy new adapter (17,088 B) | ~23.9 | owner |
 | `upgrade` x4, `register_adapter`, `add_support_for_asset` | <0.5 | owner / admin |
-| **Owner total** | **~120 (~130 after Oct 26)** | |
-| Claimer's first tick: restore the remaining archived data entries, extend everything | <1 | admin |
+| **Owner total** | **~76** | |
+| Claimer's next keep-alive: extend the new code to 120 days again | ~9 | admin |
 
-The old adapter is never restored (it is replaced, which is why its 28.7 XLM does not appear). After the
-migration, rent on the five code entries is about 74 XLM per 120 days instead of 80, and it is paid by the
-claimer in ~0.34 XLM ticks every 12 hours instead of in lumps by whoever touches a cold contract.
+If the migration slips past ~2027-02-11, the old entries archive again and the restore rows come back
+(~52 XLM for controller, distributor, manager and registry). After the migration, rent on the five code entries
+is about 74 XLM per 120 days instead of 80, paid by the claimer's keep-alive on the 1st and 16th of each month
+(~9 XLM per run) instead of in lumps by whoever touches a cold contract. The old code entries, the old adapter
+included, keep their TTL until 2027-02-11 and then expire; nothing pays for them again.
 
 Live state on mainnet read 1.76 GB on 2026-10-09 and 1.81 GB on 2026-10-10; the rent rate leaves its floor at
 2.0 GB and roughly doubles by 2.1 GB. `make code-rent` prints both numbers; check it the day you migrate, and
@@ -41,8 +59,9 @@ if state is within reach of 2.0 GB start the claimer with `KEEP_ALIVE_LEDGERS=31
 
 ## 1. Pre-flight (read-only, nothing is sent)
 
-**Wallets.** On 2026-10-10 `owner-mainnet` holds **6.9 XLM** and `admin-mainnet` 512.9 XLM. Fund the owner to
-at least **150 XLM** before starting; the admin needs ~150 XLM free for the claimer's first weeks. Check:
+**Wallets.** On 2026-10-14 (after the claimer run and a 150 XLM transfer admin → owner) `owner-mainnet` holds
+**156.9 XLM** and `admin-mainnet` **282.8 XLM**. The owner needs ~90 XLM (the ~76 above plus the declared-fee
+margin); the admin needs ~50 XLM free for the claimer's first months. Both are covered. Check:
 
 ```bash
 for k in owner-mainnet admin-mainnet; do
@@ -57,33 +76,27 @@ make load-addresses NETWORK=mainnet          # deployed_addresses.mk/.sh from ma
 export USDC=CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75
 source deployed_addresses.sh                  # CUSD_ID, CUSD_MANAGER_ID, ..., BLEND_CAPITAL_ADAPTER_ID
 make get-pending-harvest                      # must be "null": never swap the adapter with a harvest pending
-make check-distribution-status                # true since July 2026
+make check-distribution-status                # false until ~2026-11-13 08:00 UTC (epoch 3 started 2026-10-14)
 stellar contract invoke --send=no --network mainnet --source admin-mainnet --id $LENDING_YIELD_CONTROLLER_ID -- get_yield --protocol BC_LA --asset $USDC
 stellar contract invoke --send=no --network mainnet --source admin-mainnet --id $BLEND_CAPITAL_ADAPTER_ID -- get_balance --user $LENDING_YIELD_CONTROLLER_ID --asset $USDC
 make test-total-supply
 ```
 
-On 2026-10-10: no pending harvest, distribution available, yield 3,497,364 stroops (3.50 USDC), controller
-position 156,029,109 (156.03 USDC), cUSD supply 152,531,735 (152.53 USDC), one member, epoch 2.
+On 2026-10-14 (after the claimer run): no pending harvest, distribution not available, yield 1,473 stroops,
+controller position 156,161,299 (156.16 USDC), one member, epoch 3 started 08:00:22 UTC.
 
-**Decision 1: the 3.5 USDC of unclaimed yield.** The new adapter adopts the controller's position as its
-principal at deploy time, so whatever has accrued but not been harvested *before* the swap stays in the pool as
-surplus collateral and is never distributed. Two options:
+**Unclaimed yield: settled.** The new adapter adopts the controller's position as its principal at deploy time,
+so yield accrued but not harvested *before* the swap stays in the pool as surplus collateral and is never
+distributed. The 2026-10-14 run harvested and distributed the 3.63 USDC that had built up, so only what accrues
+from then until the swap is left behind (1,473 stroops in the first ~70 minutes after the harvest): migrate
+early and it is negligible. Do not run another manual harvest cycle first; it would only spend admin XLM.
 
-- **A. Swap first (cheaper, default).** The 3.5 USDC remains in the pool backing cUSD; the claimer's first
-  harvest after the swap takes the zero-yield path and simply advances the epoch. Cost as in the table above.
-- **B. Harvest first, then swap.** Run one cycle on the old adapter, which distributes 3.15 USDC to the member
-  and 0.35 to treasury. It restores the old adapter code (+28.7 XLM) and the old controller and distributor
-  (which the upgrade needs anyway), all paid by `admin-mainnet`. Net extra: about 29 XLM. The owner then pays
-  only uploads and the adapter deploy (~75 XLM).
-
-If B: `make harvest-yield && make recompound-yield && make finalize-distribution`, then confirm
-`make get-pending-harvest` is `null` again before going on. If the harvest reports no yield, the cycle still
-advances the epoch and the three commands complete with the last two failing on "No pending harvest".
-
-**Decision 2: timing.** The adapter swap takes two transactions (`deploy`, then `register_adapter`), a few
-seconds apart; a member deposit between them goes to the old adapter and is simply fine. Pick a quiet hour
-anyway so the front-end and claimer changes can be deployed in the same window.
+**Timing.** Migrate **before ~2026-11-13 08:00 UTC**, when the next distribution opens; after that the claimer
+would harvest on the old adapter again (cheap now, everything is warm) and the left-behind yield grows. The
+adapter swap takes two transactions (`deploy`, then `register_adapter`), a few seconds apart; a member deposit
+between them goes to the old adapter and is simply fine. **Stop the mainnet claimer for the migration window**
+(it should not harvest between the pre-flight `get-pending-harvest` check and `register_adapter`), and pick a
+quiet hour so the front-end and claimer can be redeployed in the same window.
 
 **Build and check:**
 
@@ -144,30 +157,35 @@ stellar contract invoke --source <member-identity> --network mainnet --id $C --b
 ## 4. Deploy the yield-claimer
 
 `PUBLIC` config already carries the mainnet ids; the adapter is read from the registry, so nothing in the
-claimer references the new address. Merge the claimer branch, build the image (the repository's workflow does
-it on push), and run it with:
+claimer references the new address. The claimer now lives at `RasenGUY/yield-claimer`; every push to `main`
+builds `ghcr.io/rasenguy/yield-claimer:mainnet` (and `:mainnet-<sha>`), with the `mainnet` GitHub environment's
+variables baked in (`NETWORK=PUBLIC`). Secrets are never in the image; pass them at runtime:
 
 ```
-NETWORK=PUBLIC
-WALLET_SECRET_KEY / WALLET_PUBLIC_KEY   admin-mainnet
-CRON_EXPRESSION="0 0-23/12 * * *"       every 12 hours
-MAX_FEE_XLM=100
-KEEP_ALIVE_LEDGERS=2073600              120 days; raise to 3110400 (180 days) once no release is planned
-ALERT_WEBHOOK_URL=                      optional
+WALLET_SECRET_KEY / WALLET_PUBLIC_KEY   admin-mainnet (mainnet environment secrets)
+MAX_FEE_XLM=100                         default
+KEEP_ALIVE_LEDGERS=2073600              default, 120 days; raise to 3110400 (180 days) once no release is planned
+ALERT_WEBHOOK_URL=                      optional secret, see the claimer README
 ```
 
-`docker-compose.yml` passes all of these through and health-checks `/yield-claimer/health`. The first tick:
-harvest (zero-yield path under option A: advances the epoch), then keep-alive, which restores the archived data
-entries (cUSD token instance, `CusdSupply`, the controller's USDC balance, the distributor's member and
-distribution records: under 1 XLM in total) and extends everything to 120 days. Expect in the log:
+Schedules are fixed per network in the claimer's `src/config/config.ts` (there is no `CRON_EXPRESSION` any
+more), in the container's UTC:
+
+- claim check daily at 00:00: claims once per 30-day distribution, within a day of it opening;
+- keep-alive at 01:00 on the 1st and 16th: reads every TTL and submits only when the shortest one has drifted
+  more than a day below 120 days, or an entry is missing or archived (then it restores first).
+
+Locally, `pnpm start:mainnet` in the claimer runs the same thing from `.env.mainnet`. The startup log must say
+`PUBLIC: claim-yield "0 0 * * *", keep-alive "0 1 1,16 * *"`. After the migration, the first keep-alive run
+extends the new code entries back to 120 days; expect:
 
 ```
-harvest_yield: fee 0.x XLM            Harvest complete. TX ...
-keep-alive: fee 0.x XLM               keep-alive: TX ...      (a `restore:` line first if anything was archived)
+keep-alive: fee ~9 XLM                keep-alive: TX ...      (a `restore:` line first if anything was archived)
 ```
 
-Every later tick logs `keep-alive: fee 0.3x XLM`. A tick that is more than about twice the previous one means
-the rent rate has left the floor; a fee above `MAX_FEE_XLM` is refused and alerted, never paid.
+Later runs log about the same (15 days of rent on ~74 XLM per 120 days). A run that is more than about twice
+the previous one means the rent rate has left the floor; a fee above `MAX_FEE_XLM` is refused and alerted, never
+paid. The first claim after the migration is the ~2026-11-13 distribution, if the migration lands before it.
 
 ## 5. Deploy the front-end
 
@@ -177,7 +195,7 @@ if the simulated fee ever exceeds 0.5 XLM.
 
 ## 6. Afterwards
 
-- `make keep-alive` is the manual backstop if the claimer is down for more than a few days.
+- `make keep-alive` is the manual backstop if the claimer is down across a 1st or 16th.
 - `make code-rent` once a month: rent per contract, live state, distance to the 2.0 GB knee.
 - When no further contract release is planned for a while, set `KEEP_ALIVE_LEDGERS=3110400` on the claimer to
   prepay 180 days at today's rate.
