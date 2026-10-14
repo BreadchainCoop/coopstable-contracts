@@ -145,5 +145,7 @@ pub trait LendingAdapter {
     /// * `yield_controller` - The address of the yield controller contract
     /// * `lending_pool_id` - The address of the lending pool contract
     /// * `protocol_token_id` - The address of the protocol's native token
-    fn __constructor(e: Env, yield_controller: Address, lending_pool_id: Address, protocol_token_id: Address); 
+    /// * `owner` - The address allowed to upgrade the adapter
+    /// * `asset` - Asset whose existing position of `yield_controller` in the pool becomes the opening principal
+    fn __constructor(e: Env, yield_controller: Address, lending_pool_id: Address, protocol_token_id: Address, owner: Address, asset: Address);
 }

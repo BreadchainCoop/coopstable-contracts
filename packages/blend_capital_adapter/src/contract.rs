@@ -1,4 +1,4 @@
-use soroban_sdk::{ contract, contractimpl, Address, Env, Symbol, Val, Vec };
+use soroban_sdk::{ contract, contractimpl, Address, BytesN, Env, Symbol, Val, Vec };
 use crate::{ adapter, constants::{BLEND_TOKEN_ID, LENDING_POOL_ID, YIELD_CONTROLLER_ID}, storage };
 use yield_adapter::{
     events::LendingAdapterEvents,
@@ -15,7 +15,7 @@ pub struct BlendCapitalAdapter;
 #[contractimpl]
 impl LendingAdapter for BlendCapitalAdapter {
     
-    fn __constructor(e: Env, yield_controller: Address, blend_pool_id: Address, blend_token_id: Address) {
+    fn __constructor(e: Env, yield_controller: Address, blend_pool_id: Address, blend_token_id: Address, owner: Address, asset: Address) {
         e.storage()
             .instance()
             .set(&YIELD_CONTROLLER_ID, &yield_controller);
@@ -25,6 +25,12 @@ impl LendingAdapter for BlendCapitalAdapter {
         e.storage()
             .instance()
             .set(&BLEND_TOKEN_ID, &blend_token_id);
+        storage::write_owner(&e, &owner);
+
+        // Adopt whatever the controller already holds in the pool as the opening principal, so a replacement
+        // adapter never reports the pre-existing position as yield (0 on a fresh deployment).
+        let principal = adapter::get_balance(&e, yield_controller, asset.clone());
+        storage::set_asset_epoch_principal(&e, &asset, 0, principal);
     }
 
     fn deposit(e: &Env, user: Address, asset: Address, amount: i128) -> i128 {
@@ -67,6 +73,7 @@ impl LendingAdapter for BlendCapitalAdapter {
     fn claim_yield(e: &Env, asset: Address, yield_amount: i128) -> i128 {
         
         storage::require_yield_controller(e);
+        storage::extend_instance(e);
         
         let claimed = adapter::withdraw_collateral(e, storage::get_yield_controller(e), asset.clone(), yield_amount);
         
@@ -88,6 +95,7 @@ impl LendingAdapter for BlendCapitalAdapter {
     
     fn claim_emissions(e: &Env, to: Address, asset: Address) -> i128 {
         storage::require_yield_controller(e);
+        storage::extend_instance(e);
         
         let emissions = adapter::claim(e, storage::get_yield_controller(e), to.clone(), asset.clone());
 
@@ -115,8 +123,19 @@ impl LendingAdapter for BlendCapitalAdapter {
     
     fn update_epoch_principal(env: &Env, asset: Address, epoch: u64, principal: i128) {
         storage::require_yield_controller(env);
+        storage::extend_instance(env);
         storage::set_asset_epoch_principal(env, &asset, epoch, principal);
         
         LendingAdapterEvents::update_epoch_principal(env, asset, epoch, principal);
+    }
+}
+
+#[contractimpl]
+impl BlendCapitalAdapter {
+    /// (Owner only) Replace the contract code; the address and all storage survive.
+    pub fn upgrade(e: &Env, new_wasm_hash: BytesN<32>) {
+        storage::read_owner(e).require_auth();
+        storage::extend_instance(e);
+        e.deployer().update_current_contract_wasm(new_wasm_hash);
     }
 }

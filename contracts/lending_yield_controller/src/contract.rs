@@ -8,8 +8,8 @@ contractmeta!(
     val = "Yield controller for the Coopstable cUSD system"
 );
 
-fn require_admin(e: &Env) { storage::read_admin(e).require_auth(); }
-fn require_owner(e: &Env) { storage::read_owner(e).require_auth(); }
+fn require_admin(e: &Env) { storage::read_admin(e).require_auth(); storage::extend_instance(e); }
+fn require_owner(e: &Env) { storage::read_owner(e).require_auth(); storage::extend_instance(e); }
 
 pub trait LendingYieldControllerTrait {
     /// Initialize the Lending Yield Controller contract

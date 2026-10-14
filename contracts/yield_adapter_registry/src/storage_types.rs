@@ -1,7 +1,7 @@
 use soroban_sdk::{contracttype, Address, Env, Map, Symbol, Vec};
 
 pub(crate) const DAY_IN_LEDGERS: u32 = 17280;
-pub(crate) const REGISTRY_BUMP_AMOUNT: u32 = 30 * DAY_IN_LEDGERS;
+pub(crate) const REGISTRY_BUMP_AMOUNT: u32 = 120 * DAY_IN_LEDGERS;
 pub(crate) const REGISTRY_LIFETIME_THRESHOLD: u32 = REGISTRY_BUMP_AMOUNT - DAY_IN_LEDGERS;
 
 #[derive(Clone)]

@@ -6,3 +6,4 @@ pub (crate) const LENDING_POOL_ID: Symbol = symbol_short!("LID");
 pub (crate) const BLEND_TOKEN_ID: Symbol = symbol_short!("BLND");
 pub (crate) const ASSET_EPOCH_PRINCIPAL: Symbol = symbol_short!("AEP");
 pub (crate) const SCALAR_12: i128 = 1_000_000_000_000;
+pub (crate) const OWNER: Symbol = symbol_short!("OWNER");

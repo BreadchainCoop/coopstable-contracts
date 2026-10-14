@@ -20,6 +20,3 @@ yield_adapter_registry = { workspace = true }
 cusd_manager = { workspace = true }
 pretty_assertions = { workspace = true }
 soroban-sdk = { workspace = true, features = ["testutils"] }
-
-[features]
-use_mocks = []

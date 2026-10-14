@@ -453,3 +453,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Blend Capital](https://www.blend.capital/) for yield protocol integration
 - The Breadchain Cooperative community for cooperative stablecoin vision
 - Bread Token project for inspiration on yield-bearing stablecoins
+
+
+alexander.wu@stellar.org
+paulwong@stellar.org

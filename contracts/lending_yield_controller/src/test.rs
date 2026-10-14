@@ -125,8 +125,8 @@ impl TestFixture {
 
     fn assert_event_with_tuple_data(&self, expected_event: (Symbol, Address), expected_data: (Address, i128)) {
         let events = self.env.events().all();
-        if !events.is_empty() {
-            let published_event = vec![&self.env, events.last_unchecked()];
+        if !events.events().is_empty() {
+            let published_event = events.filter_by_contract(&self.controller.address);
             let expected = vec![
                 &self.env,
                 (
@@ -141,8 +141,8 @@ impl TestFixture {
 
     fn assert_event_with_address_data(&self, expected_event: (Symbol,), expected_data: Address) {
         let events = self.env.events().all();
-        if !events.is_empty() {
-            let published_event = vec![&self.env, events.last_unchecked()];
+        if !events.events().is_empty() {
+            let published_event = events.filter_by_contract(&self.controller.address);
             let expected = vec![
                 &self.env,
                 (
@@ -847,4 +847,20 @@ fn test_claim_yield_returns_zero_when_no_yield() {
     // claim_yield should return 0 when there's no yield
     // Note: This will fail without a proper mock adapter that returns 0 yield
     // The test documents expected behavior
+}
+#[test]
+fn test_only_admin_paths_extend_instance_ttl() {
+    use soroban_sdk::testutils::storage::Instance;
+    use crate::storage_types::INSTANCE_BUMP_AMOUNT;
+
+    let fixture = TestFixture::create();
+    let ttl = || fixture.env.as_contract(&fixture.controller.address, || fixture.env.storage().instance().get_ttl());
+
+    let initial = ttl();
+    assert!(initial < INSTANCE_BUMP_AMOUNT);
+    fixture.controller.get_adapter_registry(); // the read every deposit and withdrawal starts with
+    assert_eq!(ttl(), initial);
+
+    fixture.controller.set_yield_distributor(&Address::generate(&fixture.env)); // admin path
+    assert_eq!(ttl(), INSTANCE_BUMP_AMOUNT);
 }
