@@ -154,13 +154,15 @@ Expected: `get_balance` equals the pre-flight position plus accrual; `get_yield`
 deploy (stroops, never anything near the position); `code_rent.py` shows the five new hashes, each
 `liveUntil` about 2,073,600 ledgers ahead, and a total near 74 XLM per 120 days.
 
-A member path pays no rent. Simulate a mint from any wallet holding USDC and a cUSD trustline; the resource fee
-must be a warm one (hundreds of thousands of stroops, not hundreds of millions):
+A member path pays no rent. Simulate a mint from any address holding USDC and a cUSD trustline; simulation
+needs no secret key, so a public address works (the distributor's member list has one). The resource fee must
+be a warm one (hundreds of thousands of stroops, not hundreds of millions; 292,439 on 2026-10-14):
 
 ```bash
-stellar contract invoke --source <member-identity> --network mainnet --id $C --build-only -- deposit_collateral \
-  --protocol BC_LA --user <member G address> --asset $USDC --amount 10000000 \
-  | stellar tx simulate --network mainnet --source-account <member-identity> \
+M=GAPRPZYCIV3QPMCTWSRDNY64EJMZNCJFUCTJHQDQNW6RJ66TEVEH5UDU   # get_distribution_info .members
+stellar contract invoke --source $M --network mainnet --id $C --build-only -- deposit_collateral \
+  --protocol BC_LA --user $M --asset $USDC --amount 10000000 \
+  | stellar tx simulate --network mainnet --source-account $M \
   | stellar xdr decode --type TransactionEnvelope --output json | jq '.tx.tx.ext.v1.resource_fee'
 ```
 
