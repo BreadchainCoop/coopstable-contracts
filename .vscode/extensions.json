@@ -1,7 +1,5 @@
 {
     "recommendations": [
-        "myml.vscode-markdown-plantuml-preview",
-        "esbenp.prettier-vscode",
-        "jebbs.plantuml"
+        "rust-lang.rust-analyzer"
     ]
 }

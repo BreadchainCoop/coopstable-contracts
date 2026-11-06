@@ -18,7 +18,3 @@ docs/gas-analysis/
 docs/migration/
 docs/upgradeability.md
 docs/tasks-completed-for-migration.md
-branch_structure.json
-temp_auto_push.bat
-temp_interactive_push.bat
-.gitignore
