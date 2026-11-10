@@ -1232,6 +1232,10 @@ add-member:
 		printf "$(RED)Error: Yield Distributor ID not set.$(NC)\n"; \
 		exit 1; \
 	fi
+	@# A member that cannot receive cUSD (no trustline) makes every distribution fail: simulate a transfer first.
+	@out=$$(stellar contract invoke --send=no --source $(OWNER) --network $(NETWORK) --id $(CUSD_ID) \
+		-- transfer --from $(OWNER) --to $(MEMBER) --amount 1 2>&1) \
+		|| { printf "%s\n$(RED)Error: $(MEMBER) cannot receive cUSD (trustline missing?). Not added.$(NC)\n" "$$out"; exit 1; }
 	stellar contract invoke \
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
@@ -1245,7 +1249,7 @@ add-member:
 # distributor
 .PHONY: remove-member
 remove-member:
-	@printf "$(YELLOW)Adding $(MEMBER) as community member for yield distribution...$(NC)\n"
+	@printf "$(YELLOW)Removing $(MEMBER) from yield distribution...$(NC)\n"
 	@if [ -z "$(YIELD_DISTRIBUTOR_ID)" ]; then \
 		printf "$(RED)Error: Yield Distributor ID not set.$(NC)\n"; \
 		exit 1; \
@@ -1258,7 +1262,7 @@ remove-member:
 		-- \
 		remove_member \
 		--member $(MEMBER)
-	@printf "$(GREEN)$(MEMBER) added as community member!$(NC)\n"
+	@printf "$(GREEN)$(MEMBER) removed from yield distribution!$(NC)\n"
 
 .PHONY: add-all-members
 add-all-members:
