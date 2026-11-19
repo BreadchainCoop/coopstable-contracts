@@ -155,6 +155,8 @@ fn test_issue_cusd_unauthorized() {
     fixture.cusd_manager.issue_cusd(&fixture.user1, &amount);
 }
 
+// Note: the cUSD asset contract rejects a negative amount with the same code (#8), so this test and
+// test_burn_cusd_negative_amount pass with or without the manager's own check. The check is defence in depth.
 #[test]
 #[should_panic(expected = "Error(Contract, #8)")]
 fn test_issue_cusd_negative_amount() {
@@ -521,3 +523,54 @@ fn test_mint_and_burn_do_not_extend_ttl_but_admin_does() {
     fixture.cusd_manager.set_yield_controller(&fixture.yield_controller); // admin path
     assert_eq!(ttls(), (INSTANCE_BUMP_AMOUNT, PERSISTENT_BUMP_AMOUNT));
 }
+
+// L-05: only the yield controller may burn through the manager. A holder signing alone is refused.
+#[test]
+fn test_burn_cusd_requires_the_yield_controller() {
+    use soroban_sdk::testutils::{MockAuth, MockAuthInvoke};
+    let fixture = TestFixture::create();
+    let amount = 100_0000000i128;
+    fixture.issue_tokens_to_user(&fixture.user1, amount);
+
+    // The holder's signature covers the token burn, which is the only place it is asked for.
+    let burn = MockAuthInvoke {
+        contract: &fixture.cusd_token_id,
+        fn_name: "burn",
+        args: (fixture.user1.clone(), amount).into_val(&fixture.env),
+        sub_invokes: &[],
+    };
+    let call = MockAuthInvoke {
+        contract: &fixture.cusd_manager.address,
+        fn_name: "burn_cusd",
+        args: (fixture.user1.clone(), amount).into_val(&fixture.env),
+        sub_invokes: &[],
+    };
+    fixture.env.mock_auths(&[MockAuth { address: &fixture.user1, invoke: &burn }]);
+    assert!(fixture.cusd_manager.try_burn_cusd(&fixture.user1, &amount).is_err());
+    assert_eq!(fixture.token_client().balance(&fixture.user1), amount);
+    assert_eq!(fixture.cusd_manager.cusd_total_supply(), amount);
+
+    fixture.env.mock_auths(&[
+        MockAuth { address: &fixture.yield_controller, invoke: &call },
+        MockAuth { address: &fixture.user1, invoke: &burn },
+    ]);
+    fixture.cusd_manager.burn_cusd(&fixture.user1, &amount);
+    assert_eq!(fixture.cusd_manager.cusd_total_supply(), 0);
+}
+
+// L-06: an upgrade is announced with the new wasm hash.
+#[test]
+fn test_upgrade_emits_an_event() {
+    let fixture = TestFixture::create();
+    fixture.env.mock_all_auths();
+    let hash = fixture.env.deployer().upload_contract_wasm(UPGRADE_WASM);
+    fixture.cusd_manager.upgrade(&hash);
+    let id = fixture.cusd_manager.address.clone();
+    assert_eq!(
+        fixture.env.events().all().filter_by_contract(&id),
+        vec![&fixture.env, (id.clone(), (Symbol::new(&fixture.env, "upgrade"),).into_val(&fixture.env), hash.into_val(&fixture.env))]
+    );
+}
+
+/// Any valid wasm will do as the upgrade target: the event is emitted by the code being replaced.
+const UPGRADE_WASM: &[u8] = include_bytes!("../../../packages/blend_capital_adapter/artifacts/pool.wasm");

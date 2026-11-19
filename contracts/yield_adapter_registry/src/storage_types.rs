@@ -34,13 +34,6 @@ impl YieldAdapterRegistryMap {
         self.registry_map.contains_key(key)
     }
 
-    pub fn contains_value(&self, value: Address) -> bool {
-        self.registry_map
-            .keys()
-            .iter()
-            .any(|key| self.registry_map.get(key) == Some(value.clone()))
-    }
-
     pub fn set_adapter(&mut self, key: Symbol, value: Address) {
         self.registry_map.set(key, value);
     }
@@ -49,8 +42,10 @@ impl YieldAdapterRegistryMap {
         self.registry_map.get(key.clone()).unwrap()
     }
 
+    /// Removes the adapter and its allowlist, so a later adapter under the same symbol starts with none.
     pub fn remove(&mut self, key: Symbol) {
-        self.registry_map.remove(key);
+        self.registry_map.remove(key.clone());
+        self.supported_assets.remove(key);
     }
 
     pub fn support_asset(&mut self, key: Symbol, asset: Address) {

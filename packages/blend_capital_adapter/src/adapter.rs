@@ -27,8 +27,11 @@ pub fn supply_collateral(
     let request = create_request(RequestType::SupplyCollateral, asset.clone(), amount);
     let request_vec: Vec<Request> = vec![e, request];
 
-    pool_client.submit( 
-        &yield_controller.clone(), 
+    // The returned positions are deliberately not used. The pool can move a different amount than
+    // requested (it clamps an oversized withdrawal), so the controller measures token balances around
+    // this call and reverts on any difference.
+    let _ = pool_client.submit(
+        &yield_controller.clone(),
         &user,
         &yield_controller.clone(),
         &request_vec,
@@ -70,8 +73,9 @@ pub fn withdraw_collateral(
     let yield_controller = storage::get_yield_controller(e);
     let request_vec: Vec<Request> = vec![e, request];
     
-    pool_client.submit(
-        &yield_controller.clone(), 
+    // Result not used: see `supply_collateral`.
+    let _ = pool_client.submit(
+        &yield_controller.clone(),
         &yield_controller.clone(),
         &user,
         &request_vec,
@@ -202,28 +206,10 @@ pub fn claim_auth(e: &Env, from: Address, to: Address, asset: Address) -> Option
     None
 }
 
+/// Yield is whatever the position is worth above what is owed. A negative amount owed counts as zero, so
+/// interest left after a full exit stays claimable.
 pub fn read_yield(e: &Env, user: Address, asset: Address) -> i128 {
-    // Note: user parameter is kept for interface compatibility but will always be yield_controller
-    let current_value = get_balance(e, user.clone(), asset.clone());
-    
-    if let Some(epoch_data) = storage::get_asset_epoch_principal(e, &asset) {
-        // Calculate effective principal including withdrawals and deposits within epoch
-        // Principal + deposits_in_epoch - withdrawals = total amount that should not count as yield
-        let effective_principal = epoch_data.principal + epoch_data.deposits_in_epoch - epoch_data.withdrawals;
-        
-        if effective_principal <= 0 || current_value <= effective_principal {
-            return 0;
-        }
-        
-        current_value - effective_principal
-    } else {
-        // Fallback to original deposit method for first epoch
-        let original_deposit = storage::get_deposit_amount(e, &user, &asset);
-        if original_deposit == 0 || current_value <= original_deposit {
-            return 0;
-        }
-        current_value - original_deposit
-    }
+    (get_balance(e, user, asset.clone()) - storage::read_principal(e, &asset).max(0)).max(0)
 }
 
 pub fn get_apy(e: &Env, asset: Address) -> u32 {

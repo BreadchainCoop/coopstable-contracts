@@ -151,6 +151,7 @@ impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
 
     fn set_yield_adapter_admin(e: &Env, new_admin: Address) {
         require_owner(e);
+        storage::write_admin(e, new_admin.clone());
         YieldAdapterRegistryEvents::set_admin(&e, new_admin);
     }
 
@@ -161,6 +162,13 @@ impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
         adapter_address: Address,
     ) {
         require_admin(e);
+        // One adapter per protocol and one protocol per adapter. Replacing an adapter means `remove_adapter`
+        // first, which also clears the allowlist the old one had.
+        if storage::verify_if_yield_adapter_exists(e, yield_type.clone(), protocol.clone())
+            || storage::get_yield_adapters(e, yield_type.clone()).contains(&adapter_address)
+        {
+            panic_with_error!(e, YieldAdapterRegistryError::AdapterAlreadyRegistered);
+        }
         storage::register_yield_adapter(
             e,
             yield_type.clone(),
@@ -240,6 +248,7 @@ impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
 
     fn upgrade(e: &Env, new_wasm_hash: BytesN<32>) {
         require_owner(e);
-        e.deployer().update_current_contract_wasm(new_wasm_hash);
+        e.deployer().update_current_contract_wasm(new_wasm_hash.clone());
+        YieldAdapterRegistryEvents::upgrade(e, new_wasm_hash);
     }
 }

@@ -66,8 +66,40 @@ pub fn set_pending_harvest(e: &Env, harvest: &PendingHarvest) {
 
 pub fn remove_pending_harvest(e: &Env, protocol: &Symbol, asset: &Address) {
     e.storage().instance().remove(&DataKey::PendingHarvest(protocol.clone(), asset.clone()));
+    e.storage().instance().remove(&DataKey::HarvestAdapter(protocol.clone(), asset.clone()));
+}
+
+pub fn set_harvest_adapter(e: &Env, protocol: &Symbol, asset: &Address, adapter: &Address) {
+    e.storage().instance().set(&DataKey::HarvestAdapter(protocol.clone(), asset.clone()), adapter);
+}
+
+pub fn get_harvest_adapter(e: &Env, protocol: &Symbol, asset: &Address) -> Option<Address> {
+    e.storage().instance().get(&DataKey::HarvestAdapter(protocol.clone(), asset.clone()))
 }
 
 pub fn has_pending_harvest(e: &Env, protocol: &Symbol, asset: &Address) -> bool {
     e.storage().instance().has(&DataKey::PendingHarvest(protocol.clone(), asset.clone()))
+}
+
+
+pub fn read_paused(e: &Env) -> (bool, bool) {
+    e.storage().instance().get(&DataKey::Paused).unwrap_or((false, false))
+}
+
+pub fn write_paused(e: &Env, paused: (bool, bool)) {
+    e.storage().instance().set(&DataKey::Paused, &paused);
+}
+
+pub fn read_held_harvest(e: &Env, asset: &Address) -> i128 {
+    e.storage().instance().get(&DataKey::HeldHarvest(asset.clone())).unwrap_or(0)
+}
+
+pub fn add_held_harvest(e: &Env, asset: &Address, amount: i128) {
+    let key = DataKey::HeldHarvest(asset.clone());
+    let held = read_held_harvest(e, asset) + amount;
+    if held > 0 {
+        e.storage().instance().set(&key, &held);
+    } else {
+        e.storage().instance().remove(&key);
+    }
 }

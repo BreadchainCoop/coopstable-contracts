@@ -1,4 +1,14 @@
-use soroban_sdk::{contracttype, Address};
+use soroban_sdk::{contracterror, contracttype, Address};
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum AdapterError {
+    /// Deposit of an asset this adapter is not bound to
+    UnsupportedAsset = 1300,
+    /// The adapter is already bound to an asset
+    AssetAlreadyBound = 1301,
+}
 
 #[derive(Clone)]
 #[repr(u32)]

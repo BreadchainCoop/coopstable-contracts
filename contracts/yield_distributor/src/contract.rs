@@ -189,6 +189,9 @@ impl YieldDistributorTrait for YieldDistributor {
         owner: Address,
         admin: Address,
     ) {
+        if treasury_share_bps > 10000 {
+            panic_with_error!(&e, YieldDistributorError::InvalidConfig);
+        }
         storage::write_admin(&e, admin);
         storage::write_owner(&e, owner);
         storage::set_treasury(&e, &treasury);
@@ -279,6 +282,10 @@ impl YieldDistributorTrait for YieldDistributor {
 
     fn set_distribution_period(e: &Env, period: u64) {
         require_admin(e);
+        if period == 0 {
+            // A period of 0 would make a distribution available on every call.
+            panic_with_error!(e, YieldDistributorError::InvalidConfig);
+        }
         storage::set_distribution_period(e, period);
         YieldDistributorEvents::set_distribution_period(e, period);
     }
@@ -312,15 +319,16 @@ impl YieldDistributorTrait for YieldDistributor {
         let treasury_share_bps = storage::get_treasury_share_bps(e);
         let treasury = storage::get_treasury(e);
 
-        let mut treasury_amount = (amount as i128 * treasury_share_bps as i128) / 10000;
-        let members_amount = amount - treasury_amount;
-        
-        let per_member_amount = if distribution.members.len() > 0 {
-            members_amount / distribution.members.len() as i128
+        // Members split what is left after the treasury share, rounded down. The treasury takes its share
+        // plus the remainder (everything if there are no members), so nothing stays in the distributor.
+        let member_count = distribution.members.len() as i128;
+        let per_member_amount = if member_count > 0 {
+            (amount - (amount * treasury_share_bps as i128) / 10000) / member_count
         } else {
-            treasury_amount = amount; // if no members then it all goes to the treasury
             0
         };
+        let members_amount = per_member_amount * member_count;
+        let treasury_amount = amount - members_amount;
 
         let token_client = TokenClient::new(e, &token);
         if per_member_amount > 0 {
@@ -406,6 +414,7 @@ impl YieldDistributorTrait for YieldDistributor {
 
     fn upgrade(e: &Env, new_wasm_hash: BytesN<32>) {
         require_owner(e);
-        e.deployer().update_current_contract_wasm(new_wasm_hash);
+        e.deployer().update_current_contract_wasm(new_wasm_hash.clone());
+        YieldDistributorEvents::upgrade(e, new_wasm_hash);
     }
 }

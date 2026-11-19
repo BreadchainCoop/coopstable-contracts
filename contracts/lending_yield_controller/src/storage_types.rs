@@ -39,4 +39,10 @@ pub enum DataKey {
     YieldDistributor,
     /// Pending harvest for a specific protocol/asset pair
     PendingHarvest(Symbol, Address),
+    /// (mint paused, redeem paused)
+    Paused,
+    /// Amount of an asset the controller holds between harvest stage 1 and stage 2
+    HeldHarvest(Address),
+    /// Adapter that took a pending harvest out of the pool; the harvest goes back through the same one
+    HarvestAdapter(Symbol, Address),
 }
