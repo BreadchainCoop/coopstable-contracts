@@ -1,0 +1,17 @@
+[package]
+name = "coopstable-invariants"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Standalone on purpose: the contracts are loaded as wasm, not linked.
+[workspace]
+
+[dependencies]
+soroban-sdk = { version = "=26.1.1", features = ["testutils"] }
+proptest = { version = "1", default-features = false, features = ["std"] }
+
+[profile.release]
+opt-level = 3
+overflow-checks = true
+debug = 0
