@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env, Symbol, Vec};
+use soroban_sdk::{Address, BytesN, Env, Symbol, Vec};
 
 pub struct YieldDistributorEvents {}
 
@@ -56,5 +56,10 @@ impl YieldDistributorEvents {
             topics,
             (total_amount, treasury_amount, members, per_member_amount),
         );
+    }
+
+    pub fn upgrade(e: &Env, new_wasm_hash: BytesN<32>) {
+        let topics = (Symbol::new(e, "upgrade"),);
+        e.events().publish(topics, new_wasm_hash);
     }
 }
