@@ -216,9 +216,9 @@ fn stage(name: &str) -> Cfg {
     match name {
         "s0" => Cfg { name: "s0", prefix_controller: true, ..base },
         "s1" => base,
-        "s2" => Cfg { name: "s2", cancel: Cancel::RecompoundedOnly, ..base },
-        "s3" => Cfg { name: "s3", cancel: Cancel::Any, ..base },
-        "s4" => Cfg { name: "s4", cancel: Cancel::RecompoundedOnly, loss: true, exit_check: false, ..base },
+        "s2" => Cfg { name: "s2", cancel: Cancel::RecompoundedOnly, cases: 3000, ..base },
+        "s3" => Cfg { name: "s3", cancel: Cancel::Any, cases: 3000, ..base },
+        "s4" => Cfg { name: "s4", cancel: Cancel::RecompoundedOnly, loss: true, exit_check: false, cases: 3000, ..base },
         "s4b" => Cfg { name: "s4b", loss: true, harvest: false, cap_withdraw: true, exit_check: false, ..base },
         "s5" => Cfg { name: "s5", cases: 50_000, ..base },
         _ => panic!("unknown stage {name}"),
@@ -267,6 +267,8 @@ enum Act {
     Rescue(Amt),
     /// Owner withdrawal from the pool position: (of USDC?). USDC is backing, so it must be refused.
     RescueCollateral(bool),
+    /// The registry admin adds (true) or removes (false) USDC from the allowlist.
+    Support(bool),
 }
 
 fn amt() -> impl Strategy<Value = Amt> {
@@ -297,6 +299,7 @@ fn act(cfg: &Cfg) -> impl Strategy<Value = Act> {
         v.push((2, (any::<bool>(), any::<bool>()).prop_map(|(m, r)| Act::Unpause(m, r)).boxed()));
         v.push((1, amt().prop_map(Act::Rescue).boxed()));
         v.push((1, any::<bool>().prop_map(Act::RescueCollateral).boxed()));
+        v.push((2, prop_oneof![1 => Just(false), 2 => Just(true)].prop_map(Act::Support).boxed()));
     }
     if cfg.harvest {
         v.push((4, any::<bool>().prop_map(Act::Cycle).boxed()));
@@ -377,6 +380,8 @@ struct Snap {
     blnd_treasury: i128,
     /// (mint paused, redeem paused)
     paused: (bool, bool),
+    /// USDC is on the registry allowlist.
+    supported: bool,
 }
 
 impl Snap {
@@ -401,6 +406,7 @@ struct W {
     ctl: controller::Client<'static>,
     adp: adapter::Client<'static>,
     mgr: manager::Client<'static>,
+    reg: registry::Client<'static>,
     dist: distributor::Client<'static>,
     pool: pool::MockPoolClient<'static>,
     usdc: TokenClient<'static>,
@@ -411,6 +417,8 @@ struct W {
     holders: Vec<Address>,
     usdc_minted: i128,
     ops: i128,
+    /// USDC put in through `recollateralize`: owed to nobody, booked as owed.
+    topups: i128,
     rmax: i128,
     had_loss: bool,
     exiting: bool,
@@ -511,6 +519,7 @@ impl W {
             ctl: controller::Client::new(&env, &ctl_id),
             adp: adapter::Client::new(&env, &adp_id),
             mgr,
+            reg,
             dist,
             pool: pool::MockPoolClient::new(&env, &pool_id),
             usdc: TokenClient::new(&env, &usdc_id),
@@ -521,13 +530,14 @@ impl W {
             holders,
             usdc_minted: 30_000 * UNIT,
             ops: 0,
+            topups: 0,
             rmax: S12,
             had_loss: false,
             exiting: false,
             ever_member: [false; 3],
             snap: Snap {
                 p: 0, s: 0, y: 0, btok: 0, rate: S12, usdc: vec![], cusd: vec![], pending: None, avail: false,
-                epoch: 0, active: [false; 3], blnd_treasury: 0, paused: (false, false),
+                epoch: 0, active: [false; 3], blnd_treasury: 0, paused: (false, false), supported: true,
             },
             log: vec![],
             env,
@@ -561,6 +571,7 @@ impl W {
             active,
             blnd_treasury: self.blnd.balance(&self.holders[TREASURY]),
             paused: if self.cfg.prefix_controller { (false, false) } else { self.ctl.get_paused() },
+            supported: self.reg.is_supported_asset(&Symbol::new(&self.env, "LEND"), &p, &self.usdc.address),
         }
     }
 
@@ -607,6 +618,7 @@ impl W {
         let res: Result<i128, u32>;
         let mut step_ops = 0i128;
         let mut is_loss = false;
+        let mut topup = 0i128;
         // (requested, paid out) for withdrawals; requested for deposits
         let mut dep: Option<i128> = None;
         let mut wd: Option<(i128, i128)> = None;
@@ -630,6 +642,8 @@ impl W {
                     Err(1006)
                 } else if amount <= 0 {
                     Err(8)
+                } else if !pre.supported {
+                    Err(1000)
                 } else if mint == 0 {
                     Err(1216)
                 } else if amount > pre.usdc[u] {
@@ -664,6 +678,8 @@ impl W {
                     Err(1007)
                 } else if amount <= 0 {
                     Err(8)
+                } else if !pre.supported {
+                    Err(1000)
                 } else if burn == 0 {
                     Err(1217)
                 } else if out != amount {
@@ -728,8 +744,13 @@ impl W {
             }
             Act::Harvest => {
                 kind = "harvest";
-                if pre.pending.is_some() {
+                if pre.paused.0 {
+                    // The mint pause stops the yield cycle from starting.
+                    exp = Err(1006);
+                } else if pre.pending.is_some() {
                     exp = Err(1003);
+                } else if !pre.supported {
+                    exp = Err(1000);
                 } else if pre.y >= MIN_HARVEST {
                     want.btok -= (pre.y * S12 + rate - 1) / rate;
                     want.usdc[POOL] -= pre.y;
@@ -750,6 +771,7 @@ impl W {
             Act::Recompound => {
                 kind = "recompound";
                 exp = match pre.pending {
+                    _ if !pre.supported => Err(1000),
                     None => Err(1002),
                     Some((_, false)) => Err(1004),
                     Some((amount, true)) => {
@@ -773,8 +795,12 @@ impl W {
             }
             Act::Finalize => {
                 kind = "finalize";
-                exp = if !pre.avail {
+                exp = if pre.paused.0 {
+                    Err(1006)
+                } else if !pre.avail {
                     Err(1001)
+                } else if !pre.supported {
+                    Err(1000)
                 } else {
                     match pre.pending {
                         None => Err(1002),
@@ -832,8 +858,12 @@ impl W {
             }
             Act::Claim => {
                 kind = "claim";
-                want.blnd_treasury += 100;
-                exp = Ok(());
+                exp = if pre.supported {
+                    want.blnd_treasury += 100;
+                    Ok(())
+                } else {
+                    Err(1000)
+                };
                 res = oc(self.ctl.try_claim_emissions(&proto, &usdc));
             }
             Act::AddMember(i) => {
@@ -870,6 +900,8 @@ impl W {
                 // Not a mint, so the mint pause does not apply.
                 exp = if amount <= 0 {
                     Err(8)
+                } else if !pre.supported {
+                    Err(1000)
                 } else if mint == 0 {
                     Err(1216)
                 } else if amount > pre.usdc[u] {
@@ -879,6 +911,7 @@ impl W {
                     want.usdc[POOL] += amount;
                     want.btok += mint;
                     step_ops = 1;
+                    topup = amount;
                     Ok(())
                 };
                 res = oc(self.ctl.try_recollateralize(&proto, &usdc, &self.holders[u], &amount)).map(|_| 0);
@@ -915,6 +948,17 @@ impl W {
                 let (asset, code) = if *of_usdc { (usdc.clone(), 1008) } else { (self.other.clone(), 1217) };
                 exp = Err(code);
                 res = oc(self.ctl.try_rescue_collateral(&proto, &asset, &self.holders[TREASURY], &UNIT)).map(|_| 0);
+            }
+            Act::Support(on) => {
+                kind = if *on { "support-on" } else { "support-off" };
+                let lend = Symbol::new(&self.env, "LEND");
+                want.supported = *on;
+                exp = Ok(());
+                res = if *on {
+                    oc(self.reg.try_add_support_for_asset(&lend, &proto, &usdc)).map(|_| 0)
+                } else {
+                    oc(self.reg.try_remove_support_for_asset(&lend, &proto, &usdc)).map(|_| 0)
+                };
             }
             Act::Cycle(_) => unreachable!(),
         }
@@ -956,6 +1000,7 @@ impl W {
             want.y = post.y;
             want.avail = post.avail;
             self.ops += step_ops;
+            self.topups += topup;
         }
         if post != want {
             self.fail("P0", format!("{desc}: state differs from prediction\n   want {want:?}\n   got  {post:?}"))?;
@@ -976,6 +1021,21 @@ impl W {
                 if out > amount || out < amount - tau {
                     self.fail("P3", format!("withdrawal burned {amount} cUSD and paid {out} USDC (tolerance {tau})"))?;
                 }
+            }
+        }
+        // P8: the adapter's books. What it records as owed, plus a harvest in transit, is exactly cUSD
+        // supply plus what was topped up. Nothing is written off and nothing is counted twice.
+        if !self.cfg.prefix_controller {
+            let owed = self.adp.get_principal(&usdc);
+            let in_transit = match post.pending {
+                Some((amount, true)) => amount,
+                _ => 0,
+            };
+            if owed + in_transit != post.s + self.topups {
+                self.fail(
+                    "P8",
+                    format!("owed {owed} + in transit {in_transit} != supply {} + top-ups {}", post.s, self.topups),
+                )?;
             }
         }
         // P4: supply adds up.
@@ -1033,6 +1093,7 @@ impl W {
         self.log.push("-- exit: every holder redeems everything".into());
         if !self.cfg.prefix_controller {
             self.step(&Act::Unpause(true, true))?;
+            self.step(&Act::Support(true))?;
         }
         self.exiting = true;
         for w in order {
@@ -1197,7 +1258,7 @@ fn main() {
         let mut need_ok = vec!["deposit", "withdraw", "interest", "time", "claim", "add-member", "remove-member"];
         let mut need_err = vec!["deposit-other", "withdraw-other"];
         if !cfg.prefix_controller {
-            need_ok.extend(["recollateralize", "pause", "unpause"]);
+            need_ok.extend(["recollateralize", "pause", "unpause", "support-on", "support-off"]);
             need_err.extend(["rescue", "rescue-collateral"]);
         }
         if cfg.harvest {

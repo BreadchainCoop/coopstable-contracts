@@ -1,7 +1,7 @@
 # Backing invariant property test
 
 Random sequences of deposits, withdrawals, interest, pool losses, harvest stages, cancels, pauses, top-ups,
-rescues and time jumps, with "cUSD is backed" checked after every step. Every outcome is predicted from
+rescues, allowlist changes and time jumps, with "cUSD is backed" checked after every step. Every outcome is predicted from
 public state first, so an unexpected success or error code is a failure too.
 
 The five CoopStable contracts run as wasm, read from disk when the test starts. Only the Blend pool is a mock
@@ -15,7 +15,7 @@ make invariants INVARIANT_STAGES="s3 s4" CASES=3000
 
 # or by hand, after `stellar contract build`
 cd invariants
-cargo run --release -- s1          # 2,000 cases, about 5 minutes
+cargo run --release -- s1          # 2,000 cases, about 5 minutes (s2, s3, s4: 3,000 cases)
 cargo run --release -- dust        # scripted case for L-09
 cargo run --release -- absorb      # scripted case for I-06
 ```
@@ -27,7 +27,7 @@ which is ignored by git.
 | Stage | What it adds | Expected |
 |---|---|---|
 | `s0` | Pre-fix controller wasm (mainnet until 2026-11-19) | Fail at P0 |
-| `s1` | Deposits, withdrawals, interest, harvest stages, members, emissions, pauses, top-ups, rescues | Pass |
+| `s1` | Deposits, withdrawals, interest, harvest stages, members, emissions, pauses, top-ups, rescues, allowlist changes | Pass |
 | `s2` | + `cancel_harvest` in state `Recompounded` only | Pass |
 | `s3` | + `cancel_harvest` in any state | Pass |
 | `s4` | `s2` + pool losses | Pass |
@@ -50,6 +50,7 @@ A pass only counts if the report ends with `coverage: every action reached its m
 | P5 | Reported yield is real surplus |
 | P6 | The controller holds USDC only while a harvest is between stage 1 and stage 2 |
 | P7 | Everyone can leave: all cUSD redeems, up to rounding |
+| P8 | The adapter's amount owed, plus a harvest in transit, equals cUSD supply plus top-ups, exactly |
 | X1 | USDC is conserved and the mock pool can pay the position |
 
 ## Environment
@@ -67,6 +68,8 @@ Every run prints the sha256 of each wasm it loaded and whether it equals a deplo
 ## Limits
 
 - The pool is a mock. It has no borrowers, utilisation limit, pool status, supply cap or emission accrual.
+- One adapter throughout: removing or swapping the adapter mid-harvest is covered by
+  `a_pending_harvest_survives_adapter_removal_and_swap` in the controller's end-to-end tests instead.
 - Every call is authorized (`mock_all_auths_allowing_non_root_auth`). This tests accounting, not access
   control; `contracts/lending_yield_controller/src/test_e2e.rs` covers who may call what.
 - The client types are generated at compile time from the wasm in `target/`. If a contract's interface
