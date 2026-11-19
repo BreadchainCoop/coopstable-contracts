@@ -142,7 +142,7 @@ pub trait LendingYieldControllerTrait {
     /// (Admin only) Stage 1: Harvest yield from the lending protocol
     /// Withdraws accumulated yield from the protocol and stores it for later processing.
     ///
-    /// Returns the amount of yield harvested
+    /// Returns the amount of yield harvested. A yield below the minimum harvest (1,000 stroops) counts as none.
     ///
     /// ### Arguments
     /// * `protocol` - The symbol identifier of the lending protocol
@@ -172,7 +172,7 @@ pub trait LendingYieldControllerTrait {
     /// (Admin only) Stage 3: Finalize distribution of yield to members
     /// Issues cUSD and distributes to treasury and members.
     ///
-    /// Returns the amount distributed
+    /// Returns the amount distributed: the harvested amount, or what is still surplus if that is less
     ///
     /// ### Arguments
     /// * `protocol` - The symbol identifier of the lending protocol
@@ -182,7 +182,7 @@ pub trait LendingYieldControllerTrait {
     /// If caller is not admin
     /// If no pending harvest exists
     /// If harvest is not in correct state (must be recompounded)
-    /// If distribution is not available
+    /// If distribution is not available, or none of the harvested yield is still surplus
     fn finalize_distribution(e: &Env, protocol: Symbol, asset: Address) -> i128;
 
     /// Fetch the pending harvest state for a protocol/asset pair
@@ -194,6 +194,7 @@ pub trait LendingYieldControllerTrait {
 
     /// (Admin only) Cancel a pending harvest operation
     /// Use this to reset state if something goes wrong during multi-stage process.
+    /// Before stage 2 the harvested yield is re-deposited into the protocol first.
     ///
     /// ### Arguments
     /// * `protocol` - The symbol identifier of the lending protocol
@@ -203,7 +204,45 @@ pub trait LendingYieldControllerTrait {
     /// If caller is not admin
     fn cancel_harvest(e: &Env, protocol: Symbol, asset: Address);
 
-    /// Claim emissions rewards from a specific protocol for an asset
+    /// (Admin only) Top up the backing of a supported asset without minting cUSD
+    ///
+    /// Pulls `amount` of `asset` from `from` into the lending protocol. Works while mint is paused.
+    ///
+    /// ### Arguments
+    /// * `protocol` - The symbol identifier of the lending protocol
+    /// * `asset` - The address of the asset; must be supported in the registry
+    /// * `from` - The address that funds the top-up; must authorize it
+    /// * `amount` - The amount to supply
+    ///
+    /// ### Panics
+    /// If the caller is not the admin, `from` does not authorize, or the asset is not supported
+    fn recollateralize(e: &Env, protocol: Symbol, asset: Address, from: Address, amount: i128);
+
+    /// (Owner only) Withdraw a reserve that is NOT a supported asset from the pool position
+    ///
+    /// Burns no cUSD. It cannot touch the backing, because supported assets are refused.
+    ///
+    /// ### Panics
+    /// If the caller is not the owner, the asset is supported, or the pool pays less than `amount`
+    fn rescue_collateral(e: &Env, protocol: Symbol, asset: Address, to: Address, amount: i128);
+
+    /// (Owner only) Transfer tokens held by the controller itself
+    ///
+    /// ### Panics
+    /// If the caller is not the owner, or a harvest of `asset` is between stage 1 and stage 2
+    fn rescue(e: &Env, asset: Address, to: Address, amount: i128);
+
+    /// (Admin only) Pause deposits (`mint`) and/or withdrawals (`redeem`). A `false` leaves that flag as it is:
+    /// the admin can only switch pauses on.
+    fn pause(e: &Env, mint: bool, redeem: bool);
+
+    /// (Owner only) Clear the pause on deposits (`mint`) and/or withdrawals (`redeem`)
+    fn unpause(e: &Env, mint: bool, redeem: bool);
+
+    /// Fetch the pause flags as (mint paused, redeem paused)
+    fn get_paused(e: &Env) -> (bool, bool);
+
+    /// (Admin only) Claim emissions rewards from a protocol for a supported asset, to the distributor's treasury
     ///
     /// Returns the total amount of emissions claimed
     ///
@@ -302,16 +341,42 @@ impl LendingYieldControllerTrait for LendingYieldController {
     }
 
     fn claim_emissions(e: &Env, protocol: Symbol, asset: Address) -> i128 {
-        let claimed_total = controls::process_claim_emissions(e, &protocol, asset.clone());
+        require_admin(e);
+        controls::process_claim_emissions(e, &protocol, asset)
+    }
 
-        LendingYieldControllerEvents::claim_emissions(
-            &e,
-            e.current_contract_address(),
-            asset,
-            claimed_total,
-        );
+    fn recollateralize(e: &Env, protocol: Symbol, asset: Address, from: Address, amount: i128) {
+        require_admin(e);
+        from.require_auth();
+        controls::process_recollateralize(e, &protocol, asset, from, amount);
+    }
 
-        claimed_total
+    fn rescue_collateral(e: &Env, protocol: Symbol, asset: Address, to: Address, amount: i128) {
+        require_owner(e);
+        controls::process_rescue_collateral(e, &protocol, asset, to, amount);
+    }
+
+    fn rescue(e: &Env, asset: Address, to: Address, amount: i128) {
+        require_owner(e);
+        controls::process_rescue(e, asset, to, amount);
+    }
+
+    fn pause(e: &Env, mint: bool, redeem: bool) {
+        require_admin(e);
+        let (m, r) = storage::read_paused(e);
+        storage::write_paused(e, (m || mint, r || redeem));
+        LendingYieldControllerEvents::paused(e, m || mint, r || redeem);
+    }
+
+    fn unpause(e: &Env, mint: bool, redeem: bool) {
+        require_owner(e);
+        let (m, r) = storage::read_paused(e);
+        storage::write_paused(e, (m && !mint, r && !redeem));
+        LendingYieldControllerEvents::paused(e, m && !mint, r && !redeem);
+    }
+
+    fn get_paused(e: &Env) -> (bool, bool) {
+        storage::read_paused(e)
     }
 
     fn set_yield_distributor(e: &Env, yield_distributor: Address) {
@@ -356,7 +421,8 @@ impl LendingYieldControllerTrait for LendingYieldController {
 
     fn upgrade(e: &Env, new_wasm_hash: BytesN<32>) {
         require_owner(e);
-        e.deployer().update_current_contract_wasm(new_wasm_hash);
+        e.deployer().update_current_contract_wasm(new_wasm_hash.clone());
+        LendingYieldControllerEvents::upgrade(e, new_wasm_hash);
     }
 
     // =========================================================================

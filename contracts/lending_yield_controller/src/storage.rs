@@ -71,3 +71,26 @@ pub fn remove_pending_harvest(e: &Env, protocol: &Symbol, asset: &Address) {
 pub fn has_pending_harvest(e: &Env, protocol: &Symbol, asset: &Address) -> bool {
     e.storage().instance().has(&DataKey::PendingHarvest(protocol.clone(), asset.clone()))
 }
+
+
+pub fn read_paused(e: &Env) -> (bool, bool) {
+    e.storage().instance().get(&DataKey::Paused).unwrap_or((false, false))
+}
+
+pub fn write_paused(e: &Env, paused: (bool, bool)) {
+    e.storage().instance().set(&DataKey::Paused, &paused);
+}
+
+pub fn read_held_harvest(e: &Env, asset: &Address) -> i128 {
+    e.storage().instance().get(&DataKey::HeldHarvest(asset.clone())).unwrap_or(0)
+}
+
+pub fn add_held_harvest(e: &Env, asset: &Address, amount: i128) {
+    let key = DataKey::HeldHarvest(asset.clone());
+    let held = read_held_harvest(e, asset) + amount;
+    if held > 0 {
+        e.storage().instance().set(&key, &held);
+    } else {
+        e.storage().instance().remove(&key);
+    }
+}

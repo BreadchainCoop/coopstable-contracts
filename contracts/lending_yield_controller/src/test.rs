@@ -796,7 +796,7 @@ fn test_cancel_harvest_no_pending_harvest() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #1100)")]
+#[should_panic(expected = "Error(Contract, #1000)")] // no adapter means no supported asset; the allowlist is checked first
 fn test_harvest_yield_no_adapter() {
     let fixture = TestFixture::create();
 
