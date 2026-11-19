@@ -1629,6 +1629,10 @@ KEEP_ALIVE_LEDGERS ?= 2073600
 KEEP_ALIVE_IDS := $(CUSD_MANAGER_ID) $(YIELD_ADAPTER_REGISTRY_ID) $(YIELD_DISTRIBUTOR_ID) $(LENDING_YIELD_CONTROLLER_ID) $(BLEND_CAPITAL_ADAPTER_ID)
 KEEP_ALIVE_HASHES := $(shell jq -r '.hashes[]' $(NETWORK).contracts.json 2>/dev/null)
 KEEP_ALIVE_ARGS := --source $(ADMIN_KEY) --network $(NETWORK)
+# Distribution records to keep alive, counted back from the current epoch. One transaction each, so not all
+# of history: older records are left to archive (restorable), and `get_distribution_history` fails until
+# every archived record it lists has been restored.
+KEEP_ALIVE_EPOCHS ?= 12
 
 # Usage: make keep-alive [KEEP_ALIVE_LEDGERS=3110400]   (120 days by default, 180 days is the network maximum)
 .PHONY: keep-alive
@@ -1659,9 +1663,10 @@ keep-alive:
 	@FAILED=""; EPOCH=$$(stellar contract invoke $(KEEP_ALIVE_ARGS) --send=no --id $(YIELD_DISTRIBUTOR_ID) -- get_current_epoch | tr -d '"'); \
 	MEMBERS=$$(stellar contract invoke $(KEEP_ALIVE_ARGS) --send=no --id $(YIELD_DISTRIBUTOR_ID) -- list_members | jq -r '.[]'); \
 	KEYS='{"vec":[{"symbol":"Members"}]} {"vec":[{"symbol":"Distributions"}]} {"vec":[{"symbol":"TotalDistributed"}]}'; \
-	for n in $$(seq 0 $$EPOCH); do KEYS="$$KEYS {\"vec\":[{\"symbol\":\"Distribution\"},{\"u64\":$$n}]}"; done; \
+	FIRST=$$((EPOCH - $(KEEP_ALIVE_EPOCHS) + 1)); if [ $$FIRST -lt 0 ]; then FIRST=0; fi; \
+	for n in $$(seq $$FIRST $$EPOCH); do KEYS="$$KEYS {\"vec\":[{\"symbol\":\"Distribution\"},{\"u64\":$$n}]}"; done; \
 	for m in $$MEMBERS; do KEYS="$$KEYS {\"vec\":[{\"symbol\":\"Member\"},{\"address\":\"$$m\"}]}"; done; \
-	printf "$(YELLOW)Extending the distributor's persistent entries (epochs 0..$$EPOCH, members, totals)...$(NC)\n"; \
+	printf "$(YELLOW)Extending the distributor's persistent entries (epochs $$FIRST..$$EPOCH, members, totals)...$(NC)\n"; \
 	for key in $$KEYS; do \
 		xdr=$$(echo "$$key" | stellar xdr encode --type ScVal); \
 		stellar contract extend $(KEEP_ALIVE_ARGS) --id $(YIELD_DISTRIBUTOR_ID) --key-xdr $$xdr --durability persistent --ledgers-to-extend $(KEEP_ALIVE_LEDGERS) \
