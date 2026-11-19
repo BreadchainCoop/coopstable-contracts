@@ -54,10 +54,8 @@ fn write_yield_adapter_registry(e: &Env, registry_map: YieldAdapterRegistryMap) 
 pub fn register_yield_adapter(e: &Env, yield_type: Symbol, protocol: Symbol, adapter_id: Address) {
     let mut registry_map: YieldAdapterRegistryMap =
         read_yield_adapter_registry(e, yield_type.clone());
-    if !registry_map.contains_value(adapter_id.clone()) {
-        registry_map.set_adapter(protocol, adapter_id.clone());
-        write_yield_adapter_registry(e, registry_map);
-    }
+    registry_map.set_adapter(protocol, adapter_id);
+    write_yield_adapter_registry(e, registry_map);
 }
 
 pub fn remove_yield_adapter(e: &Env, yield_type: Symbol, protocol: Symbol) {

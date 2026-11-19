@@ -109,42 +109,74 @@ fn test_constructor() {
     assert!(fixture.verify_adapter_exists(protocol, &adapter_address));
 }
 
-// Test admin role management
+// M-01: the owner replaces the admin; the new admin can act and the old one cannot.
 #[test]
 fn test_set_yield_adapter_admin() {
+    use soroban_sdk::testutils::{MockAuth, MockAuthInvoke};
     let fixture = TestFixture::create();
     let new_admin = Address::generate(&fixture.env);
 
-    // Mock authorization for the admin
     fixture.env.mock_all_auths();
+    fixture.registry.set_yield_adapter_admin(&new_admin);
 
-    // Set new admin
-    fixture
-        .registry
-        .set_yield_adapter_admin(&new_admin);
-
-    // Expected event has topic "set_admin" and data is the new admin address
     let published_event = fixture.env.events().all().filter_by_contract(&fixture.registry.address);
     let expected_event = vec![
         &fixture.env,
         (
             fixture.registry.address.clone(),
             (Symbol::new(&fixture.env, "set_admin"),).into_val(&fixture.env),
-            new_admin.into_val(&fixture.env),
+            new_admin.clone().into_val(&fixture.env),
         ),
     ];
     assert_eq!(published_event, expected_event);
 
-    // New admin should now be able to register adapters
     let (adapter_address, protocol) = fixture.create_adapter();
-    fixture.registry.register_adapter(
-        &SupportedYieldType::Lending.id(),
-        &protocol.id(),
-        &adapter_address,
-    );
+    let args = (SupportedYieldType::Lending.id(), protocol.id(), adapter_address.clone());
+    let sign_as = |who: &Address| {
+        fixture.env.mock_auths(&[MockAuth {
+            address: who,
+            invoke: &MockAuthInvoke {
+                contract: &fixture.registry.address,
+                fn_name: "register_adapter",
+                args: args.clone().into_val(&fixture.env),
+                sub_invokes: &[],
+            },
+        }]);
+        fixture.registry.try_register_adapter(&args.0, &args.1, &args.2)
+    };
 
-    // Verify adapter is registered in storage
+    assert!(sign_as(&fixture.admin).is_err(), "the old admin must be rejected");
+    assert!(sign_as(&new_admin).is_ok(), "the new admin must be accepted");
     assert!(fixture.verify_adapter_exists(protocol, &adapter_address));
+}
+
+// L-03: registering an adapter address twice is an error, not a silent no-op.
+#[test]
+#[should_panic(expected = "Error(Contract, #1101)")]
+fn test_register_adapter_twice_panics() {
+    let fixture = TestFixture::create();
+    fixture.env.mock_all_auths();
+    let (adapter_address, protocol) = fixture.create_adapter();
+    fixture.registry.register_adapter(&SupportedYieldType::Lending.id(), &protocol.id(), &adapter_address);
+    fixture.registry.register_adapter(&SupportedYieldType::Lending.id(), &symbol_short!("OTHER"), &adapter_address);
+}
+
+// L-03: a new adapter under the same symbol does not inherit the old allowlist.
+#[test]
+fn test_remove_adapter_clears_its_allowlist() {
+    let fixture = TestFixture::create();
+    fixture.env.mock_all_auths();
+    let (adapter_address, protocol) = fixture.create_adapter();
+    let asset = fixture.create_asset();
+    let lend = SupportedYieldType::Lending.id();
+
+    fixture.registry.register_adapter(&lend, &protocol.id(), &adapter_address);
+    fixture.registry.add_support_for_asset(&lend, &protocol.id(), &asset);
+    fixture.registry.remove_adapter(&lend, &protocol.id());
+    assert!(!fixture.registry.is_supported_asset(&lend, &protocol.id(), &asset));
+
+    fixture.registry.register_adapter(&lend, &protocol.id(), &Address::generate(&fixture.env));
+    assert!(!fixture.registry.is_supported_asset(&lend, &protocol.id(), &asset));
 }
 
 // Test adapter registration

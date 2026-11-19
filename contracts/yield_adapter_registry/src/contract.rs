@@ -151,6 +151,7 @@ impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
 
     fn set_yield_adapter_admin(e: &Env, new_admin: Address) {
         require_owner(e);
+        storage::write_admin(e, new_admin.clone());
         YieldAdapterRegistryEvents::set_admin(&e, new_admin);
     }
 
@@ -161,6 +162,9 @@ impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
         adapter_address: Address,
     ) {
         require_admin(e);
+        if storage::get_yield_adapters(e, yield_type.clone()).contains(&adapter_address) {
+            panic_with_error!(e, YieldAdapterRegistryError::AdapterAlreadyRegistered);
+        }
         storage::register_yield_adapter(
             e,
             yield_type.clone(),
@@ -240,6 +244,7 @@ impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
 
     fn upgrade(e: &Env, new_wasm_hash: BytesN<32>) {
         require_owner(e);
-        e.deployer().update_current_contract_wasm(new_wasm_hash);
+        e.deployer().update_current_contract_wasm(new_wasm_hash.clone());
+        YieldAdapterRegistryEvents::upgrade(e, new_wasm_hash);
     }
 }
