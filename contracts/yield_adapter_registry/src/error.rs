@@ -15,6 +15,6 @@ pub enum YieldAdapterRegistryError {
 
     // YieldAdapterRegistryError Errors
     InvalidYieldAdapter = 1100,
-    /// The adapter address is already registered under a protocol of this yield type
+    /// The protocol already has an adapter, or the adapter is already registered under another protocol
     AdapterAlreadyRegistered = 1101,
 }

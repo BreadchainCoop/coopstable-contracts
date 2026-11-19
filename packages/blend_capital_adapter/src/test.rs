@@ -396,6 +396,28 @@ fn test_deposit_rejects_any_other_asset() {
     assert!(client.try_deposit(&fixture.user1, &fixture.usdc_token_id, &1).is_err());
 }
 
+// The state of an adapter upgraded from a version without the binding: no asset stored. Deposits fail
+// closed until the owner binds it; withdrawals stay open.
+#[test]
+fn test_deposit_fails_closed_until_an_asset_is_bound() {
+    let fixture = TestFixture::create();
+    let client = fixture.lending_adapter_client();
+    fixture.env.mock_all_auths();
+    client.deposit(&fixture.user1, &fixture.usdc_token_id, &1000_0000000);
+    fixture.env.as_contract(&fixture.adapter.address, || {
+        fixture.env.storage().instance().remove(&crate::constants::ASSET)
+    });
+
+    assert_eq!(
+        client.try_deposit(&fixture.user1, &fixture.usdc_token_id, &1).err().unwrap(),
+        Ok(soroban_sdk::Error::from_contract_error(1300))
+    );
+    client.withdraw(&fixture.user1, &fixture.usdc_token_id, &400_0000000);
+
+    fixture.adapter.set_asset(&fixture.usdc_token_id);
+    client.deposit(&fixture.user1, &fixture.usdc_token_id, &1);
+}
+
 #[test]
 #[should_panic(expected = "Error(Auth, InvalidAction)")]
 fn test_set_asset_unauthorized() {

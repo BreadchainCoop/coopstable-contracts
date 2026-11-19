@@ -161,6 +161,21 @@ fn test_register_adapter_twice_panics() {
     fixture.registry.register_adapter(&SupportedYieldType::Lending.id(), &symbol_short!("OTHER"), &adapter_address);
 }
 
+// L-03: a protocol's adapter cannot be replaced in place, which would keep the old allowlist.
+#[test]
+fn test_register_adapter_over_an_existing_protocol_panics() {
+    let fixture = TestFixture::create();
+    fixture.env.mock_all_auths();
+    let (adapter_address, protocol) = fixture.create_adapter();
+    let lend = SupportedYieldType::Lending.id();
+    fixture.registry.register_adapter(&lend, &protocol.id(), &adapter_address);
+    assert_eq!(
+        fixture.registry.try_register_adapter(&lend, &protocol.id(), &Address::generate(&fixture.env)).err().unwrap(),
+        Ok(soroban_sdk::Error::from_contract_error(1101))
+    );
+    assert_eq!(fixture.registry.get_adapter(&lend, &protocol.id()), adapter_address);
+}
+
 // L-03: a new adapter under the same symbol does not inherit the old allowlist.
 #[test]
 fn test_remove_adapter_clears_its_allowlist() {

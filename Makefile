@@ -38,7 +38,8 @@ CUSD_ADDRESS = $(CUSD_CODE):$(OWNER)
 
 # Default values
 # Opening principal of a newly deployed adapter: what is already owed to cUSD holders for the asset.
-# 0 on a fresh deployment. For a replacement adapter pass the old adapter's `get_principal`.
+# 0 on a fresh deployment. For a replacement adapter pass the old adapter's `get_principal`, read while
+# `get_pending_harvest` is empty: between harvest stage 1 and stage 2 it is short by the harvested amount.
 ADAPTER_PRINCIPAL ?= 0
 TREASURY_SHARE_BPS ?= 1000
 # DISTRIBUTION_PERIOD ?= 60
@@ -1674,7 +1675,8 @@ keep-alive:
 # An adapter deployed before Bundle 2 has no upgrade entrypoint: replace it with deploy-blend-adapter-full.
 # After upgrading an adapter that predates the asset binding, run `make set-adapter-asset`.
 # Afterwards copy the printed hashes into $(NETWORK).contracts.json.
-UPGRADEABLE := cusd_manager:CUSD_MANAGER_ID yield_adapter_registry:YIELD_ADAPTER_REGISTRY_ID yield_distributor:YIELD_DISTRIBUTOR_ID lending_yield_controller:LENDING_YIELD_CONTROLLER_ID blend_capital_adapter:BLEND_CAPITAL_ADAPTER_ID
+# The adapter goes before the controller: the new controller calls `get_principal`, which the old adapter lacks.
+UPGRADEABLE := cusd_manager:CUSD_MANAGER_ID yield_adapter_registry:YIELD_ADAPTER_REGISTRY_ID yield_distributor:YIELD_DISTRIBUTOR_ID blend_capital_adapter:BLEND_CAPITAL_ADAPTER_ID lending_yield_controller:LENDING_YIELD_CONTROLLER_ID
 
 .PHONY: upgrade-all
 upgrade-all: check-build

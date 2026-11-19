@@ -162,7 +162,11 @@ impl YieldAdapterRegistryTrait for YieldAdapterRegistry {
         adapter_address: Address,
     ) {
         require_admin(e);
-        if storage::get_yield_adapters(e, yield_type.clone()).contains(&adapter_address) {
+        // One adapter per protocol and one protocol per adapter. Replacing an adapter means `remove_adapter`
+        // first, which also clears the allowlist the old one had.
+        if storage::verify_if_yield_adapter_exists(e, yield_type.clone(), protocol.clone())
+            || storage::get_yield_adapters(e, yield_type.clone()).contains(&adapter_address)
+        {
             panic_with_error!(e, YieldAdapterRegistryError::AdapterAlreadyRegistered);
         }
         storage::register_yield_adapter(
