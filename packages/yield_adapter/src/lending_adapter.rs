@@ -128,6 +128,13 @@ pub trait LendingAdapter {
     /// Fetch the address of the protocol's native token (e.g., BLND for Blend)
     fn protocol_token(e: &Env) -> Address;
 
+    /// Fetch the amount owed to cUSD holders for an asset: the epoch principal plus deposits minus
+    /// withdrawals made since. It is never derived from the live value of the position.
+    ///
+    /// ### Arguments
+    /// * `asset` - The address of the asset
+    fn get_principal(env: &Env, asset: Address) -> i128;
+
     /// (Yield Controller only) Update the principal amount for an epoch
     ///
     /// ### Arguments
@@ -146,6 +153,7 @@ pub trait LendingAdapter {
     /// * `lending_pool_id` - The address of the lending pool contract
     /// * `protocol_token_id` - The address of the protocol's native token
     /// * `owner` - The address allowed to upgrade the adapter
-    /// * `asset` - Asset whose existing position of `yield_controller` in the pool becomes the opening principal
-    fn __constructor(e: Env, yield_controller: Address, lending_pool_id: Address, protocol_token_id: Address, owner: Address, asset: Address);
+    /// * `asset` - The only asset this adapter accepts deposits of
+    /// * `principal` - Opening principal: what is already owed to cUSD holders for `asset` (0 on a fresh deployment)
+    fn __constructor(e: Env, yield_controller: Address, lending_pool_id: Address, protocol_token_id: Address, owner: Address, asset: Address, principal: i128);
 }

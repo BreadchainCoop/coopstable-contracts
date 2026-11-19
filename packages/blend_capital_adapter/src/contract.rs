@@ -15,7 +15,7 @@ pub struct BlendCapitalAdapter;
 #[contractimpl]
 impl LendingAdapter for BlendCapitalAdapter {
     
-    fn __constructor(e: Env, yield_controller: Address, blend_pool_id: Address, blend_token_id: Address, owner: Address, asset: Address) {
+    fn __constructor(e: Env, yield_controller: Address, blend_pool_id: Address, blend_token_id: Address, owner: Address, asset: Address, principal: i128) {
         e.storage()
             .instance()
             .set(&YIELD_CONTROLLER_ID, &yield_controller);
@@ -27,15 +27,16 @@ impl LendingAdapter for BlendCapitalAdapter {
             .set(&BLEND_TOKEN_ID, &blend_token_id);
         storage::write_owner(&e, &owner);
 
-        // Adopt whatever the controller already holds in the pool as the opening principal, so a replacement
-        // adapter never reports the pre-existing position as yield (0 on a fresh deployment).
-        let principal = adapter::get_balance(&e, yield_controller, asset.clone());
+        storage::write_asset(&e, &asset);
+        // The opening principal is stated, not read from the pool: adopting the live position would turn
+        // unharvested yield into principal.
         storage::set_asset_epoch_principal(&e, &asset, 0, principal);
     }
 
     fn deposit(e: &Env, user: Address, asset: Address, amount: i128) -> i128 {
         
         storage::require_yield_controller(e);
+        storage::require_asset(e, &asset);
 
         // Initialize epoch principal if this is the first deposit
         if storage::get_asset_epoch_principal(e, &asset).is_none() {
@@ -121,6 +122,8 @@ impl LendingAdapter for BlendCapitalAdapter {
     
     fn get_apy(env: &Env, asset: Address) -> u32 { adapter::get_apy(env, asset) }
     
+    fn get_principal(env: &Env, asset: Address) -> i128 { storage::read_principal(env, &asset) }
+
     fn update_epoch_principal(env: &Env, asset: Address, epoch: u64, principal: i128) {
         storage::require_yield_controller(env);
         storage::extend_instance(env);
@@ -136,6 +139,16 @@ impl BlendCapitalAdapter {
     pub fn upgrade(e: &Env, new_wasm_hash: BytesN<32>) {
         storage::read_owner(e).require_auth();
         storage::extend_instance(e);
-        e.deployer().update_current_contract_wasm(new_wasm_hash);
+        e.deployer().update_current_contract_wasm(new_wasm_hash.clone());
+        LendingAdapterEvents::upgrade(e, new_wasm_hash);
+    }
+
+    /// (Owner only) Bind the adapter to the one asset it accepts deposits of. For an adapter deployed
+    /// before the binding existed; a new deployment sets it in the constructor.
+    pub fn set_asset(e: &Env, asset: Address) {
+        storage::read_owner(e).require_auth();
+        storage::extend_instance(e);
+        storage::write_asset(e, &asset);
+        LendingAdapterEvents::set_asset(e, asset);
     }
 }

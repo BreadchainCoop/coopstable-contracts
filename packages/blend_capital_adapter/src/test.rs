@@ -45,7 +45,7 @@ impl TestFixture {
         pool.init(&usdc_token_id);
         let adapter_id = env.register(
             BlendCapitalAdapter,
-            (yield_controller.clone(), pool_id.clone(), blend_token_id.clone(), Address::generate(&env), usdc_token_id.clone()),
+            (yield_controller.clone(), pool_id.clone(), blend_token_id.clone(), Address::generate(&env), usdc_token_id.clone(), 0i128),
         );
         let adapter = BlendCapitalAdapterClient::new(&env, &adapter_id);
 
@@ -376,26 +376,64 @@ fn test_zero_amount_operations() {
     assert_eq!(result, 0);
 }
 
+// I-03: the adapter is bound to one asset; the owner can rebind an adapter deployed before the binding.
 #[test]
-fn test_different_assets() {
+fn test_deposit_rejects_any_other_asset() {
     let fixture = TestFixture::create();
     let client = fixture.lending_adapter_client();
-
-    let other_token = fixture.env.register_stellar_asset_contract_v2(fixture.token_admin.clone());
-    let other_token_id = other_token.address();
-
+    let other_token_id = fixture.env.register_stellar_asset_contract_v2(fixture.token_admin.clone()).address();
     fixture.env.mock_all_auths();
 
-    let usdc_amount = 1000_0000000;
-    let other_amount = 500_0000000;
+    client.deposit(&fixture.user1, &fixture.usdc_token_id, &1000_0000000);
+    assert_eq!(
+        client.try_deposit(&fixture.user1, &other_token_id, &500_0000000).err().unwrap(),
+        Ok(soroban_sdk::Error::from_contract_error(1300))
+    );
+    assert_eq!(fixture.get_contract_deposit(&other_token_id), None);
 
-    client.deposit(&fixture.user1, &fixture.usdc_token_id, &usdc_amount);
-    client.deposit(&fixture.user1, &other_token_id, &other_amount);
-    let usdc_deposit = fixture.get_contract_deposit(&fixture.usdc_token_id);
-    let other_deposit = fixture.get_contract_deposit(&other_token_id);
+    fixture.adapter.set_asset(&other_token_id);
+    client.deposit(&fixture.user1, &other_token_id, &500_0000000);
+    assert!(client.try_deposit(&fixture.user1, &fixture.usdc_token_id, &1).is_err());
+}
 
-    assert_eq!(usdc_deposit, Some(usdc_amount));
-    assert_eq!(other_deposit, Some(other_amount));
+#[test]
+#[should_panic(expected = "Error(Auth, InvalidAction)")]
+fn test_set_asset_unauthorized() {
+    let fixture = TestFixture::create();
+    fixture.adapter.set_asset(&fixture.usdc_token_id);
+}
+
+// The amount owed follows deposits and withdrawals, never the live value of the position.
+#[test]
+fn test_get_principal_tracks_what_is_owed() {
+    let fixture = TestFixture::create();
+    let client = fixture.lending_adapter_client();
+    fixture.env.mock_all_auths();
+
+    assert_eq!(client.get_principal(&fixture.usdc_token_id), 0);
+    client.deposit(&fixture.user1, &fixture.usdc_token_id, &1000_0000000);
+    fixture.pool.add_yield(&fixture.usdc_token_id, &50_0000000);
+    assert_eq!(client.get_principal(&fixture.usdc_token_id), 1000_0000000);
+    client.withdraw(&fixture.user1, &fixture.usdc_token_id, &400_0000000);
+    assert_eq!(client.get_principal(&fixture.usdc_token_id), 600_0000000);
+    client.update_epoch_principal(&fixture.usdc_token_id, &1, &600_0000000);
+    assert_eq!(client.get_principal(&fixture.usdc_token_id), 600_0000000);
+}
+
+// I-05: with nothing owed (or the record over-withdrawn), the whole position is yield.
+#[test]
+fn test_yield_is_readable_when_nothing_is_owed() {
+    let fixture = TestFixture::create();
+    let client = fixture.lending_adapter_client();
+    fixture.env.mock_all_auths();
+
+    client.deposit(&fixture.user1, &fixture.usdc_token_id, &1000_0000000);
+    fixture.pool.add_yield(&fixture.usdc_token_id, &50_0000000);
+    client.update_epoch_principal(&fixture.usdc_token_id, &1, &-5_0000000);
+    assert_eq!(
+        client.get_yield(&fixture.usdc_token_id),
+        client.get_balance(&fixture.yield_controller, &fixture.usdc_token_id)
+    );
 }
 
 #[test]
@@ -628,15 +666,18 @@ fn test_member_paths_leave_ttl_alone_and_admin_paths_extend_it() {
     assert_eq!(ttl(), ADAPTER_INSTANCE_BUMP_AMOUNT);
 }
 
+// I-04: a replacement adapter is told what is owed. Yield not harvested before the swap stays yield.
 #[test]
-fn test_replacement_adapter_adopts_existing_position_as_principal() {
+fn test_replacement_adapter_takes_its_opening_principal_as_an_argument() {
     let fixture = TestFixture::create();
     let client = fixture.lending_adapter_client();
     fixture.env.mock_all_auths();
     let deposit_amount = 1000_0000000;
     client.deposit(&fixture.user1, &fixture.usdc_token_id, &deposit_amount);
+    fixture.pool.add_yield(&fixture.usdc_token_id, &50_0000000);
+    let unharvested = client.get_yield(&fixture.usdc_token_id);
+    assert!(unharvested > 0);
 
-    // The controller's pool position already exists; a replacement adapter must start from it, not from 0.
     let replacement_id = fixture.env.register(
         BlendCapitalAdapter,
         (
@@ -645,18 +686,14 @@ fn test_replacement_adapter_adopts_existing_position_as_principal() {
             fixture.blend_token_id.clone(),
             Address::generate(&fixture.env),
             fixture.usdc_token_id.clone(),
+            client.get_principal(&fixture.usdc_token_id),
         ),
     );
     let replacement = LendingAdapterClient::new(&fixture.env, &replacement_id);
-    assert_eq!(replacement.get_balance(&fixture.yield_controller, &fixture.usdc_token_id), deposit_amount);
-    assert_eq!(replacement.get_yield(&fixture.usdc_token_id), 0);
+    assert_eq!(replacement.get_principal(&fixture.usdc_token_id), deposit_amount);
+    assert_eq!(replacement.get_yield(&fixture.usdc_token_id), unharvested);
 
-    // A member deposit right after the swap must not turn the old position into "yield".
+    // A member deposit right after the swap is principal, not yield.
     replacement.deposit(&fixture.user1, &fixture.usdc_token_id, &100_0000000);
-    assert_eq!(replacement.get_yield(&fixture.usdc_token_id), 0);
-
-    // The mock scales b_rate as if the position were 1000, so 5% on the 1100 held here is 55.
-    fixture.pool.add_yield(&fixture.usdc_token_id, &50_0000000);
-    let accrued = replacement.get_yield(&fixture.usdc_token_id);
-    assert!((accrued - 55_0000000).abs() <= 1, "expected 55 of yield, got {}", accrued);
+    assert_eq!(replacement.get_principal(&fixture.usdc_token_id), deposit_amount + 100_0000000);
 }

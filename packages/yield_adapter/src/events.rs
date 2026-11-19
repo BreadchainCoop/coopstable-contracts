@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env, Symbol};
+use soroban_sdk::{Address, BytesN, Env, Symbol};
 
 pub struct LendingAdapterEvents {}
 
@@ -26,5 +26,13 @@ impl LendingAdapterEvents {
     pub fn update_epoch_principal(e: &Env, asset: Address, epoch: u64, principal: i128) {
         let topics = (Symbol::new(e, "epoch_principal_updated"), asset);
         e.events().publish(topics, (epoch, principal));
+    }
+
+    pub fn set_asset(e: &Env, asset: Address) {
+        e.events().publish((Symbol::new(e, "set_asset"),), asset);
+    }
+
+    pub fn upgrade(e: &Env, new_wasm_hash: BytesN<32>) {
+        e.events().publish((Symbol::new(e, "upgrade"),), new_wasm_hash);
     }
 }
