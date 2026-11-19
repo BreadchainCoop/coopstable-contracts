@@ -62,6 +62,13 @@ export enum RequestType {
   DeleteLiquidationAuction = 9,
 }
 
+export const AdapterError = {
+  /**
+   * Deposit of an asset this adapter is not bound to
+   */
+  1300: {message:"UnsupportedAsset"}
+}
+
 export type SupportedAdapter = {tag: "BlendCapital", values: void} | {tag: "Custom", values: readonly [string]};
 
 export type SupportedYieldType = {tag: "Lending", values: void} | {tag: "Liquidity", values: void} | {tag: "Custom", values: readonly [string]};
@@ -94,6 +101,13 @@ export interface Client {
   get_yield: ({asset}: {asset: string}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
 
   /**
+   * Construct and simulate a set_asset transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * (Owner only) Bind the adapter to the one asset it accepts deposits of. For an adapter deployed
+   * before the binding existed; a new deployment sets it in the constructor.
+   */
+  set_asset: ({asset}: {asset: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
    * Construct and simulate a claim_yield transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    */
   claim_yield: ({asset, yield_amount}: {asset: string, yield_amount: i128}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
@@ -112,6 +126,11 @@ export interface Client {
    * Construct and simulate a get_emissions transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    */
   get_emissions: ({asset}: {asset: string}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
+
+  /**
+   * Construct and simulate a get_principal transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  get_principal: ({asset}: {asset: string}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
 
   /**
    * Construct and simulate a withdraw_auth transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -152,7 +171,7 @@ export interface Client {
 export class Client extends ContractClient {
   static async deploy<T = Client>(
         /** Constructor/Initialization Args for the contract's `__constructor` method */
-        {yield_controller, blend_pool_id, blend_token_id, owner, asset}: {yield_controller: string, blend_pool_id: string, blend_token_id: string, owner: string, asset: string},
+        {yield_controller, blend_pool_id, blend_token_id, owner, asset, principal}: {yield_controller: string, blend_pool_id: string, blend_token_id: string, owner: string, asset: string, principal: i128},
     /** Options for initializing a Client as well as for calling a method, with extras specific to deploying. */
     options: MethodOptions &
       Omit<ContractClientOptions, "contractId"> & {
@@ -164,23 +183,26 @@ export class Client extends ContractClient {
         format?: "hex" | "base64";
       }
   ): Promise<AssembledTransaction<T>> {
-    return ContractClient.deploy({yield_controller, blend_pool_id, blend_token_id, owner, asset}, options)
+    return ContractClient.deploy({yield_controller, blend_pool_id, blend_token_id, owner, asset, principal}, options)
   }
   constructor(public readonly options: ContractClientOptions) {
     super(
       new ContractSpec([ "AAAAAQAAAAAAAAAAAAAAE0Fzc2V0RXBvY2hQcmluY2lwYWwAAAAABQAAAAAAAAARZGVwb3NpdHNfaW5fZXBvY2gAAAAAAAALAAAAAAAAAAVlcG9jaAAAAAAAAAYAAAAAAAAADGxhc3RfdXBkYXRlZAAAAAYAAAAAAAAACXByaW5jaXBhbAAAAAAAAAsAAAAAAAAAC3dpdGhkcmF3YWxzAAAAAAs=",
         "AAAAAQAAAAAAAAAAAAAAB1JlcXVlc3QAAAAAAwAAAAAAAAAHYWRkcmVzcwAAAAATAAAAAAAAAAZhbW91bnQAAAAAAAsAAAAAAAAADHJlcXVlc3RfdHlwZQAAAAQ=",
         "AAAAAwAAAAAAAAAAAAAAC1JlcXVlc3RUeXBlAAAAAAoAAAAAAAAABlN1cHBseQAAAAAAAAAAAAAAAAAIV2l0aGRyYXcAAAABAAAAAAAAABBTdXBwbHlDb2xsYXRlcmFsAAAAAgAAAAAAAAASV2l0aGRyYXdDb2xsYXRlcmFsAAAAAAADAAAAAAAAAAZCb3Jyb3cAAAAAAAQAAAAAAAAABVJlcGF5AAAAAAAABQAAAAAAAAAaRmlsbFVzZXJMaXF1aWRhdGlvbkF1Y3Rpb24AAAAAAAYAAAAAAAAAEkZpbGxCYWREZWJ0QXVjdGlvbgAAAAAABwAAAAAAAAATRmlsbEludGVyZXN0QXVjdGlvbgAAAAAIAAAAAAAAABhEZWxldGVMaXF1aWRhdGlvbkF1Y3Rpb24AAAAJ",
+        "AAAABAAAAAAAAAAAAAAADEFkYXB0ZXJFcnJvcgAAAAEAAAAwRGVwb3NpdCBvZiBhbiBhc3NldCB0aGlzIGFkYXB0ZXIgaXMgbm90IGJvdW5kIHRvAAAAEFVuc3VwcG9ydGVkQXNzZXQAAAUU",
         "AAAAAAAAAAAAAAAHZGVwb3NpdAAAAAADAAAAAAAAAAR1c2VyAAAAEwAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAAAAAAZhbW91bnQAAAAAAAsAAAABAAAACw==",
         "AAAAAAAAAAAAAAAHZ2V0X2FweQAAAAABAAAAAAAAAAVhc3NldAAAAAAAABMAAAABAAAABA==",
         "AAAAAAAAAEwoT3duZXIgb25seSkgUmVwbGFjZSB0aGUgY29udHJhY3QgY29kZTsgdGhlIGFkZHJlc3MgYW5kIGFsbCBzdG9yYWdlIHN1cnZpdmUuAAAAB3VwZ3JhZGUAAAAAAQAAAAAAAAANbmV3X3dhc21faGFzaAAAAAAAA+4AAAAgAAAAAA==",
         "AAAAAAAAAAAAAAAId2l0aGRyYXcAAAADAAAAAAAAAAR1c2VyAAAAEwAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAAAAAAZhbW91bnQAAAAAAAsAAAABAAAACw==",
         "AAAAAAAAAAAAAAAJZ2V0X3lpZWxkAAAAAAAAAQAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAQAAAAs=",
+        "AAAAAAAAAKcoT3duZXIgb25seSkgQmluZCB0aGUgYWRhcHRlciB0byB0aGUgb25lIGFzc2V0IGl0IGFjY2VwdHMgZGVwb3NpdHMgb2YuIEZvciBhbiBhZGFwdGVyIGRlcGxveWVkCmJlZm9yZSB0aGUgYmluZGluZyBleGlzdGVkOyBhIG5ldyBkZXBsb3ltZW50IHNldHMgaXQgaW4gdGhlIGNvbnN0cnVjdG9yLgAAAAAJc2V0X2Fzc2V0AAAAAAAAAQAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAA==",
         "AAAAAAAAAAAAAAALY2xhaW1feWllbGQAAAAAAgAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAAAAAAx5aWVsZF9hbW91bnQAAAALAAAAAQAAAAs=",
         "AAAAAAAAAAAAAAALZ2V0X2JhbGFuY2UAAAAAAgAAAAAAAAAEdXNlcgAAABMAAAAAAAAABWFzc2V0AAAAAAAAEwAAAAEAAAAL",
         "AAAAAAAAAAAAAAAMZGVwb3NpdF9hdXRoAAAAAwAAAAAAAAAEdXNlcgAAABMAAAAAAAAABWFzc2V0AAAAAAAAEwAAAAAAAAAGYW1vdW50AAAAAAALAAAAAQAAA+gAAAPtAAAAAwAAABMAAAARAAAD6gAAAAA=",
-        "AAAAAAAAAAAAAAANX19jb25zdHJ1Y3RvcgAAAAAAAAUAAAAAAAAAEHlpZWxkX2NvbnRyb2xsZXIAAAATAAAAAAAAAA1ibGVuZF9wb29sX2lkAAAAAAAAEwAAAAAAAAAOYmxlbmRfdG9rZW5faWQAAAAAABMAAAAAAAAABW93bmVyAAAAAAAAEwAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAA==",
+        "AAAAAAAAAAAAAAANX19jb25zdHJ1Y3RvcgAAAAAAAAYAAAAAAAAAEHlpZWxkX2NvbnRyb2xsZXIAAAATAAAAAAAAAA1ibGVuZF9wb29sX2lkAAAAAAAAEwAAAAAAAAAOYmxlbmRfdG9rZW5faWQAAAAAABMAAAAAAAAABW93bmVyAAAAAAAAEwAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAAAAAAlwcmluY2lwYWwAAAAAAAALAAAAAA==",
         "AAAAAAAAAAAAAAANZ2V0X2VtaXNzaW9ucwAAAAAAAAEAAAAAAAAABWFzc2V0AAAAAAAAEwAAAAEAAAAL",
+        "AAAAAAAAAAAAAAANZ2V0X3ByaW5jaXBhbAAAAAAAAAEAAAAAAAAABWFzc2V0AAAAAAAAEwAAAAEAAAAL",
         "AAAAAAAAAAAAAAANd2l0aGRyYXdfYXV0aAAAAAAAAAMAAAAAAAAABHVzZXIAAAATAAAAAAAAAAVhc3NldAAAAAAAABMAAAAAAAAABmFtb3VudAAAAAAACwAAAAEAAAPoAAAD7QAAAAMAAAATAAAAEQAAA+oAAAAA",
         "AAAAAAAAAAAAAAAOcHJvdG9jb2xfdG9rZW4AAAAAAAAAAAABAAAAEw==",
         "AAAAAAAAAAAAAAAPY2xhaW1fZW1pc3Npb25zAAAAAAIAAAAAAAAAAnRvAAAAAAATAAAAAAAAAAVhc3NldAAAAAAAABMAAAABAAAACw==",
@@ -199,10 +221,12 @@ export class Client extends ContractClient {
         upgrade: this.txFromJSON<null>,
         withdraw: this.txFromJSON<i128>,
         get_yield: this.txFromJSON<i128>,
+        set_asset: this.txFromJSON<null>,
         claim_yield: this.txFromJSON<i128>,
         get_balance: this.txFromJSON<i128>,
         deposit_auth: this.txFromJSON<Option<readonly [string, string, Array<any>]>>,
         get_emissions: this.txFromJSON<i128>,
+        get_principal: this.txFromJSON<i128>,
         withdraw_auth: this.txFromJSON<Option<readonly [string, string, Array<any>]>>,
         protocol_token: this.txFromJSON<string>,
         claim_emissions: this.txFromJSON<i128>,

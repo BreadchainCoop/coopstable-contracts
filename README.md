@@ -149,7 +149,7 @@ The Makefile provides comprehensive automation for building, testing, deploying,
 | Contract | Description | Key Functions |
 |----------|-------------|---------------|
 | **cUSD Manager** | Central authority for cUSD token lifecycle | `issue_cusd()`, `burn_cusd()`, `cusd_total_supply()` |
-| **Lending Yield Controller** | Main system orchestrator and user interface | `deposit_collateral()`, `withdraw_collateral()`, `claim_yield()` |
+| **Lending Yield Controller** | Main system orchestrator and user interface | `deposit_collateral()`, `withdraw_collateral()`, `harvest_yield()` → `recompound_yield()` → `finalize_distribution()`, `pause()`, `recollateralize()` |
 | **Yield Distributor** | Manages yield distribution with epochs | `distribute_yield()`, `add_member()`, `is_distribution_available()` |
 | **Yield Adapter Registry** | Registry for managing yield protocol adapters | `register_adapter()`, `get_adapter()`, `is_supported_asset()` |
 
@@ -158,7 +158,46 @@ The Makefile provides comprehensive automation for building, testing, deploying,
 | Package | Description | Key Functions |
 |---------|-------------|---------------|
 | **yield_adapter** | Common interfaces for all yield adapters | `LendingAdapter` trait, events, types |
-| **blend_capital_adapter** | Blend Capital protocol integration | `deposit()`, `withdraw()`, `get_yield()`, `claim_emissions()` |
+| **blend_capital_adapter** | Blend Capital protocol integration, bound to one asset | `deposit()`, `withdraw()`, `get_yield()`, `get_principal()`, `claim_emissions()` |
+
+### Roles and entry points
+
+Each contract has an `owner` and an `admin`. A user needs neither.
+
+| Who | Lending Yield Controller entry points |
+|-----|----------------------------------------|
+| Anyone (signs for their own funds) | `deposit_collateral`, `withdraw_collateral`, and the read-only `get_*` views |
+| Admin | `harvest_yield`, `recompound_yield`, `finalize_distribution`, `cancel_harvest`, `claim_emissions`, `pause`, `set_yield_distributor`, `set_adapter_registry`, `set_cusd_manager` |
+| Admin, with the funder's signature | `recollateralize` |
+| Owner | `unpause`, `rescue_collateral`, `rescue`, `set_admin`, `upgrade` |
+
+- **`pause(mint, redeem)`** stops deposits, withdrawals or both. The admin can only switch a pause on; only the
+  owner clears it with `unpause(mint, redeem)`. Reads and the harvest stages keep working while paused.
+- **`recollateralize(protocol, asset, from, amount)`** supplies a supported asset from `from` into the pool
+  position without minting cUSD. It raises what the adapter records as owed by the same amount, so a top-up
+  is never paid out as yield. It works while mint is paused.
+- **`rescue_collateral(protocol, asset, to, amount)`** withdraws a reserve that is **not** a supported asset
+  from the controller's pool position. A supported asset is refused, so it cannot touch the backing.
+- **`rescue(asset, to, amount)`** transfers tokens the controller holds itself. It is refused while a harvest
+  of that asset sits between stage 1 and stage 2.
+- **`claim_emissions`** sends the pool's emissions to the distributor's treasury.
+
+Other contracts: the registry's admin registers adapters and sets the asset allowlist, and its owner replaces
+the admin (`set_yield_adapter_admin`). Only the yield controller can call the manager's `issue_cusd` and
+`burn_cusd`. The adapter's owner can `upgrade` it and bind it to its asset with `set_asset`.
+
+### Backing and yield
+
+The adapter records what is owed to cUSD holders for its asset (`get_principal`): deposits add to it,
+withdrawals subtract, and each distribution adds the cUSD it minted. It is never set from the live value of
+the pool position. Yield is the value of the position above that amount, so after a pool loss yield reads 0
+until the loss is made good. A harvest below 1,000 stroops is treated as no yield, and stage 3 mints only
+what is still surplus at that moment.
+
+A deposit or withdrawal moves exactly the requested amount or reverts. A redemption larger than the pool
+position therefore fails; it does not burn the full amount for a smaller payout. The pool rounds in its own
+favour, so the position can sit a stroop or two below supply until interest accrues, and the last holder
+out may have to redeem a stroop less than their balance.
 
 ### System Flow
 
@@ -334,8 +373,31 @@ make next-distribution
 # Withdraw specific amount
 TEST_AMOUNT=1000000000 make test-withdraw
 
-# Withdraw all cUSD balance
-make burn-cusd ACC=admin
+```
+
+`burn_cusd` on the cUSD Manager is restricted to the yield controller, so redeeming through
+`withdraw_collateral` is the only way to burn cUSD for its collateral.
+
+### Pause, Recollateralize and Rescue
+
+Amounts are in stroops. None of these mint or burn cUSD.
+
+```bash
+# Admin: stop mints, leave redemptions open
+make pause MINT=true REDEEM=false
+make get-paused
+
+# Owner: clear both pauses
+make unpause MINT=true REDEEM=true
+
+# Admin calls, the funder identity pays: top up the USDC backing
+make recollateralize FUNDER_KEY=funder AMOUNT=10520174658
+
+# Owner: withdraw a reserve that is not a supported asset from the pool position
+make rescue-collateral ASSET=<ASSET_ADDRESS> TO=<ACCOUNT> AMOUNT=10520174658
+
+# Owner: transfer tokens held by the controller itself
+make rescue ASSET=<ASSET_ADDRESS> TO=<ACCOUNT> AMOUNT=1000000
 ```
 
 ## Testing
@@ -354,6 +416,21 @@ make test
 cd packages/blend_capital_adapter
 make test
 ```
+
+`contracts/lending_yield_controller/src/test_e2e.rs` runs the money paths end to end: the real adapter
+(loaded as wasm), manager, registry and distributor against a Blend pool mock that moves tokens and enforces
+authorization.
+
+### Property Test
+
+`invariants/` runs random sequences of deposits, withdrawals, interest, pool losses, harvest stages, pauses,
+top-ups and rescues against the built wasm and checks that cUSD stays backed after every step.
+
+```bash
+make invariants            # about 5 minutes per stage
+```
+
+See `invariants/README.md`.
 
 ## TypeScript Bindings
 
