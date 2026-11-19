@@ -1,5 +1,5 @@
-use soroban_sdk::{ contract, contractimpl, Address, BytesN, Env, Symbol, Val, Vec };
-use crate::{ adapter, constants::{BLEND_TOKEN_ID, LENDING_POOL_ID, YIELD_CONTROLLER_ID}, storage };
+use soroban_sdk::{ contract, contractimpl, panic_with_error, Address, BytesN, Env, Symbol, Val, Vec };
+use crate::{ adapter, contract_types::AdapterError, constants::{BLEND_TOKEN_ID, LENDING_POOL_ID, YIELD_CONTROLLER_ID}, storage };
 use yield_adapter::{
     events::LendingAdapterEvents,
     lending_adapter::LendingAdapter,
@@ -124,6 +124,10 @@ impl LendingAdapter for BlendCapitalAdapter {
     
     fn get_principal(env: &Env, asset: Address) -> i128 { storage::read_principal(env, &asset) }
 
+    fn get_asset(env: &Env) -> Address {
+        storage::read_asset(env).unwrap_or_else(|| panic_with_error!(env, AdapterError::UnsupportedAsset))
+    }
+
     fn update_epoch_principal(env: &Env, asset: Address, epoch: u64, principal: i128) {
         storage::require_yield_controller(env);
         storage::extend_instance(env);
@@ -144,9 +148,12 @@ impl BlendCapitalAdapter {
     }
 
     /// (Owner only) Bind the adapter to the one asset it accepts deposits of. For an adapter deployed
-    /// before the binding existed; a new deployment sets it in the constructor.
+    /// before the binding existed; a new deployment sets it in the constructor. It can be set once.
     pub fn set_asset(e: &Env, asset: Address) {
         storage::read_owner(e).require_auth();
+        if storage::read_asset(e).is_some() {
+            panic_with_error!(e, AdapterError::AssetAlreadyBound);
+        }
         storage::extend_instance(e);
         storage::write_asset(e, &asset);
         LendingAdapterEvents::set_asset(e, asset);

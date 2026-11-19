@@ -6,6 +6,8 @@ use soroban_sdk::{contracterror, contracttype, Address};
 pub enum AdapterError {
     /// Deposit of an asset this adapter is not bound to
     UnsupportedAsset = 1300,
+    /// The adapter is already bound to an asset
+    AssetAlreadyBound = 1301,
 }
 
 #[derive(Clone)]

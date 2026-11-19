@@ -135,6 +135,12 @@ pub trait LendingAdapter {
     /// * `asset` - The address of the asset
     fn get_principal(env: &Env, asset: Address) -> i128;
 
+    /// Fetch the one asset this adapter accepts deposits of
+    ///
+    /// ### Panics
+    /// If no asset is bound yet
+    fn get_asset(env: &Env) -> Address;
+
     /// (Yield Controller only) Update the principal amount for an epoch
     ///
     /// ### Arguments

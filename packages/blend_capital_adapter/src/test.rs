@@ -376,7 +376,7 @@ fn test_zero_amount_operations() {
     assert_eq!(result, 0);
 }
 
-// I-03: the adapter is bound to one asset; the owner can rebind an adapter deployed before the binding.
+// I-03: the adapter is bound to one asset, for good.
 #[test]
 fn test_deposit_rejects_any_other_asset() {
     let fixture = TestFixture::create();
@@ -391,9 +391,12 @@ fn test_deposit_rejects_any_other_asset() {
     );
     assert_eq!(fixture.get_contract_deposit(&other_token_id), None);
 
-    fixture.adapter.set_asset(&other_token_id);
-    client.deposit(&fixture.user1, &other_token_id, &500_0000000);
-    assert!(client.try_deposit(&fixture.user1, &fixture.usdc_token_id, &1).is_err());
+    // The binding is set once: not even the owner can point the adapter at another asset.
+    assert_eq!(
+        fixture.adapter.try_set_asset(&other_token_id).err().unwrap(),
+        Ok(soroban_sdk::Error::from_contract_error(1301))
+    );
+    assert_eq!(client.get_asset(), fixture.usdc_token_id);
 }
 
 // The state of an adapter upgraded from a version without the binding: no asset stored. Deposits fail
@@ -719,3 +722,20 @@ fn test_replacement_adapter_takes_its_opening_principal_as_an_argument() {
     replacement.deposit(&fixture.user1, &fixture.usdc_token_id, &100_0000000);
     assert_eq!(replacement.get_principal(&fixture.usdc_token_id), deposit_amount + 100_0000000);
 }
+
+// L-06: an upgrade is announced with the new wasm hash.
+#[test]
+fn test_upgrade_emits_an_event() {
+    let fixture = TestFixture::create();
+    fixture.env.mock_all_auths();
+    let hash = fixture.env.deployer().upload_contract_wasm(UPGRADE_WASM);
+    fixture.adapter.upgrade(&hash);
+    let id = fixture.adapter.address.clone();
+    assert_eq!(
+        fixture.env.events().all().filter_by_contract(&id),
+        vec![&fixture.env, (id.clone(), (Symbol::new(&fixture.env, "upgrade"),).into_val(&fixture.env), hash.into_val(&fixture.env))]
+    );
+}
+
+/// Any valid wasm will do as the upgrade target: the event is emitted by the code being replaced.
+const UPGRADE_WASM: &[u8] = include_bytes!("../artifacts/pool.wasm");

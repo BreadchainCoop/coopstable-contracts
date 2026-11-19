@@ -70,10 +70,14 @@ pub fn write_asset(e: &Env, asset: &Address) {
     e.storage().instance().set(&ASSET, asset);
 }
 
+pub fn read_asset(e: &Env) -> Option<Address> {
+    e.storage().instance().get(&ASSET)
+}
+
 /// Deposits fail closed for anything but the bound asset, including on an adapter deployed before the
 /// binding existed, until the owner calls `set_asset`.
 pub fn require_asset(e: &Env, asset: &Address) {
-    if e.storage().instance().get::<_, Address>(&ASSET).as_ref() != Some(asset) {
+    if read_asset(e).as_ref() != Some(asset) {
         panic_with_error!(e, AdapterError::UnsupportedAsset);
     }
 }
