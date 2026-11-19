@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env, Symbol};
+use soroban_sdk::{Address, BytesN, Env, Symbol};
 
 pub struct CUSDManagerEvents {}
 
@@ -31,5 +31,10 @@ impl CUSDManagerEvents {
     pub fn set_yield_controller(e: &Env, yield_controller: Address) {
         let topics = (Symbol::new(e, "set_yield_controller"),);
         e.events().publish(topics, yield_controller);
+    }
+
+    pub fn upgrade(e: &Env, new_wasm_hash: BytesN<32>) {
+        let topics = (Symbol::new(e, "upgrade"),);
+        e.events().publish(topics, new_wasm_hash);
     }
 }

@@ -149,6 +149,10 @@ impl CUSDManagerTrait for CUSDManager {
     }
 
     fn burn_cusd(e: &Env, from: Address, amount: i128) {
+        // Only the yield controller burns through the manager, as part of a redemption. A holder can still
+        // call `burn` on the cUSD asset contract directly; that bypasses `CusdSupply`, so the counter can
+        // overstate real supply and must be reconciled against the asset before it is used for backing checks.
+        storage::read_yield_controller(e).require_auth();
         check_nonnegative_amount(e, amount);
         token::process_token_burn(&e, from.clone(), amount);
         CUSDManagerEvents::burn_cusd(&e, from, amount);
@@ -164,6 +168,7 @@ impl CUSDManagerTrait for CUSDManager {
 
     fn upgrade(e: &Env, new_wasm_hash: BytesN<32>) {
         require_owner(e);
-        e.deployer().update_current_contract_wasm(new_wasm_hash);
+        e.deployer().update_current_contract_wasm(new_wasm_hash.clone());
+        CUSDManagerEvents::upgrade(e, new_wasm_hash);
     }
 }
