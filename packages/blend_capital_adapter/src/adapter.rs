@@ -27,8 +27,11 @@ pub fn supply_collateral(
     let request = create_request(RequestType::SupplyCollateral, asset.clone(), amount);
     let request_vec: Vec<Request> = vec![e, request];
 
-    pool_client.submit( 
-        &yield_controller.clone(), 
+    // The returned positions are deliberately not used. The pool can move a different amount than
+    // requested (it clamps an oversized withdrawal), so the controller measures token balances around
+    // this call and reverts on any difference.
+    let _ = pool_client.submit(
+        &yield_controller.clone(),
         &user,
         &yield_controller.clone(),
         &request_vec,
@@ -70,8 +73,9 @@ pub fn withdraw_collateral(
     let yield_controller = storage::get_yield_controller(e);
     let request_vec: Vec<Request> = vec![e, request];
     
-    pool_client.submit(
-        &yield_controller.clone(), 
+    // Result not used: see `supply_collateral`.
+    let _ = pool_client.submit(
+        &yield_controller.clone(),
         &yield_controller.clone(),
         &user,
         &request_vec,

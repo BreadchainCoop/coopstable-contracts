@@ -55,7 +55,8 @@ fn supply(e: &Env, adapter: &LendingAdapterClient, from: &Address, asset: &Addre
         }
         utils::authenticate_contract(e, pool, fn_name, args);
     }
-    adapter.deposit(from, asset, &amount);
+    // The adapter returns the amount it was asked for, not what moved; the balance check is what counts.
+    let _ = adapter.deposit(from, asset, &amount);
 
     if before - token.balance(from) != amount {
         panic_with_error!(e, LendingYieldControllerError::BalanceError);
@@ -69,7 +70,7 @@ fn withdraw(e: &Env, adapter: &LendingAdapterClient, to: &Address, asset: &Addre
     let before = token.balance(to);
 
     authorize(e, adapter.withdraw_auth(to, asset, &amount));
-    adapter.withdraw(to, asset, &amount);
+    let _ = adapter.withdraw(to, asset, &amount);
 
     if token.balance(to) - before != amount {
         panic_with_error!(e, LendingYieldControllerError::BalanceError);
@@ -246,7 +247,10 @@ pub fn process_finalize_distribution(e: &Env, protocol: &Symbol, asset: Address)
     let cusd_manager = storage::cusd_manager_client(e);
 
     cusd_manager.issue_cusd(&distributor.address, &yield_amount);
-    distributor.distribute_yield(&cusd_manager.get_cusd_id(), &yield_amount);
+    // The distributor returns 0 and moves nothing when no distribution is due.
+    if distributor.distribute_yield(&cusd_manager.get_cusd_id(), &yield_amount) != yield_amount {
+        panic_with_error!(e, LendingYieldControllerError::YieldUnavailable);
+    }
 
     // The minted yield is now owed too. Anything the position earned since stage 1 stays yield.
     // `distribute_yield` has already moved the distributor to the next epoch.
