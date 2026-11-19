@@ -1,5 +1,5 @@
 {
-    "_note": "Testnet rehearsal: baseline deployed 2026-10-09, migrated to Bundle 2 on 2026-10-10. `hashes` are the live code; `hashes_pre_bundle_2` and BLEND_CAPITAL_ADAPTER_PRE_BUNDLE_2 are the rollback list. Regenerate deployed_addresses.mk/.sh with `make load-addresses NETWORK=testnet`.",
+    "_note": "Testnet rehearsal: baseline deployed 2026-10-09, migrated to Bundle 2 on 2026-10-10, upgraded in place to the audit-hardening code (branch fix/audit-hardening) on 2026-11-20 after reproducing the 2026-11-19 exploit at 500 USDC scale. `hashes` are the live code; `hashes_pre_audit_hardening`, `hashes_pre_bundle_2` and BLEND_CAPITAL_ADAPTER_PRE_BUNDLE_2 are the rollback lists. Regenerate deployed_addresses.mk/.sh with `make load-addresses NETWORK=testnet`.",
     "ids": {
         "CUSD": "CDHBZE4M6EGNYX2436W2FLZGWUSWQQKCC7TORNQJ7SFRC3R5QQ2N7TF2",
         "CUSD_MANAGER": "CCPHYUUQWP7KM6WIWIC6QHQ4NEPYYUHFATAYJFGY7VQG7AUETLVUXJLJ",
@@ -14,6 +14,13 @@
         "BLEND_CAPITAL_ADAPTER_PRE_BUNDLE_2": "CCVDEOINI4ZV6IJKCYZP7ZSZQ53R5S6DJGCFWZVI4FVGDAUABJPRXWIA"
     },
     "hashes": {
+        "CUSD_MANAGER": "fca879f58a64b5af1df776d07624a8124e5764683de393f40a465dd26f381b2f",
+        "YIELD_ADAPTER_REGISTRY": "d00b34993abb85c383fa38864444c4abcb134684ba64ac5e7a6658ff0b983504",
+        "YIELD_DISTRIBUTOR": "e5d8892076a9c5c883fdafaeedb66a046b2fcf4eb6c187eda430c7150ce17e24",
+        "LENDING_YIELD_CONTROLLER": "ca23aa4dc1b28418d45bfdcb7910427b1aa2e91a5661691d12cd8cdf62eeadcc",
+        "BLEND_CAPITAL_ADAPTER": "106edb5eac0a49270c0afa734a4753dcd8a301537e2e9ab86816f34d9aa793db"
+    },
+    "hashes_pre_audit_hardening": {
         "CUSD_MANAGER": "97a1072f714b529e4e63b20a58bc1a4335c5c6351c34f751209b21316a96e8cd",
         "YIELD_ADAPTER_REGISTRY": "2e6c63c89c8ad6e2197808a04aae0b555af7df1c4b126fb04792be6a3a6bfc01",
         "YIELD_DISTRIBUTOR": "d02d86d813fe9850294c36d39bbffa993179e59c695d68e461deba05c8b998d0",
