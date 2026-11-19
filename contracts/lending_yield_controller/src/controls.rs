@@ -110,10 +110,15 @@ pub fn process_recollateralize(e: &Env, protocol: &Symbol, asset: Address, from:
 /// Withdraws a reserve that is not a supported asset out of the pool position. It can never touch backing.
 pub fn process_rescue_collateral(e: &Env, protocol: &Symbol, asset: Address, to: Address, amount: i128) {
     require_positive(e, amount);
-    if storage::adapter_registry_client(e).is_supported_asset(&storage_types::YIELD_TYPE.id(), protocol, &asset) {
+    let adapter = adapter_for(e, protocol);
+    // Two barriers: the registry allowlist, and the asset the adapter itself is bound to. The second one
+    // holds even while the allowlist is empty, as it is right after an adapter is registered.
+    if storage::adapter_registry_client(e).is_supported_asset(&storage_types::YIELD_TYPE.id(), protocol, &asset)
+        || adapter.get_asset() == asset
+    {
         panic_with_error!(e, LendingYieldControllerError::AssetIsSupported);
     }
-    withdraw(e, &adapter_for(e, protocol), &to, &asset, amount);
+    withdraw(e, &adapter, &to, &asset, amount);
     LendingYieldControllerEvents::rescue_collateral(e, protocol.clone(), asset, to, amount);
 }
 
@@ -182,9 +187,17 @@ pub fn process_harvest_yield(e: &Env, protocol: &Symbol, asset: Address) -> i128
         return 0;
     }
 
+    // As with a withdrawal, the controller must receive exactly what it asked for.
+    let token = TokenClient::new(e, &asset);
+    let before = token.balance(&e.current_contract_address());
     authorize(e, adapter.claim_yield_auth(&asset, &yield_amount));
-    let claimed = adapter.claim_yield(&asset, &yield_amount);
+    let _ = adapter.claim_yield(&asset, &yield_amount);
+    if token.balance(&e.current_contract_address()) - before != yield_amount {
+        panic_with_error!(e, LendingYieldControllerError::BalanceError);
+    }
+    let claimed = yield_amount;
 
+    storage::set_harvest_adapter(e, protocol, &asset, &adapter.address);
     storage::set_pending_harvest(e, &PendingHarvest {
         protocol: protocol.clone(),
         asset: asset.clone(),
@@ -203,6 +216,25 @@ fn pending_harvest(e: &Env, protocol: &Symbol, asset: &Address) -> PendingHarves
         .unwrap_or_else(|| panic_with_error!(e, LendingYieldControllerError::NoPendingHarvest))
 }
 
+// The adapter that took the pending harvest out of the pool. A harvest that was pending before this was
+// recorded falls back to the registered adapter.
+fn harvest_adapter<'a>(e: &'a Env, protocol: &Symbol, asset: &Address) -> LendingAdapterClient<'a> {
+    match storage::get_harvest_adapter(e, protocol, asset) {
+        Some(address) => LendingAdapterClient::new(e, &address),
+        None => adapter_for(e, protocol),
+    }
+}
+
+// Stages 2 and 3 only continue on the adapter that did stage 1. If the registry now names another one,
+// the harvest has to be cancelled, which puts it back through the original adapter.
+fn continuing_adapter<'a>(e: &'a Env, protocol: &Symbol, asset: &Address) -> LendingAdapterClient<'a> {
+    let adapter = supported_asset_adapter(e, protocol, asset);
+    if storage::has_pending_harvest(e, protocol, asset) && harvest_adapter(e, protocol, asset).address != adapter.address {
+        panic_with_error!(e, LendingYieldControllerError::InvalidHarvestState);
+    }
+    adapter
+}
+
 // Puts a stage-1 harvest back into the pool: stage 2, and a cancel before stage 2.
 fn redeposit_harvest(e: &Env, adapter: &LendingAdapterClient, pending: &PendingHarvest) {
     supply(e, adapter, &e.current_contract_address(), &pending.asset, pending.amount);
@@ -212,7 +244,7 @@ fn redeposit_harvest(e: &Env, adapter: &LendingAdapterClient, pending: &PendingH
 /// Stage 2: Recompound harvested yield back into the protocol
 /// Re-deposits the harvested yield to continue earning interest.
 pub fn process_recompound_yield(e: &Env, protocol: &Symbol, asset: Address) -> i128 {
-    let adapter = supported_asset_adapter(e, protocol, &asset);
+    let adapter = continuing_adapter(e, protocol, &asset);
     let pending = pending_harvest(e, protocol, &asset);
     if pending.state != HarvestState::Harvested {
         panic_with_error!(e, LendingYieldControllerError::InvalidHarvestState);
@@ -229,7 +261,7 @@ pub fn process_recompound_yield(e: &Env, protocol: &Symbol, asset: Address) -> i
 /// Stage 3: Finalize distribution of yield to members
 /// Issues cUSD and distributes to treasury and members.
 pub fn process_finalize_distribution(e: &Env, protocol: &Symbol, asset: Address) -> i128 {
-    let adapter = supported_asset_adapter(e, protocol, &asset);
+    let adapter = continuing_adapter(e, protocol, &asset);
     let pending = pending_harvest(e, protocol, &asset);
     if pending.state != HarvestState::Recompounded {
         panic_with_error!(e, LendingYieldControllerError::InvalidHarvestState);
@@ -272,8 +304,8 @@ pub fn process_finalize_distribution(e: &Env, protocol: &Symbol, asset: Address)
 pub fn process_cancel_harvest(e: &Env, protocol: &Symbol, asset: Address) {
     let pending = pending_harvest(e, protocol, &asset);
     if pending.state == HarvestState::Harvested {
-        // No allowlist check: a cancel must work even after support for the asset was removed.
-        redeposit_harvest(e, &adapter_for(e, protocol), &pending);
+        // No registry lookup: a cancel must work even after the asset or the adapter was removed or swapped.
+        redeposit_harvest(e, &harvest_adapter(e, protocol, &asset), &pending);
     }
     storage::remove_pending_harvest(e, protocol, &asset);
 

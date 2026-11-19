@@ -10,6 +10,13 @@ contractmeta!(
 
 fn require_admin(e: &Env) { storage::read_admin(e).require_auth(); storage::extend_instance(e); }
 fn require_owner(e: &Env) { storage::read_owner(e).require_auth(); storage::extend_instance(e); }
+// The mint pause also stops the yield cycle from starting (stage 1) and from minting (stage 3).
+// Stage 2 and `cancel_harvest` stay open so a harvest already taken out can always go back.
+fn require_mint_open(e: &Env) {
+    if storage::read_paused(e).0 {
+        panic_with_error!(e, LendingYieldControllerError::MintPaused);
+    }
+}
 
 pub trait LendingYieldControllerTrait {
     /// Initialize the Lending Yield Controller contract
@@ -233,7 +240,8 @@ pub trait LendingYieldControllerTrait {
     fn rescue(e: &Env, asset: Address, to: Address, amount: i128);
 
     /// (Admin only) Pause deposits (`mint`) and/or withdrawals (`redeem`). A `false` leaves that flag as it is:
-    /// the admin can only switch pauses on.
+    /// the admin can only switch pauses on. The mint pause also stops `harvest_yield` and
+    /// `finalize_distribution`; `recompound_yield` and `cancel_harvest` stay open.
     fn pause(e: &Env, mint: bool, redeem: bool);
 
     /// (Owner only) Clear the pause on deposits (`mint`) and/or withdrawals (`redeem`)
@@ -431,6 +439,7 @@ impl LendingYieldControllerTrait for LendingYieldController {
 
     fn harvest_yield(e: &Env, protocol: Symbol, asset: Address) -> i128 {
         require_admin(e);
+        require_mint_open(e);
 
         let harvested = controls::process_harvest_yield(e, &protocol, asset.clone());
 
@@ -447,6 +456,7 @@ impl LendingYieldControllerTrait for LendingYieldController {
 
     fn finalize_distribution(e: &Env, protocol: Symbol, asset: Address) -> i128 {
         require_admin(e);
+        require_mint_open(e);
 
         let distributor = storage::distributor_client(e);
         if !distributor.is_distribution_available() {

@@ -84,7 +84,7 @@ mod pool {
                         if minted <= 0 {
                             panic_with_error!(&e, PoolError::InvalidBTokenMintAmount);
                         }
-                        // SHORT: a pool that takes one stroop less than asked, to test the caller's check.
+                        // SHORT: a pool that moves one stroop less than asked, to test the caller's check.
                         let short: bool = e.storage().instance().get(&SHORT).unwrap_or(false);
                         token.transfer(&spender, &e.current_contract_address(), &(r.amount - short as i128));
                         positions.collateral.set(idx, cur + minted);
@@ -97,7 +97,8 @@ mod pool {
                             out = cur * rate / S12;
                         }
                         positions.collateral.set(idx, cur - burn);
-                        token.transfer(&e.current_contract_address(), &to, &out);
+                        let short: bool = e.storage().instance().get(&SHORT).unwrap_or(false);
+                        token.transfer(&e.current_contract_address(), &to, &(out - short as i128));
                     }
                     _ => panic!("unsupported"),
                 }
@@ -149,7 +150,7 @@ mod pool {
             e.storage().instance().set(&(RATE, asset), &rate);
         }
 
-        /// Test helper: make every supply pull one stroop less than requested.
+        /// Test helper: make every supply pull, and every withdrawal pay, one stroop less than requested.
         pub fn set_short(e: Env, short: bool) {
             e.storage().instance().set(&SHORT, &short);
         }
@@ -325,6 +326,15 @@ impl Fx {
             address: who,
             invoke: &MockAuthInvoke { contract: &self.controller.address, fn_name, args, sub_invokes },
         }]);
+    }
+    fn cancel(&self) {
+        self.controller.cancel_harvest(&protocol(), &self.usdc.address);
+    }
+    fn owed(&self) -> i128 {
+        self.adapter.get_principal(&self.usdc.address)
+    }
+    fn mint_usdc(&self, to: &Address, amount: i128) {
+        StellarAssetClient::new(&self.env, &self.usdc.address).mint(to, &amount);
     }
     /// The backing invariant, with the rounding tolerance of L-07.
     fn assert_backed(&self) {
@@ -522,6 +532,7 @@ fn cancel_after_harvest_returns_the_yield_to_the_pool() {
     }
     assert!(f.position() + 5 * DUST >= 1050 * UNIT, "position {}", f.position());
     assert_eq!(f.supply(), 1000 * UNIT);
+    assert_eq!(f.owed(), f.supply());
 
     // The yield is still there to harvest properly.
     let y = f.harvest();
@@ -542,7 +553,81 @@ fn cancel_after_recompound_keeps_the_yield() {
     f.controller.cancel_harvest(&protocol(), &f.usdc.address);
     assert_eq!(f.usdc.balance(&f.controller.address), 0);
     assert_eq!(f.supply(), 1000 * UNIT);
+    assert_eq!(f.owed(), f.supply());
     assert!(f.yield_() + DUST >= 50 * UNIT);
+}
+
+/// A harvest is put back through the adapter that took it out, whatever the registry says by then.
+#[test]
+fn a_pending_harvest_survives_adapter_removal_and_swap() {
+    let f = setup();
+    f.deposit(1000 * UNIT);
+    f.set_rate_pct(10_500);
+
+    // Removed: stage 2 is refused, cancel still returns the yield to the pool.
+    f.harvest();
+    f.registry.remove_adapter(&lend(), &protocol());
+    assert_code!(f.controller.try_recompound_yield(&protocol(), &f.usdc.address), 1000);
+    f.cancel();
+    assert_eq!(f.usdc.balance(&f.controller.address), 0);
+    assert_eq!(f.owed(), 1000 * UNIT);
+    assert!(f.position() + 2 * DUST >= 1050 * UNIT);
+
+    // Swapped for another adapter on the same pool: stages 2 and 3 are refused, cancel uses the old one.
+    f.registry.register_adapter(&lend(), &protocol(), &f.adapter.address);
+    f.registry.add_support_for_asset(&lend(), &protocol(), &f.usdc.address);
+    f.harvest();
+    let other = f.env.register(
+        adapter_wasm::WASM,
+        (f.controller.address.clone(), f.pool.address.clone(), f.blnd.address.clone(), f.owner.clone(),
+         f.usdc.address.clone(), 1000 * UNIT),
+    );
+    f.registry.remove_adapter(&lend(), &protocol());
+    f.registry.register_adapter(&lend(), &protocol(), &other);
+    f.registry.add_support_for_asset(&lend(), &protocol(), &f.usdc.address);
+    assert_code!(f.controller.try_recompound_yield(&protocol(), &f.usdc.address), 1004);
+    f.cancel();
+    assert_eq!(f.usdc.balance(&f.controller.address), 0);
+    assert_eq!(f.owed(), 1000 * UNIT);
+    assert_eq!(AdapterClient::new(&f.env, &other).get_principal(&f.usdc.address), 1000 * UNIT);
+}
+
+/// Stage 1 must put exactly the harvested amount in the controller.
+#[test]
+fn harvest_reverts_when_the_pool_pays_a_different_amount() {
+    let f = setup();
+    f.deposit(1000 * UNIT);
+    f.set_rate_pct(10_500);
+    f.pool.set_short(&true);
+    assert_code!(f.controller.try_harvest_yield(&protocol(), &f.usdc.address), 10);
+    assert!(f.controller.get_pending_harvest(&protocol(), &f.usdc.address).is_none());
+}
+
+/// The mint pause also stops the yield cycle from starting or minting. Putting a harvest back stays open.
+#[test]
+fn mint_pause_stops_harvest_and_finalize_but_not_recompound_or_cancel() {
+    let f = setup();
+    f.deposit(1000 * UNIT);
+    f.set_rate_pct(10_500);
+    let (p, a) = (protocol(), f.usdc.address.clone());
+
+    f.controller.pause(&true, &false);
+    assert_code!(f.controller.try_harvest_yield(&p, &a), 1006);
+    f.controller.unpause(&true, &false);
+
+    f.harvest();
+    f.controller.pause(&true, &false);
+    f.recompound(); // the harvested yield can always go back
+    assert_code!(f.controller.try_finalize_distribution(&p, &a), 1006);
+    assert_eq!(f.supply(), 1000 * UNIT);
+    f.cancel();
+
+    f.controller.unpause(&true, &false);
+    f.controller.pause(&false, &true); // the redeem pause does not touch the yield cycle
+    f.harvest();
+    f.recompound();
+    f.finalize();
+    assert!(f.supply() > 1049 * UNIT);
 }
 
 /// M-03: a loss is not written off at the epoch reset. No yield is paid until the position is worth more
@@ -778,7 +863,12 @@ fn recovery_replay_of_the_mainnet_numbers() {
         f.env.storage().persistent().set(&ManagerKey::CusdSupply, &1_051_7788481i128)
     });
 
+    // The deployed adapter predates the asset binding: after its upgrade no asset is stored.
+    f.env.as_contract(&f.adapter.address, || f.env.storage().instance().remove(&symbol_short!("ASSET")));
+
     f.controller.pause(&true, &true);
+    assert_code!(f.controller.try_recollateralize(&protocol(), &f.usdc.address, &funder, &taken), 1300);
+    f.adapter.set_asset(&f.usdc.address);
     f.controller.recollateralize(&protocol(), &f.usdc.address, &funder, &taken);
 
     assert_eq!(f.supply(), 1_051_7788481);
@@ -795,9 +885,32 @@ fn recovery_replay_of_the_mainnet_numbers() {
     assert_eq!(f.supply(), 1_051_7788481);
     assert_eq!(f.position(), 1_052_0761540);
 
+    // Even with USDC off the allowlist, the adapter's own asset cannot be rescued.
+    f.registry.remove_support_for_asset(&lend(), &protocol(), &f.usdc.address);
+    assert_code!(f.controller.try_rescue_collateral(&protocol(), &f.usdc.address, &funder, &UNIT), 1008);
+    f.registry.add_support_for_asset(&lend(), &protocol(), &f.usdc.address);
+
     // Still paused in both directions until the owner clears it.
     assert_code!(f.controller.try_deposit_collateral(&protocol(), &f.user, &f.usdc.address, &UNIT), 1006);
     assert_code!(f.controller.try_withdraw_collateral(&protocol(), &f.user, &f.usdc.address, &UNIT), 1007);
+}
+
+/// The same top-up at a pool rate above 1.0, where the pool's rounding shows: within a few stroops.
+#[test]
+fn recollateralize_at_a_real_pool_rate() {
+    let f = setup();
+    let funder = Address::generate(&f.env);
+    let taken = 1_052_0174658;
+    f.mint_usdc(&funder, taken);
+    let rate = SCALAR_12 * 10_823 / 10_000;
+    f.pool.set_rate(&f.usdc.address, &rate);
+    f.pool.set_collateral(&f.controller.address, &f.usdc.address, &(586_882 * SCALAR_12 / rate + 1));
+    f.seed_record(&f.usdc.address, 51_7790283, 1_015_0000000, 1_067_0174658);
+
+    f.controller.recollateralize(&protocol(), &f.usdc.address, &funder, &taken);
+    assert_eq!(f.owed(), 1_051_7790283);
+    assert!((f.position() - 1_052_0761540).abs() <= DUST, "position {}", f.position());
+    assert!((f.yield_() - 2_971_257).abs() <= DUST, "yield {}", f.yield_());
 }
 
 #[test]
@@ -840,6 +953,31 @@ fn rescue_moves_stray_tokens_but_never_a_pending_harvest() {
     assert_code!(f.controller.try_rescue(&f.usdc.address, &to, &y), 1003);
     f.recompound();
     assert_eq!(f.usdc.balance(&f.controller.address), 0);
+
+    // Once the harvest is back in the pool the hold is gone: stray USDC can be swept again.
+    f.mint_usdc(&f.controller.address, 3 * UNIT);
+    f.controller.rescue(&f.usdc.address, &to, &UNIT);
+    f.cancel();
+    f.harvest();
+    assert_code!(f.controller.try_rescue(&f.usdc.address, &to, &UNIT), 1003);
+    f.cancel(); // a cancel before stage 2 clears it too
+    f.controller.rescue(&f.usdc.address, &to, &(2 * UNIT));
+    assert_eq!(f.usdc.balance(&to), 3 * UNIT);
+    assert_eq!(f.usdc.balance(&f.controller.address), 0);
+}
+
+/// L-06: an upgrade is announced with the new wasm hash.
+#[test]
+fn upgrade_emits_an_event() {
+    use soroban_sdk::testutils::Events;
+    let f = setup();
+    let hash = f.env.deployer().upload_contract_wasm(adapter_wasm::WASM);
+    f.sign(&f.owner, "upgrade", (hash.clone(),).into_val(&f.env), &[]);
+    f.controller.upgrade(&hash);
+    assert_eq!(
+        f.env.events().all().filter_by_contract(&f.controller.address),
+        vec![&f.env, (f.controller.address.clone(), (Symbol::new(&f.env, "upgrade"),).into_val(&f.env), hash.into_val(&f.env))]
+    );
 }
 
 /// Admin can only switch pauses on; only the owner clears them. Each direction is independent.

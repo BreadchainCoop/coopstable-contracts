@@ -66,6 +66,15 @@ pub fn set_pending_harvest(e: &Env, harvest: &PendingHarvest) {
 
 pub fn remove_pending_harvest(e: &Env, protocol: &Symbol, asset: &Address) {
     e.storage().instance().remove(&DataKey::PendingHarvest(protocol.clone(), asset.clone()));
+    e.storage().instance().remove(&DataKey::HarvestAdapter(protocol.clone(), asset.clone()));
+}
+
+pub fn set_harvest_adapter(e: &Env, protocol: &Symbol, asset: &Address, adapter: &Address) {
+    e.storage().instance().set(&DataKey::HarvestAdapter(protocol.clone(), asset.clone()), adapter);
+}
+
+pub fn get_harvest_adapter(e: &Env, protocol: &Symbol, asset: &Address) -> Option<Address> {
+    e.storage().instance().get(&DataKey::HarvestAdapter(protocol.clone(), asset.clone()))
 }
 
 pub fn has_pending_harvest(e: &Env, protocol: &Symbol, asset: &Address) -> bool {
