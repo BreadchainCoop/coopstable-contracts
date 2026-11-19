@@ -6,9 +6,17 @@ use crate::storage_types::{HarvestState, PendingHarvest};
 use crate::utils;
 use crate::{storage, storage_types};
 
+// Collateral moves mint/burn cUSD 1:1, so only registry-supported assets may reach the adapter.
+fn supported_asset_adapter<'a>(e: &'a Env, protocol: &Symbol, asset: &Address) -> LendingAdapterClient<'a> {
+    let registry_client = storage::adapter_registry_client(e);
+    if !registry_client.is_supported_asset(&storage_types::YIELD_TYPE.id(), protocol, asset) {
+        panic_with_error!(e, LendingYieldControllerError::UnsupportedAsset);
+    }
+    LendingAdapterClient::new(e, &registry_client.get_adapter(&storage_types::YIELD_TYPE.id(), protocol))
+}
+
 pub fn process_deposit(e: &Env, protocol: &Symbol, user: Address, asset: Address, amount: i128) -> i128 { 
-    let registry_client = storage::adapter_registry_client(&e);
-    let adapter = LendingAdapterClient::new(e, &registry_client.get_adapter(&storage_types::YIELD_TYPE.id(), &protocol));
+    let adapter = supported_asset_adapter(e, protocol, &asset);
     if let Some((id, fn_name, args)) = adapter.deposit_auth(&user, &asset, &amount) {
         utils::authenticate_contract(
             &e, 
@@ -61,18 +69,8 @@ fn process_cusd_burn(e: &Env, user: Address, amount: i128) {
 }
 
 pub fn process_withdraw_collateral(e: &Env, protocol: &Symbol, user: Address, asset: Address, amount: i128) -> i128 {
-    
-    let registry_client = storage::adapter_registry_client(&e);
-    
-    let adapter =
-        LendingAdapterClient::new(e, &registry_client.get_adapter(&storage_types::YIELD_TYPE.id(), &protocol));
-    
-    let is_asset_supported =
-        registry_client.is_supported_asset(&storage_types::YIELD_TYPE.id(), &protocol, &asset);
-    if !is_asset_supported {
-        panic_with_error!(e, LendingYieldControllerError::UnsupportedAsset);
-    };
-    
+    let adapter = supported_asset_adapter(e, protocol, &asset);
+
     if let Some((id, fn_name, args)) = adapter.withdraw_auth(&user, &asset, &amount) {
         utils::authenticate_contract(
             &e, 
