@@ -131,7 +131,7 @@ help:
 	@printf "  $(GREEN)make invariants$(NC)         - Property test of the backing invariant on the built wasm\n"
 	@printf "\n"
 	@printf "$(YELLOW)Safety and recovery:$(NC)\n"
-	@printf "  $(GREEN)make pause MINT=true REDEEM=false$(NC) - (admin) switch pauses on\n"
+	@printf "  $(GREEN)make pause MINT=true REDEEM=false$(NC) - (admin) switch pauses on; MINT also stops harvest and finalize\n"
 	@printf "  $(GREEN)make unpause MINT=true REDEEM=true$(NC) - (owner) clear pauses\n"
 	@printf "  $(GREEN)make get-paused$(NC)         - Show the pause flags (mint, redeem)\n"
 	@printf "  $(GREEN)make recollateralize FUNDER_KEY=name AMOUNT=stroops$(NC) - (admin + funder) top up backing, mints nothing\n"
@@ -1653,7 +1653,10 @@ keep-alive:
 		|| { stellar contract restore $(KEEP_ALIVE_ARGS) --id $$1 --key-xdr $$2 --durability persistent \
 		     && stellar contract extend $(KEEP_ALIVE_ARGS) --id $$1 --key-xdr $$2 --durability persistent --ledgers-to-extend $(KEEP_ALIVE_LEDGERS); }; \
 	done
-	@EPOCH=$$(stellar contract invoke $(KEEP_ALIVE_ARGS) --send=no --id $(YIELD_DISTRIBUTOR_ID) -- get_current_epoch | tr -d '"'); \
+	@stellar contract extend $(KEEP_ALIVE_ARGS) --id $(CUSD_ID) --ledgers-to-extend $(KEEP_ALIVE_LEDGERS) \
+	|| { stellar contract restore $(KEEP_ALIVE_ARGS) --id $(CUSD_ID) \
+	     && stellar contract extend $(KEEP_ALIVE_ARGS) --id $(CUSD_ID) --ledgers-to-extend $(KEEP_ALIVE_LEDGERS); }
+	@FAILED=""; EPOCH=$$(stellar contract invoke $(KEEP_ALIVE_ARGS) --send=no --id $(YIELD_DISTRIBUTOR_ID) -- get_current_epoch | tr -d '"'); \
 	MEMBERS=$$(stellar contract invoke $(KEEP_ALIVE_ARGS) --send=no --id $(YIELD_DISTRIBUTOR_ID) -- list_members | jq -r '.[]'); \
 	KEYS='{"vec":[{"symbol":"Members"}]} {"vec":[{"symbol":"Distributions"}]} {"vec":[{"symbol":"TotalDistributed"}]}'; \
 	for n in $$(seq 0 $$EPOCH); do KEYS="$$KEYS {\"vec\":[{\"symbol\":\"Distribution\"},{\"u64\":$$n}]}"; done; \
@@ -1664,14 +1667,17 @@ keep-alive:
 		stellar contract extend $(KEEP_ALIVE_ARGS) --id $(YIELD_DISTRIBUTOR_ID) --key-xdr $$xdr --durability persistent --ledgers-to-extend $(KEEP_ALIVE_LEDGERS) \
 		|| { stellar contract restore $(KEEP_ALIVE_ARGS) --id $(YIELD_DISTRIBUTOR_ID) --key-xdr $$xdr --durability persistent \
 		     && stellar contract extend $(KEEP_ALIVE_ARGS) --id $(YIELD_DISTRIBUTOR_ID) --key-xdr $$xdr --durability persistent --ledgers-to-extend $(KEEP_ALIVE_LEDGERS); } \
-		|| printf "$(YELLOW)  skipped $$key (entry does not exist yet)$(NC)\n"; \
-	done
-	@stellar contract extend $(KEEP_ALIVE_ARGS) --id $(CUSD_ID) --ledgers-to-extend $(KEEP_ALIVE_LEDGERS) \
-	|| { stellar contract restore $(KEEP_ALIVE_ARGS) --id $(CUSD_ID) \
-	     && stellar contract extend $(KEEP_ALIVE_ARGS) --id $(CUSD_ID) --ledgers-to-extend $(KEEP_ALIVE_LEDGERS); }
+		|| { printf "$(RED)  FAILED $$key$(NC)\n"; FAILED="$$FAILED $$key"; }; \
+	done; \
+	if [ -n "$$FAILED" ]; then \
+		printf "$(RED)Some distributor entries were not extended. On a deployment that has never had a member or a distribution, Members and Distributions do not exist yet; anything else is a real failure:$$FAILED$(NC)\n"; \
+		exit 1; \
+	fi
 	@printf "$(GREEN)Keep-alive done.$(NC)\n"
 
 # Upload the freshly built WASM of every upgradeable contract and upgrade it in place (owner signs).
+# Uses the optimized wasm when `make build-optimized` produced one. Remove stale *.optimized.wasm files
+# (`make clean-optimized`) before building, so an old optimized file is never uploaded by mistake.
 # An adapter deployed before Bundle 2 has no upgrade entrypoint: replace it with deploy-blend-adapter-full.
 # After upgrading an adapter that predates the asset binding, run `make set-adapter-asset`.
 # Afterwards copy the printed hashes into $(NETWORK).contracts.json.
@@ -1685,7 +1691,10 @@ upgrade-all: check-build
 		id=$$(grep "^$$var" deployed_addresses.mk | cut -d'=' -f2 | tr -d ' '); \
 		if [ -z "$$id" ]; then printf "$(RED)$$var is not set in deployed_addresses.mk$(NC)\n"; exit 1; fi; \
 		printf "$(YELLOW)$$contract ($$id)$(NC)\n"; \
-		hash=$$(stellar contract upload --source $(OWNER_KEY) --network $(NETWORK) --wasm $(WASM_DIR)/$$contract.wasm) || exit 1; \
+		wasm="$(WASM_DIR)/$$contract.wasm"; \
+		if [ -f "$(WASM_DIR)/$$contract$(OPTIMIZED_SUFFIX)" ]; then wasm="$(WASM_DIR)/$$contract$(OPTIMIZED_SUFFIX)"; fi; \
+		printf "  uploading $$wasm\n"; \
+		hash=$$(stellar contract upload --source $(OWNER_KEY) --network $(NETWORK) --wasm $$wasm) || exit 1; \
 		printf "  wasm hash: $$hash\n"; \
 		stellar contract invoke --source $(OWNER_KEY) --network $(NETWORK) --id $$id -- upgrade --new_wasm_hash $$hash || exit 1; \
 	done

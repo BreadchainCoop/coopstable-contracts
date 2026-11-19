@@ -172,19 +172,25 @@ Each contract has an `owner` and an `admin`. A user needs neither.
 | Owner | `unpause`, `rescue_collateral`, `rescue`, `set_admin`, `upgrade` |
 
 - **`pause(mint, redeem)`** stops deposits, withdrawals or both. The admin can only switch a pause on; only the
-  owner clears it with `unpause(mint, redeem)`. Reads and the harvest stages keep working while paused.
+  owner clears it with `unpause(mint, redeem)`. The mint pause also stops the yield cycle from starting
+  (`harvest_yield`) and from minting (`finalize_distribution`), so it pauses the yield claimer too.
+  `recompound_yield` and `cancel_harvest` stay open, so a harvest already taken out can always go back.
+  Reads keep working.
 - **`recollateralize(protocol, asset, from, amount)`** supplies a supported asset from `from` into the pool
   position without minting cUSD. It raises what the adapter records as owed by the same amount, so a top-up
   is never paid out as yield. It works while mint is paused.
 - **`rescue_collateral(protocol, asset, to, amount)`** withdraws a reserve that is **not** a supported asset
-  from the controller's pool position. A supported asset is refused, so it cannot touch the backing.
+  from the controller's pool position. A supported asset is refused, and so is the asset the adapter is
+  bound to, so it cannot touch the backing even while the allowlist is empty.
 - **`rescue(asset, to, amount)`** transfers tokens the controller holds itself. It is refused while a harvest
   of that asset sits between stage 1 and stage 2.
 - **`claim_emissions`** sends the pool's emissions to the distributor's treasury.
 
 Other contracts: the registry's admin registers adapters and sets the asset allowlist, and its owner replaces
 the admin (`set_yield_adapter_admin`). Only the yield controller can call the manager's `issue_cusd` and
-`burn_cusd`. The adapter's owner can `upgrade` it and bind it to its asset with `set_asset`.
+`burn_cusd`. The adapter's owner can `upgrade` it and, once, bind it to its asset with `set_asset`.
+A protocol's adapter is replaced with `remove_adapter` then `register_adapter`, never in place; a harvest
+pending at that moment goes back through the adapter that took it out when it is cancelled.
 
 ### Backing and yield
 

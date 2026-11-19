@@ -66,7 +66,11 @@ export const AdapterError = {
   /**
    * Deposit of an asset this adapter is not bound to
    */
-  1300: {message:"UnsupportedAsset"}
+  1300: {message:"UnsupportedAsset"},
+  /**
+   * The adapter is already bound to an asset
+   */
+  1301: {message:"AssetAlreadyBound"}
 }
 
 export type SupportedAdapter = {tag: "BlendCapital", values: void} | {tag: "Custom", values: readonly [string]};
@@ -96,6 +100,11 @@ export interface Client {
   withdraw: ({user, asset, amount}: {user: string, asset: string, amount: i128}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
 
   /**
+   * Construct and simulate a get_asset transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  get_asset: (options?: MethodOptions) => Promise<AssembledTransaction<string>>
+
+  /**
    * Construct and simulate a get_yield transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    */
   get_yield: ({asset}: {asset: string}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
@@ -103,7 +112,7 @@ export interface Client {
   /**
    * Construct and simulate a set_asset transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * (Owner only) Bind the adapter to the one asset it accepts deposits of. For an adapter deployed
-   * before the binding existed; a new deployment sets it in the constructor.
+   * before the binding existed; a new deployment sets it in the constructor. It can be set once.
    */
   set_asset: ({asset}: {asset: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
@@ -190,13 +199,14 @@ export class Client extends ContractClient {
       new ContractSpec([ "AAAAAQAAAAAAAAAAAAAAE0Fzc2V0RXBvY2hQcmluY2lwYWwAAAAABQAAAAAAAAARZGVwb3NpdHNfaW5fZXBvY2gAAAAAAAALAAAAAAAAAAVlcG9jaAAAAAAAAAYAAAAAAAAADGxhc3RfdXBkYXRlZAAAAAYAAAAAAAAACXByaW5jaXBhbAAAAAAAAAsAAAAAAAAAC3dpdGhkcmF3YWxzAAAAAAs=",
         "AAAAAQAAAAAAAAAAAAAAB1JlcXVlc3QAAAAAAwAAAAAAAAAHYWRkcmVzcwAAAAATAAAAAAAAAAZhbW91bnQAAAAAAAsAAAAAAAAADHJlcXVlc3RfdHlwZQAAAAQ=",
         "AAAAAwAAAAAAAAAAAAAAC1JlcXVlc3RUeXBlAAAAAAoAAAAAAAAABlN1cHBseQAAAAAAAAAAAAAAAAAIV2l0aGRyYXcAAAABAAAAAAAAABBTdXBwbHlDb2xsYXRlcmFsAAAAAgAAAAAAAAASV2l0aGRyYXdDb2xsYXRlcmFsAAAAAAADAAAAAAAAAAZCb3Jyb3cAAAAAAAQAAAAAAAAABVJlcGF5AAAAAAAABQAAAAAAAAAaRmlsbFVzZXJMaXF1aWRhdGlvbkF1Y3Rpb24AAAAAAAYAAAAAAAAAEkZpbGxCYWREZWJ0QXVjdGlvbgAAAAAABwAAAAAAAAATRmlsbEludGVyZXN0QXVjdGlvbgAAAAAIAAAAAAAAABhEZWxldGVMaXF1aWRhdGlvbkF1Y3Rpb24AAAAJ",
-        "AAAABAAAAAAAAAAAAAAADEFkYXB0ZXJFcnJvcgAAAAEAAAAwRGVwb3NpdCBvZiBhbiBhc3NldCB0aGlzIGFkYXB0ZXIgaXMgbm90IGJvdW5kIHRvAAAAEFVuc3VwcG9ydGVkQXNzZXQAAAUU",
+        "AAAABAAAAAAAAAAAAAAADEFkYXB0ZXJFcnJvcgAAAAIAAAAwRGVwb3NpdCBvZiBhbiBhc3NldCB0aGlzIGFkYXB0ZXIgaXMgbm90IGJvdW5kIHRvAAAAEFVuc3VwcG9ydGVkQXNzZXQAAAUUAAAAKFRoZSBhZGFwdGVyIGlzIGFscmVhZHkgYm91bmQgdG8gYW4gYXNzZXQAAAARQXNzZXRBbHJlYWR5Qm91bmQAAAAAAAUV",
         "AAAAAAAAAAAAAAAHZGVwb3NpdAAAAAADAAAAAAAAAAR1c2VyAAAAEwAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAAAAAAZhbW91bnQAAAAAAAsAAAABAAAACw==",
         "AAAAAAAAAAAAAAAHZ2V0X2FweQAAAAABAAAAAAAAAAVhc3NldAAAAAAAABMAAAABAAAABA==",
         "AAAAAAAAAEwoT3duZXIgb25seSkgUmVwbGFjZSB0aGUgY29udHJhY3QgY29kZTsgdGhlIGFkZHJlc3MgYW5kIGFsbCBzdG9yYWdlIHN1cnZpdmUuAAAAB3VwZ3JhZGUAAAAAAQAAAAAAAAANbmV3X3dhc21faGFzaAAAAAAAA+4AAAAgAAAAAA==",
         "AAAAAAAAAAAAAAAId2l0aGRyYXcAAAADAAAAAAAAAAR1c2VyAAAAEwAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAAAAAAZhbW91bnQAAAAAAAsAAAABAAAACw==",
+        "AAAAAAAAAAAAAAAJZ2V0X2Fzc2V0AAAAAAAAAAAAAAEAAAAT",
         "AAAAAAAAAAAAAAAJZ2V0X3lpZWxkAAAAAAAAAQAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAQAAAAs=",
-        "AAAAAAAAAKcoT3duZXIgb25seSkgQmluZCB0aGUgYWRhcHRlciB0byB0aGUgb25lIGFzc2V0IGl0IGFjY2VwdHMgZGVwb3NpdHMgb2YuIEZvciBhbiBhZGFwdGVyIGRlcGxveWVkCmJlZm9yZSB0aGUgYmluZGluZyBleGlzdGVkOyBhIG5ldyBkZXBsb3ltZW50IHNldHMgaXQgaW4gdGhlIGNvbnN0cnVjdG9yLgAAAAAJc2V0X2Fzc2V0AAAAAAAAAQAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAA==",
+        "AAAAAAAAALsoT3duZXIgb25seSkgQmluZCB0aGUgYWRhcHRlciB0byB0aGUgb25lIGFzc2V0IGl0IGFjY2VwdHMgZGVwb3NpdHMgb2YuIEZvciBhbiBhZGFwdGVyIGRlcGxveWVkCmJlZm9yZSB0aGUgYmluZGluZyBleGlzdGVkOyBhIG5ldyBkZXBsb3ltZW50IHNldHMgaXQgaW4gdGhlIGNvbnN0cnVjdG9yLiBJdCBjYW4gYmUgc2V0IG9uY2UuAAAAAAlzZXRfYXNzZXQAAAAAAAABAAAAAAAAAAVhc3NldAAAAAAAABMAAAAA",
         "AAAAAAAAAAAAAAALY2xhaW1feWllbGQAAAAAAgAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAAAAAAx5aWVsZF9hbW91bnQAAAALAAAAAQAAAAs=",
         "AAAAAAAAAAAAAAALZ2V0X2JhbGFuY2UAAAAAAgAAAAAAAAAEdXNlcgAAABMAAAAAAAAABWFzc2V0AAAAAAAAEwAAAAEAAAAL",
         "AAAAAAAAAAAAAAAMZGVwb3NpdF9hdXRoAAAAAwAAAAAAAAAEdXNlcgAAABMAAAAAAAAABWFzc2V0AAAAAAAAEwAAAAAAAAAGYW1vdW50AAAAAAALAAAAAQAAA+gAAAPtAAAAAwAAABMAAAARAAAD6gAAAAA=",
@@ -220,6 +230,7 @@ export class Client extends ContractClient {
         get_apy: this.txFromJSON<u32>,
         upgrade: this.txFromJSON<null>,
         withdraw: this.txFromJSON<i128>,
+        get_asset: this.txFromJSON<string>,
         get_yield: this.txFromJSON<i128>,
         set_asset: this.txFromJSON<null>,
         claim_yield: this.txFromJSON<i128>,
