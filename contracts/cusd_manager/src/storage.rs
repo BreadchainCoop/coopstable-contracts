@@ -4,8 +4,9 @@ use crate::storage_types::{
     INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD, DataKey, PERSISTENT_BUMP_AMOUNT, PERSISTENT_LIFETIME_THRESHOLD
 };
 
-/// Only admin and owner paths extend the instance (shared with the code) and `CusdSupply`, so a member's
-/// mint or burn never pays rent for the protocol; the yield-claimer keeps these entries alive otherwise.
+/// Only the manager's own admin and owner calls (`set_*`, `upgrade`) extend the instance (shared with the
+/// code) and `CusdSupply`, so a member's mint or burn never pays rent for the protocol. `issue_cusd` and
+/// `burn_cusd` extend nothing, the yield cycle included: in practice `make keep-alive` keeps these alive.
 pub fn extend_storage(e: &Env) {
     e.storage()
         .instance()

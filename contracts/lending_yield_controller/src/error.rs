@@ -26,4 +26,11 @@ pub enum LendingYieldControllerError {
     InvalidHarvestState = 1004,
     /// No yield available to harvest
     NoYieldToHarvest = 1005,
+
+    /// Deposits (cUSD mints) are paused
+    MintPaused = 1006,
+    /// Withdrawals (cUSD redemptions) are paused
+    RedeemPaused = 1007,
+    /// Rescue of pool collateral is only for assets that are not supported
+    AssetIsSupported = 1008,
 }

@@ -193,7 +193,7 @@ fn test_get_yield_no_adapters() {
 
 
 #[test]
-#[should_panic(expected = "Error(Contract, #1100)")]
+#[should_panic(expected = "Error(Contract, #1000)")]
 fn test_deposit_unsupported_asset() {
     let fixture = TestFixture::create();
 
@@ -209,8 +209,36 @@ fn test_deposit_unsupported_asset() {
     );
 }
 
+// Regression: the adapter is registered and USDC is supported, but the deposited asset is not.
+// A second reserve of the lending pool (e.g. XLM) must not mint cUSD.
 #[test]
-#[should_panic(expected = "Error(Contract, #1100)")]
+#[should_panic(expected = "Error(Contract, #1000)")]
+fn test_deposit_unsupported_asset_with_registered_adapter() {
+    let fixture = TestFixture::create();
+
+    fixture.env.mock_all_auths();
+    fixture.adapter_registry.register_adapter(
+        &SupportedYieldType::Lending.id(),
+        &SupportedAdapter::BlendCapital.id(),
+        &Address::generate(&fixture.env),
+    );
+    fixture.adapter_registry.add_support_for_asset(
+        &SupportedYieldType::Lending.id(),
+        &SupportedAdapter::BlendCapital.id(),
+        &fixture.usdc_token_id,
+    );
+    let other_reserve = fixture.env.register_stellar_asset_contract_v2(fixture.admin.clone());
+
+    fixture.controller.deposit_collateral(
+        &SupportedAdapter::BlendCapital.id(),
+        &fixture.user1,
+        &other_reserve.address(),
+        &1000_0000000,
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #1000)")]
 fn test_withdraw_unsupported_asset() {
     let fixture = TestFixture::create();
 
@@ -768,7 +796,7 @@ fn test_cancel_harvest_no_pending_harvest() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #1100)")]
+#[should_panic(expected = "Error(Contract, #1000)")] // no adapter means no supported asset; the allowlist is checked first
 fn test_harvest_yield_no_adapter() {
     let fixture = TestFixture::create();
 

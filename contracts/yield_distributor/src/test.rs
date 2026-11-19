@@ -442,7 +442,8 @@ fn test_yield_distribution_zero_treasury_share() {
     let result = fixture.distributor.distribute_yield(&fixture.token_id, &total_amount);
     assert_eq!(result, total_amount);
     let per_member_amount = total_amount / 3; // 3 members
-    assert_eq!(fixture.token_client().balance(&fixture.treasury), 0);
+    // Only the division remainder reaches the treasury (L-02).
+    assert_eq!(fixture.token_client().balance(&fixture.treasury), total_amount - 3 * per_member_amount);
     assert_eq!(fixture.token_client().balance(&fixture.member1), per_member_amount);
     assert_eq!(fixture.token_client().balance(&fixture.member2), per_member_amount);
     assert_eq!(fixture.token_client().balance(&fixture.member3), per_member_amount);
@@ -700,3 +701,89 @@ fn test_advance_epoch_unauthorized() {
 
     fixture.distributor.advance_epoch();
 }
+// L-02: the division remainder goes to the treasury and the record shows what was actually sent.
+#[test]
+fn test_distribution_remainder_goes_to_treasury() {
+    let fixture = TestFixture::create();
+    let total_amount = 10_001i128; // members' 9,001 does not divide by 3
+
+    fixture.add_members();
+    fixture.mint_tokens_to_distributor(total_amount);
+    fixture.env.mock_all_auths_allowing_non_root_auth();
+    fixture.distributor.distribute_yield(&fixture.token_id, &total_amount);
+
+    let token = fixture.token_client();
+    assert_eq!(token.balance(&fixture.member1), 3_000);
+    assert_eq!(token.balance(&fixture.treasury), 1_001);
+    assert_eq!(token.balance(&fixture.distributor.address), 0);
+    let record = fixture.distributor.get_distribution_history().last().unwrap();
+    assert_eq!((record.distribution_total, record.distribution_treasury, record.distribution_member), (10_001, 1_001, 9_000));
+}
+
+// L-02: a member share too small to split is not stranded in the distributor.
+#[test]
+fn test_distribution_smaller_than_member_count_goes_to_treasury() {
+    let fixture = TestFixture::create();
+    fixture.add_members();
+    fixture.mint_tokens_to_distributor(2);
+    fixture.env.mock_all_auths_allowing_non_root_auth();
+    fixture.distributor.distribute_yield(&fixture.token_id, &2);
+
+    assert_eq!(fixture.token_client().balance(&fixture.treasury), 2);
+    assert_eq!(fixture.token_client().balance(&fixture.distributor.address), 0);
+    let record = fixture.distributor.get_distribution_history().last().unwrap();
+    assert_eq!((record.distribution_treasury, record.distribution_member), (2, 0));
+}
+
+// L-08: a removed member leaves the stored member list, so it does not grow forever.
+#[test]
+fn test_remove_member_drops_the_address_from_storage() {
+    let fixture = TestFixture::create();
+    fixture.add_members();
+    fixture.env.mock_all_auths();
+    fixture.distributor.remove_member(&fixture.member2);
+
+    let stored: soroban_sdk::Vec<Address> = fixture.env.as_contract(&fixture.distributor.address, || {
+        fixture.env.storage().persistent().get(&crate::storage_types::DataKey::Members).unwrap()
+    });
+    assert_eq!(stored, vec![&fixture.env, fixture.member1.clone(), fixture.member3.clone()]);
+    assert_eq!(fixture.distributor.list_members(), stored);
+
+    // Re-adding works and is listed once.
+    fixture.distributor.add_member(&fixture.member2);
+    assert_eq!(fixture.distributor.list_members().len(), 3);
+}
+
+// L-06: config that would break distribution is refused.
+#[test]
+#[should_panic(expected = "Error(Contract, #1202)")]
+fn test_constructor_rejects_treasury_share_above_100_percent() {
+    let env = Env::default();
+    let a = Address::generate(&env);
+    env.register(YieldDistributor, (a.clone(), 10_001u32, a.clone(), 86400u64, a.clone(), a.clone()));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #1202)")]
+fn test_set_distribution_period_rejects_zero() {
+    let fixture = TestFixture::create();
+    fixture.env.mock_all_auths();
+    fixture.distributor.set_distribution_period(&0);
+}
+
+// L-06: an upgrade is announced with the new wasm hash.
+#[test]
+fn test_upgrade_emits_an_event() {
+    let fixture = TestFixture::create();
+    fixture.env.mock_all_auths();
+    let hash = fixture.env.deployer().upload_contract_wasm(UPGRADE_WASM);
+    fixture.distributor.upgrade(&hash);
+    let id = fixture.distributor.address.clone();
+    assert_eq!(
+        fixture.env.events().all().filter_by_contract(&id),
+        vec![&fixture.env, (id.clone(), (Symbol::new(&fixture.env, "upgrade"),).into_val(&fixture.env), hash.into_val(&fixture.env))]
+    );
+}
+
+/// Any valid wasm will do as the upgrade target: the event is emitted by the code being replaced.
+const UPGRADE_WASM: &[u8] = include_bytes!("../../../packages/blend_capital_adapter/artifacts/pool.wasm");

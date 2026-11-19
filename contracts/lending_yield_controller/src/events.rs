@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env, Symbol};
+use soroban_sdk::{Address, BytesN, Env, Symbol};
 pub struct LendingYieldControllerEvents {}
 
 impl LendingYieldControllerEvents {
@@ -60,5 +60,30 @@ impl LendingYieldControllerEvents {
     pub fn cancel_harvest(e: &Env, protocol: Symbol, asset: Address) {
         let topics = (Symbol::new(e, "cancel_harvest"), protocol);
         e.events().publish(topics, asset);
+    }
+
+    pub fn recollateralize(e: &Env, protocol: Symbol, asset: Address, from: Address, amount: i128) {
+        let topics = (Symbol::new(e, "recollateralize"), protocol);
+        e.events().publish(topics, (asset, from, amount));
+    }
+
+    pub fn rescue_collateral(e: &Env, protocol: Symbol, asset: Address, to: Address, amount: i128) {
+        let topics = (Symbol::new(e, "rescue_collateral"), protocol);
+        e.events().publish(topics, (asset, to, amount));
+    }
+
+    pub fn rescue(e: &Env, asset: Address, to: Address, amount: i128) {
+        let topics = (Symbol::new(e, "rescue"),);
+        e.events().publish(topics, (asset, to, amount));
+    }
+
+    pub fn paused(e: &Env, mint: bool, redeem: bool) {
+        let topics = (Symbol::new(e, "paused"),);
+        e.events().publish(topics, (mint, redeem));
+    }
+
+    pub fn upgrade(e: &Env, new_wasm_hash: BytesN<32>) {
+        let topics = (Symbol::new(e, "upgrade"),);
+        e.events().publish(topics, new_wasm_hash);
     }
 }

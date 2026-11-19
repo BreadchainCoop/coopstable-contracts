@@ -16,4 +16,6 @@ pub enum YieldDistributorError {
     // YieldDistributorError Errors
     MemberAlreadyExists = 1200,
     MemberDoesNotExist = 1201,
+    /// Treasury share above 10000 bps, or a distribution period of 0
+    InvalidConfig = 1202,
 }

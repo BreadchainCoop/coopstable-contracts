@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env, Symbol};
+use soroban_sdk::{Address, BytesN, Env, Symbol};
 
 pub struct YieldAdapterRegistryEvents {}
 
@@ -41,5 +41,10 @@ impl YieldAdapterRegistryEvents {
     ) {
         let topics = (Symbol::new(e, "remove_support_for_asset"), yield_type);
         e.events().publish(topics, (protocol, asset_address));
+    }
+
+    pub fn upgrade(e: &Env, new_wasm_hash: BytesN<32>) {
+        let topics = (Symbol::new(e, "upgrade"),);
+        e.events().publish(topics, new_wasm_hash);
     }
 }

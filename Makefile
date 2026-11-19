@@ -17,6 +17,8 @@ OPTIMIZED_SUFFIX = .optimized.wasm
 OWNER_KEY ?= owner-mainnet
 ADMIN_KEY ?= admin-mainnet
 # TREASURY_KEY ?= treasury
+# Identity that pays for `make recollateralize`. No default: the treasury has no local signer today.
+FUNDER_KEY ?=
 CUSD_CODE ?= CUSD
 
 # Get public keys from stellar keys
@@ -35,6 +37,10 @@ CUSD_ADDRESS = $(CUSD_CODE):$(OWNER)
 -include deployed_addresses.mk
 
 # Default values
+# Opening principal of a newly deployed adapter: what is already owed to cUSD holders for the asset.
+# 0 on a fresh deployment. For a replacement adapter pass the old adapter's `get_principal`, read while
+# `get_pending_harvest` is empty: between harvest stage 1 and stage 2 it is short by the harvested amount.
+ADAPTER_PRINCIPAL ?= 0
 TREASURY_SHARE_BPS ?= 1000
 # DISTRIBUTION_PERIOD ?= 60
 DISTRIBUTION_PERIOD ?= 2592000 # 30 days
@@ -110,7 +116,7 @@ help:
 	@printf "$(YELLOW)Upgrades:$(NC)\n"
 	@printf "  $(GREEN)make get-wasm-hashes$(NC)    - Get WASM hashes for all contracts\n"
 	@printf "  $(GREEN)make upload-wasm CONTRACT=name$(NC) - Upload and get hash for one contract\n"
-	@printf "  $(GREEN)make upgrade-all$(NC)        - Upload + upgrade manager, registry, distributor, controller in place\n"
+	@printf "  $(GREEN)make upgrade-all$(NC)        - Upload + upgrade manager, registry, distributor, controller, adapter in place\n"
 	@printf "  $(GREEN)make upgrade-contract CONTRACT_ID=... WASM_HASH=...$(NC) - Upgrade a contract\n"
 	@printf "\n"
 	@printf "$(YELLOW)Utilities:$(NC)\n"
@@ -122,7 +128,16 @@ help:
 	@printf "  $(GREEN)make keep-alive$(NC)         - Extend TTL of all Coopstable code + instance entries (restores first if archived)\n"
 	@printf "  $(GREEN)make code-rent$(NC)          - Rent of the deployed code entries and live state size (read-only)\n"
 	@printf "  $(GREEN)make add-all-members$(NC)    - Add all three members to yield distribution\n"
-	@printf "  $(GREEN)make burn-cusd ACC=member_1$(NC) - Burn all cUSD balance for a user\n"
+	@printf "  $(GREEN)make invariants$(NC)         - Property test of the backing invariant on the built wasm\n"
+	@printf "\n"
+	@printf "$(YELLOW)Safety and recovery:$(NC)\n"
+	@printf "  $(GREEN)make pause MINT=true REDEEM=false$(NC) - (admin) switch pauses on; MINT also stops harvest and finalize\n"
+	@printf "  $(GREEN)make unpause MINT=true REDEEM=true$(NC) - (owner) clear pauses\n"
+	@printf "  $(GREEN)make get-paused$(NC)         - Show the pause flags (mint, redeem)\n"
+	@printf "  $(GREEN)make recollateralize FUNDER_KEY=name AMOUNT=stroops$(NC) - (admin + funder) top up backing, mints nothing\n"
+	@printf "  $(GREEN)make rescue-collateral ASSET=C... TO=G... AMOUNT=stroops$(NC) - (owner) withdraw an unsupported reserve from the pool\n"
+	@printf "  $(GREEN)make rescue ASSET=C... TO=G... AMOUNT=stroops$(NC) - (owner) transfer tokens held by the controller\n"
+	@printf "  $(GREEN)make set-adapter-asset$(NC)  - (owner) bind the deployed adapter to USDC\n"
 
 # ========== BUILD TARGETS ==========
 
@@ -161,6 +176,33 @@ bindings: check-build
 			--overwrite || exit 1; \
 	done
 	@printf "$(GREEN)✓ All bindings generated successfully!$(NC)\n"
+
+# Property test of the backing invariant, on the wasm just built (see invariants/README.md).
+# Every stage must pass with its coverage minimum met. s0 runs the pre-fix controller and must FAIL;
+# it is skipped when that wasm is not at invariants/target/controller_prefix.wasm.
+# Usage: make invariants [INVARIANT_STAGES="s1 s3"] [CASES=2000]   (a low CASES misses the coverage minimum)
+INVARIANT_STAGES ?= s1 s2 s3 s4 s4b
+INVARIANTS_BIN := ./target/release/coopstable-invariants
+.PHONY: invariants
+invariants: build
+	@cd invariants && cargo build --release && mkdir -p target/results
+	@for s in $(INVARIANT_STAGES); do \
+		printf "$(YELLOW)invariants $$s...$(NC)\n"; \
+		( cd invariants && $(INVARIANTS_BIN) $$s $(CASES) > target/results/$$s.txt 2>&1 ); rc=$$?; \
+		grep -E "^cases run|^coverage|^RESULT" invariants/target/results/$$s.txt; \
+		if [ $$rc -ne 0 ] || grep -q "^coverage SHORT" invariants/target/results/$$s.txt; then \
+			printf "$(RED)$$s failed: see invariants/target/results/$$s.txt$(NC)\n"; exit 1; \
+		fi; \
+	done
+	@if [ -f invariants/target/controller_prefix.wasm ]; then \
+		printf "$(YELLOW)invariants s0 (pre-fix controller, must fail)...$(NC)\n"; \
+		( cd invariants && $(INVARIANTS_BIN) s0 $(CASES) > target/results/s0.txt 2>&1 ); rc=$$?; \
+		grep -E "^RESULT" invariants/target/results/s0.txt; \
+		if [ $$rc -ne 1 ]; then printf "$(RED)s0 did not fail (exit $$rc)$(NC)\n"; exit 1; fi; \
+	else \
+		printf "$(YELLOW)s0 skipped: no pre-fix controller wasm (see invariants/README.md)$(NC)\n"; \
+	fi
+	@printf "$(GREEN)✓ Invariants hold on the built wasm$(NC)\n"
 
 # ========== OPTIMIZATION TARGETS ==========
 
@@ -577,7 +619,8 @@ deploy-blend-adapter: check-build
 		-- \
 		--yield_controller $(LENDING_YIELD_CONTROLLER_ID) \
 		--blend_pool_id $(BLEND_POOL_ID) \
-		--blend_token_id $(BLEND_TOKEN_ID) --owner $(OWNER) --asset $(USDC_ID)); \
+		--blend_token_id $(BLEND_TOKEN_ID) --owner $(OWNER) --asset $(USDC_ID) \
+		--principal $(ADAPTER_PRINCIPAL)); \
 	printf "$(GREEN)Blend Capital Adapter deployed: $$BLEND_CAPITAL_ADAPTER_ID$(NC)\n"; \
 	echo "# Deployed contract addresses - $$(date)" > deployed_addresses.mk.tmp; \
 	echo "BLEND_CAPITAL_ADAPTER_ID = $$BLEND_CAPITAL_ADAPTER_ID" >> deployed_addresses.mk.tmp; \
@@ -914,6 +957,129 @@ test-claim-yield:
 	fi
 	@printf "$(GREEN)3-stage yield claiming complete!$(NC)\n"
 
+# ========== SAFETY AND RECOVERY TARGETS ==========
+# Amounts are in stroops (7 decimals). Nothing here mints or burns cUSD.
+
+define require_controller
+	@if [ -z "$(LENDING_YIELD_CONTROLLER_ID)" ]; then \
+		printf "$(RED)Error: Lending Yield Controller ID not set.$(NC)\n"; \
+		exit 1; \
+	fi
+endef
+
+# (Admin) Switch pauses on. A `false` leaves that flag as it is; only the owner clears a pause.
+.PHONY: pause
+pause:
+	$(require_controller)
+	@if [ -z "$(MINT)" ] || [ -z "$(REDEEM)" ]; then \
+		printf "$(RED)Usage: make pause MINT=true|false REDEEM=true|false$(NC)\n"; exit 1; \
+	fi
+	stellar contract invoke \
+		--source $(ADMIN_KEY) \
+		--network $(NETWORK) \
+		--id $(LENDING_YIELD_CONTROLLER_ID) \
+		-- \
+		pause \
+		--mint $(MINT) \
+		--redeem $(REDEEM)
+
+# (Owner) Clear pauses. `true` clears that flag.
+.PHONY: unpause
+unpause:
+	$(require_controller)
+	@if [ -z "$(MINT)" ] || [ -z "$(REDEEM)" ]; then \
+		printf "$(RED)Usage: make unpause MINT=true|false REDEEM=true|false$(NC)\n"; exit 1; \
+	fi
+	stellar contract invoke \
+		--source $(OWNER_KEY) \
+		--network $(NETWORK) \
+		--id $(LENDING_YIELD_CONTROLLER_ID) \
+		-- \
+		unpause \
+		--mint $(MINT) \
+		--redeem $(REDEEM)
+
+.PHONY: get-paused
+get-paused:
+	$(require_controller)
+	@stellar contract invoke \
+		--source $(ADMIN_KEY) \
+		--network $(NETWORK) \
+		--send=no \
+		--id $(LENDING_YIELD_CONTROLLER_ID) \
+		-- \
+		get_paused
+
+# (Admin calls, funder pays) Supply USDC into the pool position without minting cUSD.
+# FUNDER_KEY must be a local identity: it is passed by name so the CLI signs the funder's auth entry.
+.PHONY: recollateralize
+recollateralize:
+	$(require_controller)
+	@if [ -z "$(FUNDER_KEY)" ] || [ -z "$(AMOUNT)" ]; then \
+		printf "$(RED)Usage: make recollateralize FUNDER_KEY=identity AMOUNT=stroops$(NC)\n"; exit 1; \
+	fi
+	stellar contract invoke \
+		--source $(ADMIN_KEY) \
+		--network $(NETWORK) \
+		--id $(LENDING_YIELD_CONTROLLER_ID) \
+		-- \
+		recollateralize \
+		--protocol "BC_LA" \
+		--asset $(USDC_ID) \
+		--from $(FUNDER_KEY) \
+		--amount $(AMOUNT)
+
+# (Owner) Withdraw a reserve that is NOT a supported asset out of the controller's pool position.
+# The contract refuses a supported asset, so this can never touch the USDC backing.
+.PHONY: rescue-collateral
+rescue-collateral:
+	$(require_controller)
+	@if [ -z "$(ASSET)" ] || [ -z "$(TO)" ] || [ -z "$(AMOUNT)" ]; then \
+		printf "$(RED)Usage: make rescue-collateral ASSET=C... TO=G... AMOUNT=stroops$(NC)\n"; exit 1; \
+	fi
+	stellar contract invoke \
+		--source $(OWNER_KEY) \
+		--network $(NETWORK) \
+		--id $(LENDING_YIELD_CONTROLLER_ID) \
+		-- \
+		rescue_collateral \
+		--protocol "BC_LA" \
+		--asset $(ASSET) \
+		--to $(TO) \
+		--amount $(AMOUNT)
+
+# (Owner) Transfer tokens the controller holds itself. Refused while a harvest of that asset is in stage 1.
+.PHONY: rescue
+rescue:
+	$(require_controller)
+	@if [ -z "$(ASSET)" ] || [ -z "$(TO)" ] || [ -z "$(AMOUNT)" ]; then \
+		printf "$(RED)Usage: make rescue ASSET=C... TO=G... AMOUNT=stroops$(NC)\n"; exit 1; \
+	fi
+	stellar contract invoke \
+		--source $(OWNER_KEY) \
+		--network $(NETWORK) \
+		--id $(LENDING_YIELD_CONTROLLER_ID) \
+		-- \
+		rescue \
+		--asset $(ASSET) \
+		--to $(TO) \
+		--amount $(AMOUNT)
+
+# (Owner) Bind the already deployed adapter to USDC. Needed once after upgrading an adapter deployed
+# before the binding existed: until then every deposit through it is refused.
+.PHONY: set-adapter-asset
+set-adapter-asset:
+	@if [ -z "$(BLEND_CAPITAL_ADAPTER_ID)" ]; then \
+		printf "$(RED)Error: Blend Capital Adapter ID not set.$(NC)\n"; exit 1; \
+	fi
+	stellar contract invoke \
+		--source $(OWNER_KEY) \
+		--network $(NETWORK) \
+		--id $(BLEND_CAPITAL_ADAPTER_ID) \
+		-- \
+		set_asset \
+		--asset $(USDC_ID)
+
 # Individual stage targets for manual control
 .PHONY: harvest-yield
 harvest-yield:
@@ -1014,7 +1180,7 @@ test-claim-yield-sim:
 		--simulate
 	@printf "$(GREEN)Yield claiming test complete!$(NC)\n"
 
-# Test yield claiming and distribution
+# (Admin) Claim the pool's BLND emissions for USDC to the distributor's treasury
 .PHONY: test-claim-emissions
 test-claim-emissions:
 	@printf "$(YELLOW)Testing emissions claiming and distribution...$(NC)\n"
@@ -1232,6 +1398,10 @@ add-member:
 		printf "$(RED)Error: Yield Distributor ID not set.$(NC)\n"; \
 		exit 1; \
 	fi
+	@# A member that cannot receive cUSD (no trustline) makes every distribution fail: simulate a transfer first.
+	@out=$$(stellar contract invoke --send=no --source $(OWNER) --network $(NETWORK) --id $(CUSD_ID) \
+		-- transfer --from $(OWNER) --to $(MEMBER) --amount 1 2>&1) \
+		|| { printf "%s\n$(RED)Error: $(MEMBER) cannot receive cUSD (trustline missing?). Not added.$(NC)\n" "$$out"; exit 1; }
 	stellar contract invoke \
 		--source $(ADMIN_KEY) \
 		--network $(NETWORK) \
@@ -1245,7 +1415,7 @@ add-member:
 # distributor
 .PHONY: remove-member
 remove-member:
-	@printf "$(YELLOW)Adding $(MEMBER) as community member for yield distribution...$(NC)\n"
+	@printf "$(YELLOW)Removing $(MEMBER) from yield distribution...$(NC)\n"
 	@if [ -z "$(YIELD_DISTRIBUTOR_ID)" ]; then \
 		printf "$(RED)Error: Yield Distributor ID not set.$(NC)\n"; \
 		exit 1; \
@@ -1258,7 +1428,7 @@ remove-member:
 		-- \
 		remove_member \
 		--member $(MEMBER)
-	@printf "$(GREEN)$(MEMBER) added as community member!$(NC)\n"
+	@printf "$(GREEN)$(MEMBER) removed from yield distribution!$(NC)\n"
 
 .PHONY: add-all-members
 add-all-members:
@@ -1376,42 +1546,6 @@ cusd-check-balance:
 	balance \
 	--id $(ACCOUNT) || printf "$(RED)Error reading CUSD balance$(NC)\n"
 
-# Burn all cUSD balance for a user
-.PHONY: burn-cusd
-burn-cusd:
-	@if [ -z "$(ACC)" ]; then \
-		printf "$(RED)Error: ACC parameter required. Usage: make burn-cusd ACC=member_1$(NC)\n"; \
-		exit 1; \
-	fi
-	@if [ -z "$(CUSD_MANAGER_ID)" ]; then \
-		printf "$(RED)Error: CUSD Manager ID not set.$(NC)\n"; \
-		exit 1; \
-	fi
-	@printf "$(YELLOW)Getting cUSD balance for $(ACC)...$(NC)\n"
-	@ACCOUNT_KEY=$$(stellar keys public-key $(ACC)); \
-	BALANCE=$$(stellar contract invoke \
-		--source $(ACC) \
-		--network $(NETWORK) \
-		--send=no \
-		--id $(CUSD_ID) \
-		-- \
-		balance \
-		--id $$ACCOUNT_KEY 2>/dev/null || echo "0"); \
-	if [ "$$BALANCE" = "0" ] || [ -z "$$BALANCE" ]; then \
-		printf "$(RED)No cUSD balance to burn for $(ACC)$(NC)\n"; \
-		exit 0; \
-	fi; \
-	printf "$(YELLOW)Burning $$BALANCE cUSD from $(ACC)...$(NC)\n"; \
-	stellar contract invoke \
-		--source $(ACC) \
-		--network $(NETWORK) \
-		--id $(CUSD_MANAGER_ID) \
-		-- \
-		burn_cusd \
-		--from $$ACCOUNT_KEY \
-		--amount $$BALANCE; \
-	printf "$(GREEN)Successfully burned $$BALANCE cUSD from $(ACC)!$(NC)\n"
-
 # Check protocol configuration status
 .PHONY: check-config
 check-config:
@@ -1495,6 +1629,10 @@ KEEP_ALIVE_LEDGERS ?= 2073600
 KEEP_ALIVE_IDS := $(CUSD_MANAGER_ID) $(YIELD_ADAPTER_REGISTRY_ID) $(YIELD_DISTRIBUTOR_ID) $(LENDING_YIELD_CONTROLLER_ID) $(BLEND_CAPITAL_ADAPTER_ID)
 KEEP_ALIVE_HASHES := $(shell jq -r '.hashes[]' $(NETWORK).contracts.json 2>/dev/null)
 KEEP_ALIVE_ARGS := --source $(ADMIN_KEY) --network $(NETWORK)
+# Distribution records to keep alive, counted back from the current epoch. One transaction each, so not all
+# of history: older records are left to archive (restorable), and `get_distribution_history` fails until
+# every archived record it lists has been restored.
+KEEP_ALIVE_EPOCHS ?= 12
 
 # Usage: make keep-alive [KEEP_ALIVE_LEDGERS=3110400]   (120 days by default, 180 days is the network maximum)
 .PHONY: keep-alive
@@ -1522,12 +1660,34 @@ keep-alive:
 	@stellar contract extend $(KEEP_ALIVE_ARGS) --id $(CUSD_ID) --ledgers-to-extend $(KEEP_ALIVE_LEDGERS) \
 	|| { stellar contract restore $(KEEP_ALIVE_ARGS) --id $(CUSD_ID) \
 	     && stellar contract extend $(KEEP_ALIVE_ARGS) --id $(CUSD_ID) --ledgers-to-extend $(KEEP_ALIVE_LEDGERS); }
+	@FAILED=""; EPOCH=$$(stellar contract invoke $(KEEP_ALIVE_ARGS) --send=no --id $(YIELD_DISTRIBUTOR_ID) -- get_current_epoch | tr -d '"'); \
+	MEMBERS=$$(stellar contract invoke $(KEEP_ALIVE_ARGS) --send=no --id $(YIELD_DISTRIBUTOR_ID) -- list_members | jq -r '.[]'); \
+	KEYS='{"vec":[{"symbol":"Members"}]} {"vec":[{"symbol":"Distributions"}]} {"vec":[{"symbol":"TotalDistributed"}]}'; \
+	FIRST=$$((EPOCH - $(KEEP_ALIVE_EPOCHS) + 1)); if [ $$FIRST -lt 0 ]; then FIRST=0; fi; \
+	for n in $$(seq $$FIRST $$EPOCH); do KEYS="$$KEYS {\"vec\":[{\"symbol\":\"Distribution\"},{\"u64\":$$n}]}"; done; \
+	for m in $$MEMBERS; do KEYS="$$KEYS {\"vec\":[{\"symbol\":\"Member\"},{\"address\":\"$$m\"}]}"; done; \
+	printf "$(YELLOW)Extending the distributor's persistent entries (epochs $$FIRST..$$EPOCH, members, totals)...$(NC)\n"; \
+	for key in $$KEYS; do \
+		xdr=$$(echo "$$key" | stellar xdr encode --type ScVal); \
+		stellar contract extend $(KEEP_ALIVE_ARGS) --id $(YIELD_DISTRIBUTOR_ID) --key-xdr $$xdr --durability persistent --ledgers-to-extend $(KEEP_ALIVE_LEDGERS) \
+		|| { stellar contract restore $(KEEP_ALIVE_ARGS) --id $(YIELD_DISTRIBUTOR_ID) --key-xdr $$xdr --durability persistent \
+		     && stellar contract extend $(KEEP_ALIVE_ARGS) --id $(YIELD_DISTRIBUTOR_ID) --key-xdr $$xdr --durability persistent --ledgers-to-extend $(KEEP_ALIVE_LEDGERS); } \
+		|| { printf "$(RED)  FAILED $$key$(NC)\n"; FAILED="$$FAILED $$key"; }; \
+	done; \
+	if [ -n "$$FAILED" ]; then \
+		printf "$(RED)Some distributor entries were not extended. On a deployment that has never had a member or a distribution, Members and Distributions do not exist yet; anything else is a real failure:$$FAILED$(NC)\n"; \
+		exit 1; \
+	fi
 	@printf "$(GREEN)Keep-alive done.$(NC)\n"
 
 # Upload the freshly built WASM of every upgradeable contract and upgrade it in place (owner signs).
-# The adapter deployed before Bundle 2 has no upgrade entrypoint: replace it with deploy-blend-adapter-full.
+# Uses the optimized wasm when `make build-optimized` produced one. Remove stale *.optimized.wasm files
+# (`make clean-optimized`) before building, so an old optimized file is never uploaded by mistake.
+# An adapter deployed before Bundle 2 has no upgrade entrypoint: replace it with deploy-blend-adapter-full.
+# After upgrading an adapter that predates the asset binding, run `make set-adapter-asset`.
 # Afterwards copy the printed hashes into $(NETWORK).contracts.json.
-UPGRADEABLE := cusd_manager:CUSD_MANAGER_ID yield_adapter_registry:YIELD_ADAPTER_REGISTRY_ID yield_distributor:YIELD_DISTRIBUTOR_ID lending_yield_controller:LENDING_YIELD_CONTROLLER_ID
+# The adapter goes before the controller: the new controller calls `get_principal`, which the old adapter lacks.
+UPGRADEABLE := cusd_manager:CUSD_MANAGER_ID yield_adapter_registry:YIELD_ADAPTER_REGISTRY_ID yield_distributor:YIELD_DISTRIBUTOR_ID blend_capital_adapter:BLEND_CAPITAL_ADAPTER_ID lending_yield_controller:LENDING_YIELD_CONTROLLER_ID
 
 .PHONY: upgrade-all
 upgrade-all: check-build
@@ -1536,7 +1696,10 @@ upgrade-all: check-build
 		id=$$(grep "^$$var" deployed_addresses.mk | cut -d'=' -f2 | tr -d ' '); \
 		if [ -z "$$id" ]; then printf "$(RED)$$var is not set in deployed_addresses.mk$(NC)\n"; exit 1; fi; \
 		printf "$(YELLOW)$$contract ($$id)$(NC)\n"; \
-		hash=$$(stellar contract upload --source $(OWNER_KEY) --network $(NETWORK) --wasm $(WASM_DIR)/$$contract.wasm) || exit 1; \
+		wasm="$(WASM_DIR)/$$contract.wasm"; \
+		if [ -f "$(WASM_DIR)/$$contract$(OPTIMIZED_SUFFIX)" ]; then wasm="$(WASM_DIR)/$$contract$(OPTIMIZED_SUFFIX)"; fi; \
+		printf "  uploading $$wasm\n"; \
+		hash=$$(stellar contract upload --source $(OWNER_KEY) --network $(NETWORK) --wasm $$wasm) || exit 1; \
 		printf "  wasm hash: $$hash\n"; \
 		stellar contract invoke --source $(OWNER_KEY) --network $(NETWORK) --id $$id -- upgrade --new_wasm_hash $$hash || exit 1; \
 	done

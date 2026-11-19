@@ -33,7 +33,7 @@ if (typeof window !== "undefined") {
 
 
 
-export type DataKey = {tag: "Owner", values: void} | {tag: "Admin", values: void} | {tag: "CUSDManager", values: void} | {tag: "AdapterRegistry", values: void} | {tag: "YieldDistributor", values: void} | {tag: "PendingHarvest", values: readonly [string, string]};
+export type DataKey = {tag: "Owner", values: void} | {tag: "Admin", values: void} | {tag: "CUSDManager", values: void} | {tag: "AdapterRegistry", values: void} | {tag: "YieldDistributor", values: void} | {tag: "PendingHarvest", values: readonly [string, string]} | {tag: "Paused", values: void} | {tag: "HeldHarvest", values: readonly [string]} | {tag: "HarvestAdapter", values: readonly [string, string]};
 
 /**
  * State of a pending harvest operation
@@ -83,7 +83,19 @@ export const LendingYieldControllerError = {
   /**
    * No yield available to harvest
    */
-  1005: {message:"NoYieldToHarvest"}
+  1005: {message:"NoYieldToHarvest"},
+  /**
+   * Deposits (cUSD mints) are paused
+   */
+  1006: {message:"MintPaused"},
+  /**
+   * Withdrawals (cUSD redemptions) are paused
+   */
+  1007: {message:"RedeemPaused"},
+  /**
+   * Rescue of pool collateral is only for assets that are not supported
+   */
+  1008: {message:"AssetIsSupported"}
 }
 
 export type SupportedAdapter = {tag: "BlendCapital", values: void} | {tag: "Custom", values: readonly [string]};
@@ -92,9 +104,24 @@ export type SupportedYieldType = {tag: "Lending", values: void} | {tag: "Liquidi
 
 export interface Client {
   /**
+   * Construct and simulate a pause transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  pause: ({mint, redeem}: {mint: boolean, redeem: boolean}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a rescue transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  rescue: ({asset, to, amount}: {asset: string, to: string, amount: i128}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
    * Construct and simulate a get_apy transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    */
   get_apy: ({protocol, asset}: {protocol: string, asset: string}, options?: MethodOptions) => Promise<AssembledTransaction<u32>>
+
+  /**
+   * Construct and simulate a unpause transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  unpause: ({mint, redeem}: {mint: boolean, redeem: boolean}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
    * Construct and simulate a upgrade transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -110,6 +137,11 @@ export interface Client {
    * Construct and simulate a set_admin transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    */
   set_admin: ({new_admin}: {new_admin: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a get_paused transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  get_paused: (options?: MethodOptions) => Promise<AssembledTransaction<readonly [boolean, boolean]>>
 
   /**
    * Construct and simulate a get_emissions transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -132,6 +164,11 @@ export interface Client {
   claim_emissions: ({protocol, asset}: {protocol: string, asset: string}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
 
   /**
+   * Construct and simulate a recollateralize transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  recollateralize: ({protocol, asset, from, amount}: {protocol: string, asset: string, from: string, amount: i128}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
    * Construct and simulate a get_cusd_manager transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    */
   get_cusd_manager: (options?: MethodOptions) => Promise<AssembledTransaction<string>>
@@ -145,6 +182,11 @@ export interface Client {
    * Construct and simulate a set_cusd_manager transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    */
   set_cusd_manager: ({cusd_manager}: {cusd_manager: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a rescue_collateral transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   */
+  rescue_collateral: ({protocol, asset, to, amount}: {protocol: string, asset: string, to: string, amount: i128}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
    * Construct and simulate a deposit_collateral transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -206,22 +248,28 @@ export class Client extends ContractClient {
   }
   constructor(public readonly options: ContractClientOptions) {
     super(
-      new ContractSpec([ "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAABgAAAAAAAAAAAAAABU93bmVyAAAAAAAAAAAAAAAAAAAFQWRtaW4AAAAAAAAAAAAAAAAAAAtDVVNETWFuYWdlcgAAAAAAAAAAAAAAAA9BZGFwdGVyUmVnaXN0cnkAAAAAAAAAAAAAAAAQWWllbGREaXN0cmlidXRvcgAAAAEAAAAyUGVuZGluZyBoYXJ2ZXN0IGZvciBhIHNwZWNpZmljIHByb3RvY29sL2Fzc2V0IHBhaXIAAAAAAA5QZW5kaW5nSGFydmVzdAAAAAAAAgAAABEAAAAT",
+      new ContractSpec([ "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAACQAAAAAAAAAAAAAABU93bmVyAAAAAAAAAAAAAAAAAAAFQWRtaW4AAAAAAAAAAAAAAAAAAAtDVVNETWFuYWdlcgAAAAAAAAAAAAAAAA9BZGFwdGVyUmVnaXN0cnkAAAAAAAAAAAAAAAAQWWllbGREaXN0cmlidXRvcgAAAAEAAAAyUGVuZGluZyBoYXJ2ZXN0IGZvciBhIHNwZWNpZmljIHByb3RvY29sL2Fzc2V0IHBhaXIAAAAAAA5QZW5kaW5nSGFydmVzdAAAAAAAAgAAABEAAAATAAAAAAAAABwobWludCBwYXVzZWQsIHJlZGVlbSBwYXVzZWQpAAAABlBhdXNlZAAAAAAAAQAAAEtBbW91bnQgb2YgYW4gYXNzZXQgdGhlIGNvbnRyb2xsZXIgaG9sZHMgYmV0d2VlbiBoYXJ2ZXN0IHN0YWdlIDEgYW5kIHN0YWdlIDIAAAAAC0hlbGRIYXJ2ZXN0AAAAAAEAAAATAAAAAQAAAF9BZGFwdGVyIHRoYXQgdG9vayBhIHBlbmRpbmcgaGFydmVzdCBvdXQgb2YgdGhlIHBvb2w7IHRoZSBoYXJ2ZXN0IGdvZXMgYmFjayB0aHJvdWdoIHRoZSBzYW1lIG9uZQAAAAAOSGFydmVzdEFkYXB0ZXIAAAAAAAIAAAARAAAAEw==",
         "AAAAAwAAACRTdGF0ZSBvZiBhIHBlbmRpbmcgaGFydmVzdCBvcGVyYXRpb24AAAAAAAAADEhhcnZlc3RTdGF0ZQAAAAMAAAASTm8gcGVuZGluZyBoYXJ2ZXN0AAAAAAAETm9uZQAAAAAAAAAyWWllbGQgaGFzIGJlZW4gaGFydmVzdGVkICh3aXRoZHJhd24gZnJvbSBwcm90b2NvbCkAAAAAAAlIYXJ2ZXN0ZWQAAAAAAAABAAAANllpZWxkIGhhcyBiZWVuIHJlY29tcG91bmRlZCAocmUtZGVwb3NpdGVkIHRvIHByb3RvY29sKQAAAAAADFJlY29tcG91bmRlZAAAAAI=",
         "AAAAAQAAADpQZW5kaW5nIGhhcnZlc3QgZGF0YSBzdG9yZWQgYmV0d2VlbiBtdWx0aS1zdGFnZSBvcGVyYXRpb25zAAAAAAAAAAAADlBlbmRpbmdIYXJ2ZXN0AAAAAAAEAAAAAAAAAAZhbW91bnQAAAAAAAsAAAAAAAAABWFzc2V0AAAAAAAAEwAAAAAAAAAIcHJvdG9jb2wAAAARAAAAAAAAAAVzdGF0ZQAAAAAAB9AAAAAMSGFydmVzdFN0YXRl",
-        "AAAABAAAALhFcnJvciBjb2RlcyBmb3IgdGhlIGN1c2RfbWFuYWdlciBjb250cmFjdC4gQ29tbW9uIGVycm9ycyBhcmUgY29kZXMgdGhhdCBtYXRjaCB1cCB3aXRoIHRoZSBidWlsdC1pbgpMZW5kaW5nWWllbGRDb250cm9sbGVyRXJyb3IgZXJyb3IgcmVwb3J0aW5nLiBDVVNETWFuYWdlciBzcGVjaWZpYyBlcnJvcnMgc3RhcnQgYXQgMTAwAAAAAAAAABtMZW5kaW5nWWllbGRDb250cm9sbGVyRXJyb3IAAAAADAAAAAAAAAANSW50ZXJuYWxFcnJvcgAAAAAAAAEAAAAAAAAAF0FscmVhZHlJbml0aWFsaXplZEVycm9yAAAAAAMAAAAAAAAAEVVuYXV0aG9yaXplZEVycm9yAAAAAAAABAAAAAAAAAATTmVnYXRpdmVBbW91bnRFcnJvcgAAAAAIAAAAAAAAAAxCYWxhbmNlRXJyb3IAAAAKAAAAAAAAAA1PdmVyZmxvd0Vycm9yAAAAAAAADAAAAAAAAAAQVW5zdXBwb3J0ZWRBc3NldAAAA+gAAAAAAAAAEFlpZWxkVW5hdmFpbGFibGUAAAPpAAAAMU5vIHBlbmRpbmcgaGFydmVzdCBleGlzdHMgZm9yIHRoaXMgcHJvdG9jb2wvYXNzZXQAAAAAAAAQTm9QZW5kaW5nSGFydmVzdAAAA+oAAAA4QSBoYXJ2ZXN0IGlzIGFscmVhZHkgaW4gcHJvZ3Jlc3MgZm9yIHRoaXMgcHJvdG9jb2wvYXNzZXQAAAAYSGFydmVzdEFscmVhZHlJblByb2dyZXNzAAAD6wAAAChJbnZhbGlkIGhhcnZlc3Qgc3RhdGUgZm9yIHRoaXMgb3BlcmF0aW9uAAAAE0ludmFsaWRIYXJ2ZXN0U3RhdGUAAAAD7AAAAB1ObyB5aWVsZCBhdmFpbGFibGUgdG8gaGFydmVzdAAAAAAAABBOb1lpZWxkVG9IYXJ2ZXN0AAAD7Q==",
+        "AAAABAAAALhFcnJvciBjb2RlcyBmb3IgdGhlIGN1c2RfbWFuYWdlciBjb250cmFjdC4gQ29tbW9uIGVycm9ycyBhcmUgY29kZXMgdGhhdCBtYXRjaCB1cCB3aXRoIHRoZSBidWlsdC1pbgpMZW5kaW5nWWllbGRDb250cm9sbGVyRXJyb3IgZXJyb3IgcmVwb3J0aW5nLiBDVVNETWFuYWdlciBzcGVjaWZpYyBlcnJvcnMgc3RhcnQgYXQgMTAwAAAAAAAAABtMZW5kaW5nWWllbGRDb250cm9sbGVyRXJyb3IAAAAADwAAAAAAAAANSW50ZXJuYWxFcnJvcgAAAAAAAAEAAAAAAAAAF0FscmVhZHlJbml0aWFsaXplZEVycm9yAAAAAAMAAAAAAAAAEVVuYXV0aG9yaXplZEVycm9yAAAAAAAABAAAAAAAAAATTmVnYXRpdmVBbW91bnRFcnJvcgAAAAAIAAAAAAAAAAxCYWxhbmNlRXJyb3IAAAAKAAAAAAAAAA1PdmVyZmxvd0Vycm9yAAAAAAAADAAAAAAAAAAQVW5zdXBwb3J0ZWRBc3NldAAAA+gAAAAAAAAAEFlpZWxkVW5hdmFpbGFibGUAAAPpAAAAMU5vIHBlbmRpbmcgaGFydmVzdCBleGlzdHMgZm9yIHRoaXMgcHJvdG9jb2wvYXNzZXQAAAAAAAAQTm9QZW5kaW5nSGFydmVzdAAAA+oAAAA4QSBoYXJ2ZXN0IGlzIGFscmVhZHkgaW4gcHJvZ3Jlc3MgZm9yIHRoaXMgcHJvdG9jb2wvYXNzZXQAAAAYSGFydmVzdEFscmVhZHlJblByb2dyZXNzAAAD6wAAAChJbnZhbGlkIGhhcnZlc3Qgc3RhdGUgZm9yIHRoaXMgb3BlcmF0aW9uAAAAE0ludmFsaWRIYXJ2ZXN0U3RhdGUAAAAD7AAAAB1ObyB5aWVsZCBhdmFpbGFibGUgdG8gaGFydmVzdAAAAAAAABBOb1lpZWxkVG9IYXJ2ZXN0AAAD7QAAACBEZXBvc2l0cyAoY1VTRCBtaW50cykgYXJlIHBhdXNlZAAAAApNaW50UGF1c2VkAAAAAAPuAAAAKVdpdGhkcmF3YWxzIChjVVNEIHJlZGVtcHRpb25zKSBhcmUgcGF1c2VkAAAAAAAADFJlZGVlbVBhdXNlZAAAA+8AAABDUmVzY3VlIG9mIHBvb2wgY29sbGF0ZXJhbCBpcyBvbmx5IGZvciBhc3NldHMgdGhhdCBhcmUgbm90IHN1cHBvcnRlZAAAAAAQQXNzZXRJc1N1cHBvcnRlZAAAA/A=",
+        "AAAAAAAAAAAAAAAFcGF1c2UAAAAAAAACAAAAAAAAAARtaW50AAAAAQAAAAAAAAAGcmVkZWVtAAAAAAABAAAAAA==",
+        "AAAAAAAAAAAAAAAGcmVzY3VlAAAAAAADAAAAAAAAAAVhc3NldAAAAAAAABMAAAAAAAAAAnRvAAAAAAATAAAAAAAAAAZhbW91bnQAAAAAAAsAAAAA",
         "AAAAAAAAAAAAAAAHZ2V0X2FweQAAAAACAAAAAAAAAAhwcm90b2NvbAAAABEAAAAAAAAABWFzc2V0AAAAAAAAEwAAAAEAAAAE",
+        "AAAAAAAAAAAAAAAHdW5wYXVzZQAAAAACAAAAAAAAAARtaW50AAAAAQAAAAAAAAAGcmVkZWVtAAAAAAABAAAAAA==",
         "AAAAAAAAAAAAAAAHdXBncmFkZQAAAAABAAAAAAAAAA1uZXdfd2FzbV9oYXNoAAAAAAAD7gAAACAAAAAA",
         "AAAAAAAAAAAAAAAJZ2V0X3lpZWxkAAAAAAAAAgAAAAAAAAAIcHJvdG9jb2wAAAARAAAAAAAAAAVhc3NldAAAAAAAABMAAAABAAAACw==",
         "AAAAAAAAAAAAAAAJc2V0X2FkbWluAAAAAAAAAQAAAAAAAAAJbmV3X2FkbWluAAAAAAAAEwAAAAA=",
+        "AAAAAAAAAAAAAAAKZ2V0X3BhdXNlZAAAAAAAAAAAAAEAAAPtAAAAAgAAAAEAAAAB",
         "AAAAAAAAAAAAAAANX19jb25zdHJ1Y3RvcgAAAAAAAAUAAAAAAAAAEXlpZWxkX2Rpc3RyaWJ1dG9yAAAAAAAAEwAAAAAAAAAQYWRhcHRlcl9yZWdpc3RyeQAAABMAAAAAAAAADGN1c2RfbWFuYWdlcgAAABMAAAAAAAAABWFkbWluAAAAAAAAEwAAAAAAAAAFb3duZXIAAAAAAAATAAAAAA==",
         "AAAAAAAAAAAAAAANZ2V0X2VtaXNzaW9ucwAAAAAAAAIAAAAAAAAACHByb3RvY29sAAAAEQAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAQAAAAs=",
         "AAAAAAAAAAAAAAANaGFydmVzdF95aWVsZAAAAAAAAAIAAAAAAAAACHByb3RvY29sAAAAEQAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAQAAAAs=",
         "AAAAAAAAAAAAAAAOY2FuY2VsX2hhcnZlc3QAAAAAAAIAAAAAAAAACHByb3RvY29sAAAAEQAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAA==",
         "AAAAAAAAAAAAAAAPY2xhaW1fZW1pc3Npb25zAAAAAAIAAAAAAAAACHByb3RvY29sAAAAEQAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAQAAAAs=",
+        "AAAAAAAAAAAAAAAPcmVjb2xsYXRlcmFsaXplAAAAAAQAAAAAAAAACHByb3RvY29sAAAAEQAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAAAAAARmcm9tAAAAEwAAAAAAAAAGYW1vdW50AAAAAAALAAAAAA==",
         "AAAAAAAAAAAAAAAQZ2V0X2N1c2RfbWFuYWdlcgAAAAAAAAABAAAAEw==",
         "AAAAAAAAAAAAAAAQcmVjb21wb3VuZF95aWVsZAAAAAIAAAAAAAAACHByb3RvY29sAAAAEQAAAAAAAAAFYXNzZXQAAAAAAAATAAAAAQAAAAs=",
         "AAAAAAAAAAAAAAAQc2V0X2N1c2RfbWFuYWdlcgAAAAEAAAAAAAAADGN1c2RfbWFuYWdlcgAAABMAAAAA",
+        "AAAAAAAAAAAAAAARcmVzY3VlX2NvbGxhdGVyYWwAAAAAAAAEAAAAAAAAAAhwcm90b2NvbAAAABEAAAAAAAAABWFzc2V0AAAAAAAAEwAAAAAAAAACdG8AAAAAABMAAAAAAAAABmFtb3VudAAAAAAACwAAAAA=",
         "AAAAAAAAAAAAAAASZGVwb3NpdF9jb2xsYXRlcmFsAAAAAAAEAAAAAAAAAAhwcm90b2NvbAAAABEAAAAAAAAABHVzZXIAAAATAAAAAAAAAAVhc3NldAAAAAAAABMAAAAAAAAABmFtb3VudAAAAAAACwAAAAEAAAAL",
         "AAAAAAAAAAAAAAATZ2V0X3BlbmRpbmdfaGFydmVzdAAAAAACAAAAAAAAAAhwcm90b2NvbAAAABEAAAAAAAAABWFzc2V0AAAAAAAAEwAAAAEAAAPoAAAH0AAAAA5QZW5kaW5nSGFydmVzdAAA",
         "AAAAAAAAAAAAAAATd2l0aGRyYXdfY29sbGF0ZXJhbAAAAAAEAAAAAAAAAAhwcm90b2NvbAAAABEAAAAAAAAABHVzZXIAAAATAAAAAAAAAAVhc3NldAAAAAAAABMAAAAAAAAABmFtb3VudAAAAAAACwAAAAEAAAAL",
@@ -236,17 +284,23 @@ export class Client extends ContractClient {
     )
   }
   public readonly fromJSON = {
-    get_apy: this.txFromJSON<u32>,
+    pause: this.txFromJSON<null>,
+        rescue: this.txFromJSON<null>,
+        get_apy: this.txFromJSON<u32>,
+        unpause: this.txFromJSON<null>,
         upgrade: this.txFromJSON<null>,
         get_yield: this.txFromJSON<i128>,
         set_admin: this.txFromJSON<null>,
+        get_paused: this.txFromJSON<readonly [boolean, boolean]>,
         get_emissions: this.txFromJSON<i128>,
         harvest_yield: this.txFromJSON<i128>,
         cancel_harvest: this.txFromJSON<null>,
         claim_emissions: this.txFromJSON<i128>,
+        recollateralize: this.txFromJSON<null>,
         get_cusd_manager: this.txFromJSON<string>,
         recompound_yield: this.txFromJSON<i128>,
         set_cusd_manager: this.txFromJSON<null>,
+        rescue_collateral: this.txFromJSON<null>,
         deposit_collateral: this.txFromJSON<i128>,
         get_pending_harvest: this.txFromJSON<Option<PendingHarvest>>,
         withdraw_collateral: this.txFromJSON<i128>,

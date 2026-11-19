@@ -115,10 +115,19 @@ pub fn remove_member(e: &Env, address: &Address) {
         extend_persistent(e, &key);
     }
 
+    // Drop the address from the member list so it does not grow with every member that ever joined.
+    // The `Member` record stays (inactive), and past distributions keep their own member lists.
+    let members_key = DataKey::Members;
+    if let Some(mut members) = e.storage().persistent().get::<DataKey, Vec<Address>>(&members_key) {
+        if let Some(i) = members.first_index_of(address) {
+            members.remove(i);
+            e.storage().persistent().set(&members_key, &members);
+            extend_persistent(e, &members_key);
+        }
+    }
+
     // Update current distribution with new member list
     update_current_distribution_members(e);
-    
-    // Note: We don't remove from the members list to maintain history
 }
 
 pub fn get_member(e: &Env, address: &Address) -> Option<Member> {
@@ -324,6 +333,8 @@ pub fn read_distribution_history(e: &Env) -> Vec<Distribution> {
     distributions_vec
 }
 
+// ponytail: one u64 per epoch in a single entry. At a 30-day period that is ~100 bytes a decade; with a
+// period of minutes it would reach the entry size limit, so page it (or keep only a count) before then.
 fn read_all_epoch_distributions(e: &Env) -> Vec<u64> {
     match e.storage().persistent().get(&DataKey::Distributions) {
         Some(existing) => {

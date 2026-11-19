@@ -24,4 +24,5 @@ mod events;
 mod error;
 mod controls;
 mod test;
+mod test_e2e;
 mod utils;
