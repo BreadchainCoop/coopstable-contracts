@@ -770,3 +770,20 @@ fn test_set_distribution_period_rejects_zero() {
     fixture.env.mock_all_auths();
     fixture.distributor.set_distribution_period(&0);
 }
+
+// L-06: an upgrade is announced with the new wasm hash.
+#[test]
+fn test_upgrade_emits_an_event() {
+    let fixture = TestFixture::create();
+    fixture.env.mock_all_auths();
+    let hash = fixture.env.deployer().upload_contract_wasm(UPGRADE_WASM);
+    fixture.distributor.upgrade(&hash);
+    let id = fixture.distributor.address.clone();
+    assert_eq!(
+        fixture.env.events().all().filter_by_contract(&id),
+        vec![&fixture.env, (id.clone(), (Symbol::new(&fixture.env, "upgrade"),).into_val(&fixture.env), hash.into_val(&fixture.env))]
+    );
+}
+
+/// Any valid wasm will do as the upgrade target: the event is emitted by the code being replaced.
+const UPGRADE_WASM: &[u8] = include_bytes!("../../../packages/blend_capital_adapter/artifacts/pool.wasm");

@@ -557,3 +557,20 @@ fn test_burn_cusd_requires_the_yield_controller() {
     fixture.cusd_manager.burn_cusd(&fixture.user1, &amount);
     assert_eq!(fixture.cusd_manager.cusd_total_supply(), 0);
 }
+
+// L-06: an upgrade is announced with the new wasm hash.
+#[test]
+fn test_upgrade_emits_an_event() {
+    let fixture = TestFixture::create();
+    fixture.env.mock_all_auths();
+    let hash = fixture.env.deployer().upload_contract_wasm(UPGRADE_WASM);
+    fixture.cusd_manager.upgrade(&hash);
+    let id = fixture.cusd_manager.address.clone();
+    assert_eq!(
+        fixture.env.events().all().filter_by_contract(&id),
+        vec![&fixture.env, (id.clone(), (Symbol::new(&fixture.env, "upgrade"),).into_val(&fixture.env), hash.into_val(&fixture.env))]
+    );
+}
+
+/// Any valid wasm will do as the upgrade target: the event is emitted by the code being replaced.
+const UPGRADE_WASM: &[u8] = include_bytes!("../../../packages/blend_capital_adapter/artifacts/pool.wasm");

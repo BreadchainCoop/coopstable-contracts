@@ -570,3 +570,20 @@ fn test_reads_do_not_extend_ttl_but_admin_writes_do() {
     fixture.registry.add_support_for_asset(&yield_type, &protocol.id(), &fixture.create_asset()); // admin path
     assert_eq!(ttls(), (REGISTRY_BUMP_AMOUNT, REGISTRY_BUMP_AMOUNT));
 }
+
+// L-06: an upgrade is announced with the new wasm hash.
+#[test]
+fn test_upgrade_emits_an_event() {
+    let fixture = TestFixture::create();
+    fixture.env.mock_all_auths();
+    let hash = fixture.env.deployer().upload_contract_wasm(UPGRADE_WASM);
+    fixture.registry.upgrade(&hash);
+    let id = fixture.registry.address.clone();
+    assert_eq!(
+        fixture.env.events().all().filter_by_contract(&id),
+        vec![&fixture.env, (id.clone(), (Symbol::new(&fixture.env, "upgrade"),).into_val(&fixture.env), hash.into_val(&fixture.env))]
+    );
+}
+
+/// Any valid wasm will do as the upgrade target: the event is emitted by the code being replaced.
+const UPGRADE_WASM: &[u8] = include_bytes!("../../../packages/blend_capital_adapter/artifacts/pool.wasm");
